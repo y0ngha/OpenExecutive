@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Icon from "./Icon";
+import { t } from "@/i18n/index.ts";
 
 interface InfoTipProps {
   /** Tip content — text or rich JSX. */
@@ -26,7 +27,7 @@ interface InfoTipProps {
 //  - `aria-describedby` links the trigger to the tooltip while open.
 export default function InfoTip({
   children,
-  label = "More info",
+  label,
   align = "center",
 }: InfoTipProps) {
   const [open, setOpen] = useState(false);
@@ -94,7 +95,7 @@ export default function InfoTip({
     >
       <button
         type="button"
-        aria-label={label}
+        aria-label={label ?? t("misc.infoTip.moreInfo")}
         aria-describedby={open ? tipId : undefined}
         aria-expanded={open}
         aria-controls={open ? tipId : undefined}

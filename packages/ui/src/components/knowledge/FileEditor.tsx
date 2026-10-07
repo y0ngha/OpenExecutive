@@ -7,6 +7,8 @@ import type { BuiltinFileContent, ReviewItem, ReviewStatus } from "@/lib/api";
 import ReviewStatusPill from "@/components/ReviewStatusPill";
 import Button from "@/components/ui/Button";
 import OverflowMenu, { type OverflowItem } from "@/components/ui/OverflowMenu";
+import { t } from "@/i18n/index.ts";
+import { domainLabel } from "./SourceTree";
 
 interface FileEditorProps {
   file: BuiltinFileContent;
@@ -45,17 +47,17 @@ export default function FileEditor({
   // flag and Delete sit in the ⋯ menu.
   const menu: OverflowItem[] = [];
   if (review && review.status !== "needs_revision") {
-    menu.push({ label: "Flag for revision", onSelect: () => onSetReviewStatus("needs_revision") });
+    menu.push({ label: t("audit.knowledge.flagForRevision"), onSelect: () => onSetReviewStatus("needs_revision") });
   }
-  menu.push({ label: "Delete file", danger: true, onSelect: onDelete });
+  menu.push({ label: t("audit.knowledge.deleteFile"), danger: true, onSelect: onDelete });
 
   return (
     <div className="flex flex-col gap-4 h-full">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <span className={`text-sm font-semibold capitalize ${accent}`}>
-            {isFailure ? "Failure · " : ""}
-            {file.domain}
+            {isFailure ? t("audit.knowledge.failurePrefix") : ""}
+            {domainLabel(file.domain)}
           </span>
           <h2 className="text-lg sm:text-xl font-bold text-fg mt-0.5 break-words">{file.filename}</h2>
           {review && (
@@ -67,7 +69,7 @@ export default function FileEditor({
               />
               {review.status !== "approved" && (
                 <Button size="sm" onClick={() => onSetReviewStatus("approved")}>
-                  Approve
+                  {t("common.approve")}
                 </Button>
               )}
             </div>
@@ -76,7 +78,7 @@ export default function FileEditor({
         <div className="flex items-center gap-2">
           <div
             role="group"
-            aria-label="Mode"
+            aria-label={t("audit.knowledge.mode")}
             className="flex gap-1 p-1 bg-surface-overlay rounded-xl border border-line"
           >
             {(["edit", "preview"] as const).map((m) => (
@@ -88,14 +90,14 @@ export default function FileEditor({
                   mode === m ? "bg-surface-elevated text-fg shadow-sm" : "text-fg-muted hover:text-fg"
                 }`}
               >
-                {m}
+                {m === "edit" ? t("audit.knowledge.modeEdit") : t("audit.knowledge.modePreview")}
               </button>
             ))}
           </div>
           <Button variant="primary" onClick={onSave} disabled={!isDirty || isSaving}>
-            {isSaving ? "Saving…" : isDirty ? "Save" : "Saved"}
+            {isSaving ? t("common.saving") : isDirty ? t("common.save") : t("common.saved")}
           </Button>
-          <OverflowMenu items={menu} label="More file actions" />
+          <OverflowMenu items={menu} label={t("audit.knowledge.moreFileActions")} />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DynamicWorkflowDef, Person, listPeople } from "@/lib/api";
 import WorkflowDraftReview from "./WorkflowDraftReview";
+import { t } from "@/i18n/index.ts";
 
 /**
  * A custom workflow that is switched off — typically one chat saved with
@@ -30,11 +31,10 @@ export default function PendingWorkflowReview({
     <div className="h-full overflow-y-auto bg-surface text-fg">
       <div className="mx-auto max-w-3xl px-4 py-6 space-y-4">
         <Link href="/jobs" className="text-sm text-fg-muted hover:text-fg">
-          ← Back to workflows
+          {t("jobs.common.backToWorkflows")}
         </Link>
         <p className="text-sm text-fg-muted">
-          This workflow is off. Review what it does and which tools it uses, then
-          turn it on to run it or start its schedule.
+          {t("jobs.pending.intro")}
         </p>
         <WorkflowDraftReview
           draft={{ definition, summary: "", assumptions: [] }}

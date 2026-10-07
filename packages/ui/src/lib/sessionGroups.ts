@@ -1,3 +1,4 @@
+import { t, type MessageKey } from "../i18n/index.ts";
 import type { SessionSummary } from "@/lib/api";
 
 export type GroupKey = "today" | "yesterday" | "prev7" | "prev30" | "older";
@@ -8,12 +9,12 @@ export interface SessionGroup {
   items: SessionSummary[];
 }
 
-const GROUP_ORDER: { key: GroupKey; label: string }[] = [
-  { key: "today", label: "Today" },
-  { key: "yesterday", label: "Yesterday" },
-  { key: "prev7", label: "Previous 7 Days" },
-  { key: "prev30", label: "Previous 30 Days" },
-  { key: "older", label: "Older" },
+const GROUP_ORDER: { key: GroupKey; label: MessageKey }[] = [
+  { key: "today", label: "lib.chat.group.today" },
+  { key: "yesterday", label: "lib.chat.group.yesterday" },
+  { key: "prev7", label: "lib.chat.group.prev7" },
+  { key: "prev30", label: "lib.chat.group.prev30" },
+  { key: "older", label: "lib.chat.group.older" },
 ];
 
 const DAY_MS = 86_400_000;
@@ -67,7 +68,7 @@ export function groupSessionsByDate(
 
   return GROUP_ORDER.map(({ key, label }) => ({
     key,
-    label,
+    label: t(label),
     items: buckets[key],
   })).filter((g) => g.items.length > 0);
 }

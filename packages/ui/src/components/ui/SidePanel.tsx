@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef } from "react";
 
 import Icon from "@/components/Icon";
+import { t } from "@/i18n/index.ts";
 
 // A panel that slides in from the right over the page: where a summary tile
 // or an app tile opens its full list or settings, so the screen behind stays
@@ -79,7 +80,7 @@ export default function SidePanel({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("common.close")}
             className="-mr-1 inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-fg-muted hover:bg-surface-overlay hover:text-fg"
           >
             <Icon name="close" className="h-5 w-5" />

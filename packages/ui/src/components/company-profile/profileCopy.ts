@@ -4,6 +4,8 @@
 // Copy only: every field keeps its name and meaning in all three.
 
 import type { ProfileWording } from "@/components/shell/navConfig";
+// Relative: scripts/profileCopy.test.mjs loads this file under plain node.
+import { t, type MessageKey } from "../../i18n/index.ts";
 
 export interface ProfileCopy {
   /** The profile page when none exists yet. */
@@ -23,43 +25,53 @@ export interface ProfileCopy {
   departmentsLabel: string;
 }
 
-const DEPENDENCIES_NOTE = (what: string) =>
-  `Named here, a vendor or ticker counts as ${what}: the Executive will start watching its status page or filings on its own instead of asking you first.`;
+type CopyKeys = { [K in keyof ProfileCopy]: ProfileCopy[K] extends string ? MessageKey : MessageKey | null };
+
+// Each field is a getter, so the text is looked up when read (at render),
+// in the deployment's language, not once at import.
+function lazyCopy(keys: CopyKeys): ProfileCopy {
+  const copy = {};
+  for (const [field, key] of Object.entries(keys)) {
+    Object.defineProperty(copy, field, {
+      enumerable: true,
+      get: () => (key === null ? null : t(key as MessageKey)),
+    });
+  }
+  return copy as ProfileCopy;
+}
 
 export const PROFILE_COPY: Record<ProfileWording, ProfileCopy> = {
-  company: {
-    missing: "No company profile set up yet.",
-    missingBanner: "No company profile — responses will be generic.",
+  company: lazyCopy({
+    missing: "misc.profileCopy.company.missing",
+    missingBanner: "misc.profileCopy.company.missingBanner",
     intro: null,
     roleNote: null,
-    progress: "Setting up your company profile",
-    basicsTitle: "Company Basics",
-    missionPlaceholder: "Why does this company exist?",
-    dependenciesNote: DEPENDENCIES_NOTE("company data"),
-    departmentsLabel: "Departments",
-  },
-  business: {
-    missing: "No business profile set up yet.",
-    missingBanner: "No business profile — responses will be generic.",
-    intro:
-      "The Executive bases its advice on your business: what you offer, who you serve and what matters most right now.",
-    roleNote: "Your title and role are in",
-    progress: "Setting up your business profile",
-    basicsTitle: "Business Basics",
-    missionPlaceholder: "Why does this business exist?",
-    dependenciesNote: DEPENDENCIES_NOTE("business data"),
-    departmentsLabel: "Areas",
-  },
-  work: {
-    missing: "Your work isn't set up yet.",
-    missingBanner: "Your work isn't set up yet — responses will be generic.",
-    intro:
-      "The Executive bases its advice on your work: the organisation you work in, who it serves and what matters most right now.",
-    roleNote: "Your title, who you report to and what you're responsible for are in",
-    progress: "Setting up your work",
-    basicsTitle: "Where You Work",
-    missionPlaceholder: "Why does your organisation exist?",
-    dependenciesNote: DEPENDENCIES_NOTE("part of your work"),
-    departmentsLabel: "Areas",
-  },
+    progress: "misc.profileCopy.company.progress",
+    basicsTitle: "misc.profileCopy.company.basicsTitle",
+    missionPlaceholder: "misc.profileCopy.company.missionPlaceholder",
+    dependenciesNote: "misc.profileCopy.company.dependenciesNote",
+    departmentsLabel: "misc.profileCopy.company.departmentsLabel",
+  }),
+  business: lazyCopy({
+    missing: "misc.profileCopy.business.missing",
+    missingBanner: "misc.profileCopy.business.missingBanner",
+    intro: "misc.profileCopy.business.intro",
+    roleNote: "misc.profileCopy.business.roleNote",
+    progress: "misc.profileCopy.business.progress",
+    basicsTitle: "misc.profileCopy.business.basicsTitle",
+    missionPlaceholder: "misc.profileCopy.business.missionPlaceholder",
+    dependenciesNote: "misc.profileCopy.business.dependenciesNote",
+    departmentsLabel: "misc.profileCopy.areasLabel",
+  }),
+  work: lazyCopy({
+    missing: "misc.profileCopy.work.missing",
+    missingBanner: "misc.profileCopy.work.missingBanner",
+    intro: "misc.profileCopy.work.intro",
+    roleNote: "misc.profileCopy.work.roleNote",
+    progress: "misc.profileCopy.work.progress",
+    basicsTitle: "misc.profileCopy.work.basicsTitle",
+    missionPlaceholder: "misc.profileCopy.work.missionPlaceholder",
+    dependenciesNote: "misc.profileCopy.work.dependenciesNote",
+    departmentsLabel: "misc.profileCopy.areasLabel",
+  }),
 };

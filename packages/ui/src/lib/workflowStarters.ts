@@ -1,22 +1,43 @@
+import { t, type MessageKey } from "../i18n/index.ts";
+
+// Each item is read through t() when it is used, so it follows the
+// deployment's language.
+function lazyList(keys: readonly MessageKey[]): string[] {
+  const list: string[] = [];
+  keys.forEach((key, i) => Object.defineProperty(list, i, { get: () => t(key), enumerable: true }));
+  return list;
+}
+
+function chip(label: MessageKey, starter: number): { label: string; text: string } {
+  return {
+    get label() {
+      return t(label);
+    },
+    get text() {
+      return WORKFLOW_STARTERS[starter];
+    },
+  };
+}
+
 /**
  * Example one-liners for describing a new workflow. Shared by the "Start
  * here" panel on /jobs and the conversational wizard at /jobs/new.
  */
-export const WORKFLOW_STARTERS = [
-  "A weekly competitor digest sent to me every Monday morning",
-  "A board pre-read I kick off before each meeting, with the CFO signing off",
-  "A monthly hiring-plan review across all open roles",
-  "A launch readiness check I run before every product release",
-];
+export const WORKFLOW_STARTERS: string[] = lazyList([
+  "lib.starter.competitorDigest",
+  "lib.starter.boardPreRead",
+  "lib.starter.hiringPlan",
+  "lib.starter.launchReadiness",
+]);
 
 /**
  * Short chips for the front of /jobs: a label to tap and the starter it puts
  * in the box. The wizard shows the full sentences (all of them).
  */
 export const WORKFLOW_STARTER_CHIPS: { label: string; text: string }[] = [
-  { label: "Competitor digest", text: WORKFLOW_STARTERS[0] },
-  { label: "Board pre-read", text: WORKFLOW_STARTERS[1] },
-  { label: "Hiring plan review", text: WORKFLOW_STARTERS[2] },
+  chip("lib.starter.chip.competitorDigest", 0),
+  chip("lib.starter.chip.boardPreRead", 1),
+  chip("lib.starter.chip.hiringPlan", 2),
 ];
 
 const HANDOFF_KEY = "oe.workflowWizard.describe";

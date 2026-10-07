@@ -63,3 +63,35 @@ def test_get_prebuilt_rejects_path_traversal() -> None:
     assert prebuilt.get_prebuilt("../cache") is None
     assert prebuilt.get_prebuilt("..") is None
     assert prebuilt.get_prebuilt("a/b") is None
+
+
+def test_korean_translations_are_well_formed() -> None:
+    registry = {s.id for s in GUIDE_SECTIONS}
+    for section_id, data in prebuilt._TRANSLATED["KOREAN"].list().items():
+        assert section_id in registry, f"ko/{section_id}.json is not a guide section"
+        assert data["section_id"] == section_id
+        assert data["markdown"].strip() and not data["markdown"].lstrip().startswith("#")
+        assert data["mermaid"] is None
+
+
+def test_korean_serves_the_translation_and_falls_back_to_english(monkeypatch, tmp_path) -> None:
+    from openexecutive.utils.prebuilt_store import PrebuiltDocStore
+
+    (tmp_path / "chat.json").write_text(
+        '{"section_id": "chat", "title": "채팅", "markdown": "번역", '
+        '"mermaid": null, "generated_at": "2026-10-07T00:00:00Z"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setitem(prebuilt._TRANSLATED, "KOREAN", PrebuiltDocStore(tmp_path))
+
+    monkeypatch.setenv("OE_LANGUAGE", "KOREAN")
+    chat = prebuilt.get_prebuilt("chat")
+    today = prebuilt.get_prebuilt("today")
+    assert chat is not None and chat["markdown"] == "번역"
+    assert today is not None and today["markdown"] == prebuilt._STORE.get("today")["markdown"]
+    assert prebuilt.list_prebuilt()["chat"]["markdown"] == "번역"
+    assert set(prebuilt.list_prebuilt()) == {s.id for s in GUIDE_SECTIONS}
+
+    monkeypatch.setenv("OE_LANGUAGE", "ENGLISH")
+    chat = prebuilt.get_prebuilt("chat")
+    assert chat is not None and chat["markdown"] != "번역"

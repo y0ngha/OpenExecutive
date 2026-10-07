@@ -16,6 +16,8 @@ import Icon from "@/components/Icon";
 import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import { formatRelativeTime } from "@/lib/relativeTime";
+import { t, tp } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 
 type KindFilter = "all" | "draft" | "workflow";
 type View = "active" | "archived";
@@ -84,13 +86,13 @@ function ArtifactRow({
       </Link>
 
       <OverflowMenu
-        label={`More for ${item.title}`}
+        label={t("audit.artifacts.moreFor", { title: item.title })}
         items={[
           view === "active"
-            ? { label: "Archive", disabled: pending, onSelect: () => onArchive(item) }
-            : { label: "Restore", disabled: pending, onSelect: () => onRestore(item) },
+            ? { label: t("audit.artifacts.archive"), disabled: pending, onSelect: () => onArchive(item) }
+            : { label: t("audit.artifacts.restore"), disabled: pending, onSelect: () => onRestore(item) },
           {
-            label: "Delete permanently",
+            label: t("audit.artifacts.deletePermanently"),
             danger: true,
             disabled: pending,
             onSelect: () => onDelete(item),
@@ -203,7 +205,7 @@ export default function ArtifactsPage() {
     async (item: ArtifactSummary) => {
       if (
         !confirm(
-          `Permanently delete "${item.title}"? This removes it everywhere and cannot be undone.`
+          t("audit.artifacts.confirmDelete", { title: item.title })
         )
       )
         return;
@@ -280,7 +282,7 @@ export default function ArtifactsPage() {
       } else {
         const label =
           a.kind === "draft"
-            ? "Drafts"
+            ? t("audit.artifacts.drafts")
             : workflowTitleMap.get(a.source_label) ?? a.source_label;
         map.set(key, { key, label, items: [a] });
       }
@@ -298,8 +300,8 @@ export default function ArtifactsPage() {
 
   const emptyMessage =
     view === "archived"
-      ? "Nothing archived. Documents you archive will collect here, ready to restore."
-      : "No documents yet. Reports and memos the Executive produces will collect here.";
+      ? t("audit.artifacts.emptyArchived")
+      : t("audit.artifacts.emptyActive");
 
   return (
     <div className="flex flex-col h-full bg-surface text-fg">
@@ -308,49 +310,44 @@ export default function ArtifactsPage() {
           <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div className="min-w-0 max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg mb-2">
-                {view === "archived" ? "Archived documents" : "Your documents"}
+                {view === "archived" ? t("audit.artifacts.titleArchived") : t("audit.artifacts.titleActive")}
               </h1>
               <p className="text-[15px] text-fg-muted">
-                Every deliverable the Executive has produced for you — memos, web
-                pages, Word documents, spreadsheets and links into your connected
-                apps, alongside your workflow outputs and the team&apos;s scheduled
-                ones. Documents from your chats are yours alone; no one else
-                sees them. Archive what you&apos;re done with; delete clears it
-                for good.
+                {t("audit.artifacts.intro")}
               </p>
             </div>
             {/* One filter control: the kind, with Active / Archived in its ⋯. */}
             <div className="flex items-center gap-1.5">
               <div
                 role="group"
-                aria-label="Show"
+                aria-label={t("audit.artifacts.show")}
                 className="inline-flex max-w-full overflow-x-auto rounded-xl border border-line bg-surface-elevated p-1"
               >
                 <FilterButton
                   active={filter === "all"}
                   onClick={() => setFilter("all")}
-                  label="All"
+                  label={t("audit.artifacts.all")}
                   count={counts.all}
                 />
                 <FilterButton
                   active={filter === "draft"}
                   onClick={() => setFilter("draft")}
-                  label="Drafts"
+                  label={t("audit.artifacts.drafts")}
                   count={counts.draft}
                 />
                 <FilterButton
                   active={filter === "workflow"}
                   onClick={() => setFilter("workflow")}
-                  label="Workflows"
+                  label={t("audit.artifacts.workflows")}
                   count={counts.workflow}
                 />
               </div>
               <OverflowMenu
-                label="More filters"
+                label={t("audit.artifacts.moreFilters")}
                 items={[
                   view === "active"
-                    ? { label: "Show archived", onSelect: () => switchView("archived") }
-                    : { label: "Show active documents", onSelect: () => switchView("active") },
+                    ? { label: t("audit.artifacts.showArchived"), onSelect: () => switchView("archived") }
+                    : { label: t("audit.artifacts.showActive"), onSelect: () => switchView("active") },
                 ]}
               />
             </div>
@@ -358,17 +355,17 @@ export default function ArtifactsPage() {
 
           {view === "archived" && (
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-elevated px-4 py-2.5 text-[15px] text-fg-muted">
-              <span>Showing archived documents. Restore one from its ⋯.</span>
+              <span>{t("audit.artifacts.showingArchived")}</span>
               <Button onClick={() => switchView("active")}>
-                Back to active
+                {t("audit.artifacts.backToActive")}
               </Button>
             </div>
           )}
 
           {loading && (
-            <div className="text-[15px] text-fg-muted">Loading documents…</div>
+            <div className="text-[15px] text-fg-muted">{t("audit.artifacts.loading")}</div>
           )}
-          {error && <div className="text-[15px] text-red-400 mb-4">Error: {error}</div>}
+          {error && <div className="text-[15px] text-red-400 mb-4">{t("audit.errorPrefix", { error })}</div>}
 
           {!loading && !error && artifacts.length === 0 && (
             <div className="rounded-2xl border border-dashed border-line px-5 py-8 text-center text-[15px] text-fg-muted">
@@ -401,8 +398,7 @@ export default function ArtifactsPage() {
                           {group.label}
                         </span>
                         <span className="text-sm text-fg-muted">
-                          {group.items.length}{" "}
-                          {group.items.length === 1 ? "document" : "documents"}
+                          {tp("audit.artifacts.docCount", group.items.length)}
                         </span>
                       </button>
                       {!isCollapsed && (
@@ -434,15 +430,17 @@ export default function ArtifactsPage() {
         <div className="fixed bottom-4 left-4 right-4 sm:left-auto z-50 flex justify-end motion-safe:animate-in motion-safe:slide-in-from-right">
           <div className="flex items-center gap-3 rounded-xl border border-line-strong bg-surface-overlay backdrop-blur shadow-xl shadow-black/40 px-4 py-3">
             <span className="min-w-0 truncate text-[15px] text-fg">
-              Archived <span className="font-medium">{undo.item.title}</span>
+              {tRich("audit.artifacts.archivedToast", {
+                title: <span className="font-medium">{undo.item.title}</span>,
+              })}
             </span>
             <Button variant="primary" onClick={handleUndo}>
-              Undo
+              {t("audit.artifacts.undo")}
             </Button>
             <button
               type="button"
               onClick={dismissUndo}
-              aria-label="Dismiss"
+              aria-label={t("audit.dismiss")}
               className="h-9 w-9 -mr-1 flex flex-shrink-0 items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover cursor-pointer"
             >
               <Icon name="close" size="w-3.5 h-3.5" />

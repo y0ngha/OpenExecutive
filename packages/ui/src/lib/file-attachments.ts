@@ -1,3 +1,5 @@
+import { t } from "../i18n/index.ts";
+
 // Mirror the backend's `_MAX_FILES_PER_TURN` / `_MAX_BYTES_PER_FILE`. Kept
 // in sync manually; a mismatch only costs an extra round-trip + the user
 // sees the server's 413 message, so no correctness risk.
@@ -24,7 +26,7 @@ export function mergePickedFiles<T extends AttachmentFile>(
   for (const file of picked) {
     if (file.size > MAX_BYTES_PER_FILE) {
       const maxSizeMb = MAX_BYTES_PER_FILE / (1024 * 1024);
-      rejected.push(`${file.name} is too large (max ${maxSizeMb} MB)`);
+      rejected.push(t("lib.files.tooLarge", { name: file.name, mb: maxSizeMb }));
       continue;
     }
     if (files.length >= MAX_FILES_PER_TURN) break;

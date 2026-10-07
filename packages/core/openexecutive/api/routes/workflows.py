@@ -22,6 +22,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from openexecutive.api import caller as api_caller
+from openexecutive.utils.i18n import localized
 from openexecutive.workflows import (
     get_workflow,
     list_workflows,
@@ -596,7 +597,10 @@ async def start_workflow_run(name: str, request: Request) -> StreamingResponse:
                 yield _sse({
                     "type": "error",
                     "run_id": run_id,
-                    "message": "Workflow finished without producing an artifact",
+                    "message": localized(
+                        "Workflow finished without producing an artifact",
+                        "워크플로가 문서를 만들지 못하고 끝났어요.",
+                    ),
                 })
         except Exception as exc:  # noqa: BLE001 — must report any failure to the client
             logger.exception("workflow.run_failed run_id=%s workflow=%s", run_id, workflow.name)

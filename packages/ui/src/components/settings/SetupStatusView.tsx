@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import Icon from "@/components/Icon";
+import { t, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import { getSetupStatus } from "@/lib/api";
 import {
   formatAgo,
@@ -14,23 +16,23 @@ import {
   type SetupStatus,
 } from "@/lib/setupStatus";
 
-const STATE_STYLE: Record<SetupState, { dot: string; word: string; wordClass: string }> = {
-  ok: { dot: "bg-emerald-400", word: "Working", wordClass: "text-emerald-300" },
-  warn: { dot: "bg-amber-400", word: "Needs attention", wordClass: "text-amber-300" },
-  error: { dot: "bg-rose-400", word: "Not working", wordClass: "text-rose-300" },
-  off: { dot: "bg-fg-subtle", word: "Not set up", wordClass: "text-fg-muted" },
+const STATE_STYLE: Record<SetupState, { dot: string; word: MessageKey; wordClass: string }> = {
+  ok: { dot: "bg-emerald-400", word: "settings.status.state.ok", wordClass: "text-emerald-300" },
+  warn: { dot: "bg-amber-400", word: "settings.status.state.warn", wordClass: "text-amber-300" },
+  error: { dot: "bg-rose-400", word: "settings.status.state.error", wordClass: "text-rose-300" },
+  off: { dot: "bg-fg-subtle", word: "settings.status.state.off", wordClass: "text-fg-muted" },
 };
 
-const LINK_LABELS: Record<string, string> = {
-  "/people": "Open the People page",
-  "/onboard": "Open the setup interview",
-  "/settings": "Open Settings",
+const LINK_LABELS: Record<string, MessageKey> = {
+  "/people": "settings.status.link.people",
+  "/onboard": "settings.status.link.onboard",
+  "/settings": "settings.status.link.settings",
 };
 
 function linkLabel(link: string): string {
   // A person's page: the daily brief light links the owner's own profile.
-  if (link.startsWith("/people/")) return "Open your People profile";
-  return LINK_LABELS[link] ?? "Open";
+  if (link.startsWith("/people/")) return t("settings.status.link.profile");
+  return t(LINK_LABELS[link] ?? "settings.status.link.open");
 }
 
 function CheckRow({ check }: { check: SetupCheck }) {
@@ -46,7 +48,7 @@ function CheckRow({ check }: { check: SetupCheck }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <h2 className="text-sm font-medium text-fg">{check.label}</h2>
-            <span className={`text-xs ${style.wordClass}`}>{style.word}</span>
+            <span className={`text-xs ${style.wordClass}`}>{t(style.word)}</span>
           </div>
           <p className="mt-1 text-sm text-fg-muted leading-relaxed break-words">{check.summary}</p>
           {check.fix && check.state !== "ok" ? (
@@ -55,7 +57,7 @@ function CheckRow({ check }: { check: SetupCheck }) {
                 check.state === "off" ? "text-fg-subtle" : "text-fg"
               }`}
             >
-              <span className="font-medium">{check.state === "off" ? "To turn it on: " : "What to do: "}</span>
+              <span className="font-medium">{check.state === "off" ? t("settings.status.toTurnOn") : t("settings.status.whatToDo")}</span>
               {check.fix}
             </p>
           ) : null}
@@ -70,7 +72,7 @@ function CheckRow({ check }: { check: SetupCheck }) {
           ) : null}
           {check.last_activity ? (
             <p className="mt-2 text-xs text-fg-subtle">
-              Last message received {formatAgo(check.last_activity)}.
+              {t("settings.status.lastMessage", { ago: formatAgo(check.last_activity) })}
             </p>
           ) : null}
         </div>
@@ -89,7 +91,7 @@ function Tally({ checks }: { checks: SetupCheck[] }) {
       {parts.map(({ state, n }) => (
         <span key={state} className="inline-flex items-center gap-1.5">
           <span className={`inline-block w-2 h-2 rounded-full ${STATE_STYLE[state].dot}`} aria-hidden="true" />
-          {n} {STATE_STYLE[state].word.toLowerCase()}
+          {n} {t(STATE_STYLE[state].word).toLowerCase()}
         </span>
       ))}
     </p>
@@ -138,13 +140,13 @@ export default function SetupStatusView({ signIn }: { signIn: SetupCheck }) {
           className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg transition-colors"
         >
           <Icon name="arrow-left" size="w-3.5 h-3.5" />
-          Settings
+          {t("settings.subpage.back")}
         </Link>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-fg">Setup status</h1>
+            <h1 className="text-xl font-semibold text-fg">{t("settings.status.title")}</h1>
             <p className="mt-1 text-sm text-fg-muted">
-              Each part of your setup, tested now. Anything that isn&apos;t green says what to do.
+              {t("settings.status.intro")}
             </p>
           </div>
           <button
@@ -154,20 +156,20 @@ export default function SetupStatusView({ signIn }: { signIn: SetupCheck }) {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-line bg-surface-elevated text-fg hover:bg-surface-overlay transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Icon name="restore" size="w-4 h-4" />
-            {loading ? "Checking…" : "Check again"}
+            {loading ? t("settings.status.checking") : t("settings.status.checkAgain")}
           </button>
         </div>
 
         {status && !loading ? <Tally checks={checks} /> : null}
         {status && !loading ? (
-          <p className="mt-1 text-xs text-fg-subtle">Checked {formatAgo(status.checked_at)}.</p>
+          <p className="mt-1 text-xs text-fg-subtle">{t("settings.status.checked", { ago: formatAgo(status.checked_at) })}</p>
         ) : null}
 
         {error ? (
           <div className="mt-6 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200" role="alert">
-            <p className="font-medium">Couldn&apos;t run the checks: {error}.</p>
+            <p className="font-medium">{t("settings.status.runFailed", { error })}</p>
             <p className="mt-1 text-rose-200/80">
-              The API may not be running. <code>make dev</code> starts it on port 8000; its log says what went wrong.
+              {tRich("settings.status.apiDown", { cmd: <code>make dev</code> })}
             </p>
           </div>
         ) : null}
@@ -178,7 +180,7 @@ export default function SetupStatusView({ signIn }: { signIn: SetupCheck }) {
           ))}
           {loading && !status ? (
             <li className="rounded-xl border border-line bg-surface-overlay/60 p-4 text-sm text-fg-muted animate-pulse motion-reduce:animate-none">
-              Testing the AI key, channels and schedule…
+              {t("settings.status.testing")}
             </li>
           ) : null}
         </ul>

@@ -5,14 +5,15 @@ import Link from "next/link";
 import Icon from "@/components/Icon";
 import SettingsSubpage from "@/components/settings/SettingsSubpage";
 import { advancedItemsByGroup } from "@/components/shell/navConfig";
+import { t } from "@/i18n/index.ts";
 
 // Settings → Advanced: the admin and power-user pages (ADVANCED_ITEMS),
 // grouped by what you'd use them for. Each opens its own screen.
 export default function AdvancedSettingsPage() {
   return (
     <SettingsSubpage
-      title="Advanced"
-      description="Diagnostics, configuration and reference pages. Each opens its own screen."
+      title={t("settings.advanced.title")}
+      description={t("settings.advanced.description")}
     >
       {advancedItemsByGroup().map((group) => (
         <section key={group.key} aria-labelledby={`tools-${group.key}`}>

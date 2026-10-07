@@ -6,9 +6,9 @@
 // Type-only imports, so the test can load this under
 // `node --experimental-strip-types`.
 
+import { displayLocale, t } from "../i18n/index.ts";
 import type { TopThreeItem, WeeklyReviewSummary } from "@/lib/api";
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -31,7 +31,7 @@ export function topThreeWhy(item: Pick<TopThreeItem, "why">): string {
  * when no calendar was read (nothing to say). */
 export function topThreeSlot(item: Pick<TopThreeItem, "slot">): string {
   if (item.slot == null) return "";
-  return item.slot || "No free time left today";
+  return item.slot || t("lib.rhythm.noFreeTime");
 }
 
 function startOfDay(d: Date): number {
@@ -44,9 +44,13 @@ export function reviewRanLabel(iso: string, now: Date = new Date()): string {
   const ran = new Date(iso);
   if (Number.isNaN(ran.getTime())) return "";
   const days = Math.round((startOfDay(now) - startOfDay(ran)) / DAY_MS);
-  if (days <= 0) return "Ran today";
-  if (days === 1) return "Ran yesterday";
-  return `Ran ${WEEKDAYS[ran.getDay()]}, ${MONTHS[ran.getMonth()]} ${ran.getDate()}`;
+  if (days <= 0) return t("lib.rhythm.ranToday");
+  if (days === 1) return t("lib.rhythm.ranYesterday");
+  const loc = displayLocale();
+  return t("lib.rhythm.ranOn", {
+    weekday: ran.toLocaleDateString(loc, { weekday: "short" }),
+    date: ran.toLocaleDateString(loc, { month: "short", day: "numeric" }),
+  });
 }
 
 export interface ReviewExcerpt {
@@ -62,7 +66,7 @@ export function reviewExcerpt(
   review: Pick<WeeklyReviewSummary, "top_three" | "excerpt">,
 ): ReviewExcerpt {
   const top = review.top_three.map((t) => t.trim()).filter(Boolean);
-  if (top.length > 0) return { heading: "Next week's top three", numbered: true, lines: top };
+  if (top.length > 0) return { heading: t("lib.rhythm.topThree"), numbered: true, lines: top };
   const lines = review.excerpt
     .split("\n")
     .map((l) => l.trim())

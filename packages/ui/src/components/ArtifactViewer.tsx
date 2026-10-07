@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import type { ArtifactFormat } from "@/lib/api";
 import { buttonClass } from "@/components/ui/Button";
 import { hostOf } from "@/lib/url";
+import { t } from "@/i18n/index.ts";
 
 // Blocks every network fetch and all script from inside an HTML artifact.
 // The iframe sandbox (no allow-scripts, no allow-same-origin) is the real
@@ -85,7 +86,7 @@ export default function ArtifactViewer({ format, body, title, externalUrl, linkL
             rel="noopener noreferrer nofollow"
             className={buttonClass("primary", "md")}
           >
-            Open {linkLabel || "link"} ↗
+            {t("audit.artifact.openLink", { label: linkLabel || t("audit.artifact.link") })}
             <span className="text-sm font-normal opacity-80">({hostOf(externalUrl)})</span>
           </a>
         )}
@@ -98,12 +99,12 @@ export default function ArtifactViewer({ format, body, title, externalUrl, linkL
     <div className="space-y-2">
       {format === "xlsx" && (
         <div className="text-sm text-fg-muted">
-          Preview of the workbook. Download it for every row and native Excel formatting.
+          {t("audit.artifact.xlsxPreview")}
         </div>
       )}
       {format === "docx" && (
         <div className="text-sm text-fg-muted">
-          Preview of the Word document. Download it for the .docx file.
+          {t("audit.artifact.docxPreview")}
         </div>
       )}
       <MarkdownArticle markdown={body} />

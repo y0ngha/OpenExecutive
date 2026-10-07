@@ -18,6 +18,7 @@ import {
   profileWording,
 } from "@/components/shell/navConfig";
 import HubTabs from "@/components/ui/HubTabs";
+import { t, type MessageKey } from "@/i18n/index.ts";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 
 // Routes that own their full layout and should not be wrapped by the
@@ -31,44 +32,45 @@ const EXEMPT_EXACT = new Set(["/"]);
 // Dynamic segments (slugs / ids) are rendered raw and truncated by CSS.
 // `company-profile` is the team label; TopBar names it for the mode and
 // role, as the sidebar does.
-const SEGMENT_LABELS: Record<string, string> = {
-  today: "Today",
-  review: "Review",
-  proposals: "Proposals",
-  people: "People",
-  departments: "Departments",
-  goals: "Goals",
-  memories: "Pulse",
-  knowledge: "Knowledge",
-  jobs: "Workflows",
-  artifacts: "Documents",
-  chats: "Chats",
-  runs: "Runs",
-  new: "New",
-  audit: "Audit log",
-  usage: "Token usage",
-  session: "Session",
-  council: "Agent Council",
-  architecture: "Architecture",
-  "company-profile": "Company profile",
-  demo: "Company Simulator",
-  onboard: "Setup",
-  watchlist: "Watch list",
-  settings: "Settings",
-  status: "Setup status",
-  executive: "Your Executive",
-  "act-as-me": "Act as me",
-  memory: "About you",
-  workspace: "Workspace",
-  advanced: "Advanced",
-  tools: "Custom tools",
-  about: "About",
-  guide: "User Guide",
-  clients: "Client Companies",
+const SEGMENT_LABELS: Record<string, MessageKey> = {
+  today: "chat.crumb.today",
+  review: "chat.crumb.review",
+  proposals: "chat.crumb.proposals",
+  people: "chat.nav.people",
+  departments: "chat.nav.departments",
+  goals: "chat.nav.goals",
+  memories: "chat.nav.pulse",
+  knowledge: "chat.nav.knowledge",
+  jobs: "chat.nav.workflows",
+  artifacts: "chat.nav.documents",
+  chats: "chat.nav.chats",
+  runs: "chat.crumb.runs",
+  new: "chat.crumb.new",
+  audit: "chat.nav.auditLog",
+  usage: "chat.nav.tokenUsage",
+  session: "chat.crumb.session",
+  council: "chat.nav.agentCouncil",
+  architecture: "chat.nav.architecture",
+  "company-profile": "chat.nav.profile.company",
+  demo: "chat.nav.companySimulator",
+  onboard: "chat.crumb.setup",
+  watchlist: "chat.nav.watchList",
+  settings: "chat.nav.settings",
+  status: "chat.nav.setupStatus",
+  executive: "chat.nav.yourExecutive",
+  "act-as-me": "chat.nav.actAsMe",
+  memory: "chat.nav.aboutYou",
+  workspace: "chat.nav.workspace",
+  advanced: "chat.nav.advanced",
+  tools: "chat.nav.customTools",
+  about: "chat.nav.about",
+  guide: "chat.nav.userGuide",
+  clients: "chat.nav.clientCompanies",
 };
 
 function labelFor(segment: string): string {
-  return SEGMENT_LABELS[segment] ?? segment;
+  const key = Object.hasOwn(SEGMENT_LABELS, segment) ? SEGMENT_LABELS[segment] : undefined;
+  return key ? t(key) : segment;
 }
 
 function isExempt(pathname: string): boolean {
@@ -161,7 +163,11 @@ function TopBar({
   // The Advanced pages (Agent Council, Audit log, ...) live at their own
   // paths but are opened from Settings → Advanced: show that way back.
   const crumbs: { href: string | null; label: string }[] = isAdvancedPath("/" + segments.join("/"))
-    ? [{ href: "/settings", label: "Settings" }, { href: "/settings/advanced", label: "Advanced" }, ...pageCrumbs]
+    ? [
+        { href: "/settings", label: t("chat.nav.settings") },
+        { href: "/settings/advanced", label: t("chat.nav.advanced") },
+        ...pageCrumbs,
+      ]
     : pageCrumbs;
 
   return (
@@ -169,13 +175,13 @@ function TopBar({
       <div className="flex items-center gap-2 min-w-0">
         <button
           type="button"
-          aria-label="Open menu"
+          aria-label={t("chat.shell.openMenu")}
           onClick={onOpenDrawer}
           className="lg:hidden min-h-touch min-w-touch flex items-center justify-center text-fg-muted hover:text-fg cursor-pointer rounded-lg hover:bg-surface-overlay transition-colors"
         >
           <Icon name="menu" size="w-5 h-5" />
         </button>
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 min-w-0">
+        <nav aria-label={t("chat.shell.breadcrumb")} className="flex items-center gap-1.5 min-w-0">
           {crumbs.length === 0 ? (
             <span className="font-display text-[15px] font-extrabold tracking-tight text-fg">Open Executive</span>
           ) : (
@@ -231,14 +237,14 @@ function AskOEButton() {
     <button
       type="button"
       onClick={toggle}
-      title="Ask OE about this page (Ctrl/Cmd + .)"
+      title={t("chat.shell.askTitle")}
       aria-pressed={open}
       className={`flex min-h-10 items-center gap-1.5 px-3 rounded-lg text-sm font-semibold text-accent transition-colors cursor-pointer ${
         open ? "bg-accent/20" : "bg-accent/10 hover:bg-accent/15"
       }`}
     >
       <Icon name="sparkles" size="w-4 h-4" />
-      <span className="sm:hidden">Ask</span>
+      <span className="sm:hidden">{t("chat.shell.askShort")}</span>
       <span className="hidden sm:inline">Ask OE</span>
     </button>
   );
@@ -265,7 +271,7 @@ export function MobileBottomNav({
   // menu) is in the sidebar the top bar's menu button opens.
   return (
     <nav
-      aria-label="Primary"
+      aria-label={t("chat.shell.primaryNav")}
       className={`${hideClass} h-[calc(4rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] border-t border-line bg-surface-elevated flex items-stretch flex-shrink-0`}
     >
       {buildMobilePrimary({ mode, roleKind: role.role_kind }).map((item) => {

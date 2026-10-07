@@ -8,6 +8,8 @@ import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import SectionTabs, { sectionPanelProps } from "@/components/ui/SectionTabs";
 import SidePanel from "@/components/ui/SidePanel";
+import { displayLocale, t, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import {
   deleteDepartment,
   getDepartment,
@@ -37,19 +39,19 @@ const AUTHORITY_OPTS: DepartmentConfig["authority_level"][] = [
 
 const AUTHORITY_META: Record<
   DepartmentConfig["authority_level"],
-  { label: string; hint: string }
+  { label: MessageKey; hint: MessageKey }
 > = {
   auto_execute: {
-    label: "Acts on its own",
-    hint: "The specialist runs actions in its scope without asking. You'll see them in the audit log.",
+    label: "people.dept.authority.auto",
+    hint: "people.dept.authority.autoHint",
   },
   propose_only: {
-    label: "Proposes, you approve",
-    hint: "The specialist drafts actions and routes them to a person for approval before anything happens.",
+    label: "people.dept.authority.propose",
+    hint: "people.dept.authority.proposeHint",
   },
   escalate: {
-    label: "Escalates to a human",
-    hint: "The specialist will not act — it forwards everything to a human.",
+    label: "people.dept.authority.escalate",
+    hint: "people.dept.authority.escalateHint",
   },
 };
 
@@ -59,12 +61,12 @@ function cls(...parts: (string | false | undefined)[]) {
 
 // The settings form, one short section at a time.
 type SettingsTab = "charter" | "acts" | "numbers" | "channels" | "watched";
-const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
-  { id: "charter", label: "Charter" },
-  { id: "acts", label: "How it acts" },
-  { id: "numbers", label: "Numbers" },
-  { id: "channels", label: "Channels" },
-  { id: "watched", label: "Watched" },
+const SETTINGS_TABS: { id: SettingsTab; label: MessageKey }[] = [
+  { id: "charter", label: "people.dept.tab.charter" },
+  { id: "acts", label: "people.dept.howItActs" },
+  { id: "numbers", label: "people.dept.tab.numbers" },
+  { id: "channels", label: "people.dept.tab.channels" },
+  { id: "watched", label: "people.dept.tab.watched" },
 ];
 
 const INPUT_CLS =
@@ -175,7 +177,7 @@ export default function DepartmentDetailPage() {
     getDepartment(slug)
       .then((d) => applyDept(d, /* isInitial */ true))
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) setError(e instanceof Error ? e.message : t("people.dept.loadFailed"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -238,16 +240,14 @@ export default function DepartmentDetailPage() {
 
   async function removeDepartment() {
     if (!dept) return;
-    if (!window.confirm(
-      `Delete "${dept.config.title}"? This will also remove all its Goals and cannot be undone.`
-    )) return;
+    if (!window.confirm(t("people.dept.deleteConfirm", { title: dept.config.title }))) return;
     setDeleting(true);
     setDeleteErr(null);
     try {
       await deleteDepartment(slug);
       router.push("/departments");
     } catch (e) {
-      setDeleteErr(e instanceof Error ? e.message : "Delete failed");
+      setDeleteErr(e instanceof Error ? e.message : t("people.dept.deleteFailed"));
       setDeleting(false);
     }
   }
@@ -283,7 +283,7 @@ export default function DepartmentDetailPage() {
       setDept(updated);
       setEditingSettings(false);
     } catch (e) {
-      setSettingsErr(e instanceof Error ? e.message : "Save failed");
+      setSettingsErr(e instanceof Error ? e.message : t("people.dept.saveFailed"));
     } finally {
       setSavingSettings(false);
     }
@@ -293,7 +293,7 @@ export default function DepartmentDetailPage() {
     <div className="flex flex-col h-full bg-surface">
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-          {loading && <p className="text-fg-muted text-[15px]">Loading…</p>}
+          {loading && <p className="text-fg-muted text-[15px]">{t("common.loading")}</p>}
           {error && (
             <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[15px]">
               {error}
@@ -307,19 +307,19 @@ export default function DepartmentDetailPage() {
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">{dept.config.title}</h1>
                   <div className="text-[15px] text-fg-muted mt-1.5">
                     {dept.config.specialist_key ? (
-                      <>Specialist: <code className="font-mono text-sm text-fg">{dept.config.specialist_key}</code></>
+                      <>{t("people.dept.specialist")} <code className="font-mono text-sm text-fg">{dept.config.specialist_key}</code></>
                     ) : (
-                      <span className="italic">Informational department (no specialist agent)</span>
+                      <span className="italic">{t("people.dept.informational")}</span>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Button onClick={openSettings}>Edit settings</Button>
+                  <Button onClick={openSettings}>{t("people.dept.editSettings")}</Button>
                   <OverflowMenu
-                    label={`More actions for ${dept.config.title}`}
+                    label={t("people.dept.moreActions", { title: dept.config.title })}
                     items={[
                       {
-                        label: deleting ? "Deleting…" : "Delete department",
+                        label: deleting ? t("people.dept.deleting") : t("people.dept.delete"),
                         danger: true,
                         disabled: deleting,
                         onSelect: () => void removeDepartment(),
@@ -338,28 +338,28 @@ export default function DepartmentDetailPage() {
               <section className="rounded-2xl border border-line bg-surface-elevated px-5 py-2 mb-8">
                 <dl className="divide-y divide-line">
                   <div className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-4 py-3">
-                    <dt className="sm:w-40 flex-shrink-0 text-sm text-fg-muted">How it acts</dt>
+                    <dt className="sm:w-40 flex-shrink-0 text-sm text-fg-muted">{t("people.dept.howItActs")}</dt>
                     <dd className="min-w-0">
                       <div className="text-[15px] text-fg">
-                        {AUTHORITY_META[dept.config.authority_level].label}
+                        {t(AUTHORITY_META[dept.config.authority_level].label)}
                       </div>
                       <div className="text-sm text-fg-muted mt-0.5">
-                        {AUTHORITY_META[dept.config.authority_level].hint}
+                        {t(AUTHORITY_META[dept.config.authority_level].hint)}
                       </div>
                     </dd>
                   </div>
                   {[
-                    ["Mission", dept.config.charter.mission || "—"],
+                    [t("people.dept.mission"), dept.config.charter.mission || "—"],
                     ...(dept.config.head_person_id != null
-                      ? [["Head", people.find((p) => p.id === dept.config.head_person_id)?.full_name ?? `Person #${dept.config.head_person_id}`]]
+                      ? [[t("people.dept.head"), people.find((p) => p.id === dept.config.head_person_id)?.full_name ?? t("people.dept.personNumber", { id: dept.config.head_person_id })]]
                       : []),
-                    ...(dept.headcount != null ? [["Headcount", String(dept.headcount)]] : []),
-                    ...(dept.budget_usd != null ? [["Budget", `$${dept.budget_usd.toLocaleString()}`]] : []),
-                    ...(dept.config.slack_channel_id ? [["Slack channel", dept.config.slack_channel_id]] : []),
-                    ...(dept.config.discord_channel_id ? [["Discord channel", dept.config.discord_channel_id]] : []),
-                    ...(dept.config.telegram_chat_id ? [["Telegram chat", dept.config.telegram_chat_id]] : []),
+                    ...(dept.headcount != null ? [[t("people.dept.headcount"), String(dept.headcount)]] : []),
+                    ...(dept.budget_usd != null ? [[t("people.dept.budget"), `$${dept.budget_usd.toLocaleString(displayLocale())}`]] : []),
+                    ...(dept.config.slack_channel_id ? [[t("people.dept.slackChannel"), dept.config.slack_channel_id]] : []),
+                    ...(dept.config.discord_channel_id ? [[t("people.dept.discordChannel"), dept.config.discord_channel_id]] : []),
+                    ...(dept.config.telegram_chat_id ? [[t("people.dept.telegramChat"), dept.config.telegram_chat_id]] : []),
                     ...((dept.config.watched_entities ?? []).length > 0
-                      ? [["Watched entities", (dept.config.watched_entities ?? []).join(", ")]]
+                      ? [[t("people.dept.watchedEntities"), (dept.config.watched_entities ?? []).join(", ")]]
                       : []),
                   ].map(([label, value]) => (
                     <div key={label} className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-4 py-3">
@@ -369,7 +369,7 @@ export default function DepartmentDetailPage() {
                   ))}
                   {Object.entries(dept.config.cadences).length > 0 && (
                     <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 py-3">
-                      <dt className="sm:w-40 flex-shrink-0 text-sm text-fg-muted">Recurring check-in</dt>
+                      <dt className="sm:w-40 flex-shrink-0 text-sm text-fg-muted">{t("people.dept.recurringCheckIn")}</dt>
                       <dd className="flex flex-wrap gap-1.5 min-w-0">
                         {Object.entries(dept.config.cadences).map(([n, s]) => (
                           <span key={n} className="px-2.5 py-1 rounded-lg bg-surface-overlay border border-line text-sm font-mono text-fg break-all">
@@ -387,7 +387,7 @@ export default function DepartmentDetailPage() {
                 <section className="mb-8 grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {dept.config.charter.scope.length > 0 && (
                     <div>
-                      <h2 className="text-lg font-semibold text-fg mb-2">In scope</h2>
+                      <h2 className="text-lg font-semibold text-fg mb-2">{t("people.dept.inScope")}</h2>
                       <ul className="list-disc pl-5 space-y-1.5">
                         {dept.config.charter.scope.map((s, i) => (
                           <li key={i} className="text-[15px] text-fg">{s}</li>
@@ -397,7 +397,7 @@ export default function DepartmentDetailPage() {
                   )}
                   {dept.config.charter.out_of_scope.length > 0 && (
                     <div>
-                      <h2 className="text-lg font-semibold text-fg mb-2">Out of scope</h2>
+                      <h2 className="text-lg font-semibold text-fg mb-2">{t("people.dept.outOfScope")}</h2>
                       <ul className="list-disc pl-5 space-y-1.5">
                         {dept.config.charter.out_of_scope.map((s, i) => (
                           <li key={i} className="text-[15px] text-fg-muted">{s}</li>
@@ -412,11 +412,11 @@ export default function DepartmentDetailPage() {
               <section>
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <h2 className="text-lg font-semibold text-fg">
-                    Goals <span className="font-normal text-fg-subtle">{goals.length}</span>
+                    {t("people.dept.goals")} <span className="font-normal text-fg-subtle">{goals.length}</span>
                   </h2>
                   {!addingGoal && (
                     <Button variant="primary" onClick={() => setAddingGoal(true)}>
-                      Add goal
+                      {t("people.dept.addGoal")}
                     </Button>
                   )}
                 </div>
@@ -434,7 +434,7 @@ export default function DepartmentDetailPage() {
                   )}
                   {goals.length === 0 && !addingGoal ? (
                     <p className="py-8 text-[15px] text-fg-muted text-center">
-                      No Goals yet. Add the first one with Add goal.
+                      {t("people.dept.noGoals")}
                     </p>
                   ) : (
                     goals.map((goal) => (
@@ -458,7 +458,7 @@ export default function DepartmentDetailPage() {
               <SidePanel
                 open={editingSettings}
                 onClose={cancelSettings}
-                title="Department settings"
+                title={t("people.dept.settingsTitle")}
                 subtitle={dept.config.title}
                 width="lg"
                 footer={
@@ -466,10 +466,10 @@ export default function DepartmentDetailPage() {
                     {settingsErr && <p className="text-sm text-rose-500">{settingsErr}</p>}
                     <div className="flex gap-2">
                       <Button variant="primary" disabled={savingSettings} onClick={saveSettings} className="flex-1 sm:flex-none">
-                        {savingSettings ? "Saving…" : "Save settings"}
+                        {savingSettings ? t("common.saving") : t("people.dept.saveSettings")}
                       </Button>
                       <Button disabled={savingSettings} onClick={cancelSettings}>
-                        Cancel
+                        {t("common.cancel")}
                       </Button>
                     </div>
                   </div>
@@ -478,8 +478,8 @@ export default function DepartmentDetailPage() {
                 <div className="mb-5">
                   <SectionTabs
                     idBase={settingsTabsId}
-                    label="Settings sections"
-                    tabs={SETTINGS_TABS}
+                    label={t("people.dept.settingsSections")}
+                    tabs={SETTINGS_TABS.map((tab) => ({ id: tab.id, label: t(tab.label) }))}
                     active={settingsTab}
                     onChange={setSettingsTab}
                   />
@@ -487,7 +487,7 @@ export default function DepartmentDetailPage() {
                 <div {...sectionPanelProps(settingsTabsId, settingsTab)}>
                   {settingsTab === "charter" && (
                     <label className={LABEL_CLS}>
-                      Mission
+                      {t("people.dept.mission")}
                       <textarea
                         value={settingsForm.mission}
                         onChange={(e) =>
@@ -502,7 +502,7 @@ export default function DepartmentDetailPage() {
                   {settingsTab === "acts" && (
                     <div className="space-y-6">
                       <label className={LABEL_CLS}>
-                        Department head
+                        {t("people.dept.departmentHead")}
                         <select
                           value={settingsForm.head_person_id ?? ""}
                           onChange={(e) =>
@@ -513,19 +513,19 @@ export default function DepartmentDetailPage() {
                           }
                           className={FIELD_CLS}
                         >
-                          <option value="">— None —</option>
+                          <option value="">{t("people.dept.noneOption")}</option>
                           {people.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.full_name}{p.role ? ` — ${p.role}` : ""}{p.is_principal ? " (you)" : ""}
+                              {p.full_name}{p.role ? ` — ${p.role}` : ""}{p.is_principal ? t("people.dept.youSuffix") : ""}
                             </option>
                           ))}
                         </select>
                         <span className={HINT_CLS}>
-                          The Executive surfaces this person as the department owner in routing decisions.
+                          {t("people.dept.headHint")}
                         </span>
                       </label>
                       <fieldset className="space-y-2">
-                        <legend className="text-sm text-fg-muted mb-1.5">How it acts</legend>
+                        <legend className="text-sm text-fg-muted mb-1.5">{t("people.dept.howItActs")}</legend>
                         {AUTHORITY_OPTS.map((a) => {
                           const meta = AUTHORITY_META[a];
                           const checked = settingsForm.authority_level === a;
@@ -550,8 +550,8 @@ export default function DepartmentDetailPage() {
                                 className="mt-1 w-4 h-4 accent-indigo-500 flex-shrink-0"
                               />
                               <div className="min-w-0">
-                                <div className="text-[15px] font-medium text-fg">{meta.label}</div>
-                                <div className="text-sm text-fg-muted mt-0.5">{meta.hint}</div>
+                                <div className="text-[15px] font-medium text-fg">{t(meta.label)}</div>
+                                <div className="text-sm text-fg-muted mt-0.5">{t(meta.hint)}</div>
                               </div>
                             </label>
                           );
@@ -559,18 +559,18 @@ export default function DepartmentDetailPage() {
                       </fieldset>
 
                       <div>
-                        <div className="text-sm text-fg-muted mb-1.5">Recurring check-in</div>
+                        <div className="text-sm text-fg-muted mb-1.5">{t("people.dept.recurringCheckIn")}</div>
                         {Object.entries(settingsForm.cadences).map(([name, spec]) => (
                           <div key={name} className="flex items-center gap-2 mb-2">
                             <input
                               value={name}
                               readOnly
-                              aria-label="Check-in name"
+                              aria-label={t("people.dept.checkInName")}
                               className={`${FIELD_CLS} flex-1 min-w-0 font-mono text-sm text-fg-muted`}
                             />
                             <input
                               value={spec}
-                              aria-label={`Schedule for ${name}`}
+                              aria-label={t("people.dept.scheduleFor", { name })}
                               onChange={(e) =>
                                 setSettingsForm((f) => ({
                                   ...f,
@@ -583,8 +583,11 @@ export default function DepartmentDetailPage() {
                           </div>
                         ))}
                         <p className={HINT_CLS}>
-                          When set, the specialist posts a check-in on this schedule. You&apos;ll see it on Home.
-                          Examples (UTC): <code className="font-mono">daily@09:00</code>, <code className="font-mono">weekly@mon@09:00</code>, <code className="font-mono">quarterly@01-09:00</code>.
+                          {tRich("people.dept.cadenceHint", {
+                            daily: <code className="font-mono">daily@09:00</code>,
+                            weekly: <code className="font-mono">weekly@mon@09:00</code>,
+                            quarterly: <code className="font-mono">quarterly@01-09:00</code>,
+                          })}
                         </p>
                       </div>
                     </div>
@@ -593,7 +596,7 @@ export default function DepartmentDetailPage() {
                   {settingsTab === "numbers" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <label className={LABEL_CLS}>
-                        Headcount
+                        {t("people.dept.headcount")}
                         <input
                           type="number"
                           min={0}
@@ -605,7 +608,7 @@ export default function DepartmentDetailPage() {
                         />
                       </label>
                       <label className={LABEL_CLS}>
-                        Budget (USD)
+                        {t("people.dept.budgetUsd")}
                         <input
                           type="number"
                           min={0}
@@ -623,13 +626,13 @@ export default function DepartmentDetailPage() {
                   {settingsTab === "channels" && (
                     <>
                       <p className={SECTION_INTRO_CLS}>
-                        When set, the Executive can post department-scoped updates to these rooms via{" "}
-                        <code className="font-mono text-sm">send_department_message</code>. Leave blank to have OE
-                        fall back to DMing the department head.
+                        {tRich("people.dept.channelsIntro", {
+                          tool: <code className="font-mono text-sm">send_department_message</code>,
+                        })}
                       </p>
                       <div className="space-y-4">
                         <label className={LABEL_CLS}>
-                          Slack channel ID
+                          {t("people.dept.slackChannelId")}
                           <input
                             type="text"
                             value={settingsForm.slack_channel_id}
@@ -641,7 +644,7 @@ export default function DepartmentDetailPage() {
                           />
                         </label>
                         <label className={LABEL_CLS}>
-                          Discord channel ID
+                          {t("people.dept.discordChannelId")}
                           <input
                             type="text"
                             value={settingsForm.discord_channel_id}
@@ -653,7 +656,7 @@ export default function DepartmentDetailPage() {
                           />
                         </label>
                         <label className={LABEL_CLS}>
-                          Telegram chat ID
+                          {t("people.dept.telegramChatId")}
                           <input
                             type="text"
                             value={settingsForm.telegram_chat_id}
@@ -672,12 +675,10 @@ export default function DepartmentDetailPage() {
                   {settingsTab === "watched" && (
                     <>
                       <p className={SECTION_INTRO_CLS}>
-                        Vendors, competitors or tickers this department cares about, one per line. Named here,
-                        the Executive will start watching their status pages, filings and feeds on its own and
-                        route what it finds to this department and its head.
+                        {t("people.dept.watchedIntro")}
                       </p>
                       <label className={LABEL_CLS}>
-                        Watched entities (one per line)
+                        {t("people.dept.watchedLabel")}
                         <textarea
                           value={settingsForm.watched_entities}
                           onChange={(e) =>

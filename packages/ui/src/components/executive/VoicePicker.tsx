@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import Icon from "@/components/Icon";
+import { t } from "@/i18n/index.ts";
 import { getAgentDetail, listPersonas, patchAgent, type PersonaMeta } from "@/lib/api";
 
 // The Executive's voice, picked from the three general voices. Shared by the
@@ -53,7 +54,7 @@ export default function VoicePicker({ variant, onDone }: Props) {
         setLoaded(true);
       })
       .catch(() => {
-        if (!cancelled) setError("Could not load the voices.");
+        if (!cancelled) setError(t("settings.voice.loadFailed"));
       });
     return () => {
       cancelled = true;
@@ -71,7 +72,7 @@ export default function VoicePicker({ variant, onDone }: Props) {
       setCurrent(updated.voice_persona_slug ?? DIRECT);
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the voice.");
+      setError(err instanceof Error ? err.message : t("settings.voice.saveFailed"));
       setPicked(current);
       return false;
     } finally {
@@ -90,7 +91,7 @@ export default function VoicePicker({ variant, onDone }: Props) {
 
   return (
     <div>
-      <div role="radiogroup" aria-label="Executive voice" className="grid gap-3 sm:grid-cols-3">
+      <div role="radiogroup" aria-label={t("settings.voice.groupLabel")} className="grid gap-3 sm:grid-cols-3">
         {voices.map((v) => {
           const selected = picked === v.slug;
           return (
@@ -116,7 +117,7 @@ export default function VoicePicker({ variant, onDone }: Props) {
                   {v.description}
                 </span>
               ) : (
-                <span className="block text-sm text-fg-muted mt-1">Your current voice</span>
+                <span className="block text-sm text-fg-muted mt-1">{t("settings.voice.current")}</span>
               )}
               {v.sample && (
                 <span className="block text-[13px] text-fg-subtle italic mt-3 leading-relaxed">
@@ -133,8 +134,8 @@ export default function VoicePicker({ variant, onDone }: Props) {
       {variant === "card" && (
         <p className="mt-3 text-sm text-fg-subtle">
           {saving
-            ? "Saving…"
-            : "Applies from the next message. Custom voices are made in Agent Council → Executive → Advanced settings."}
+            ? t("common.saving")
+            : t("settings.voice.appliesNext")}
         </p>
       )}
 
@@ -146,7 +147,7 @@ export default function VoicePicker({ variant, onDone }: Props) {
             disabled={saving || !loaded}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? "Saving…" : "Continue"}
+            {saving ? t("common.saving") : t("settings.voice.continue")}
           </button>
           <button
             type="button"
@@ -154,7 +155,7 @@ export default function VoicePicker({ variant, onDone }: Props) {
             disabled={saving}
             className="px-3 py-2 rounded-lg text-sm text-fg-muted hover:text-fg transition-colors cursor-pointer disabled:opacity-50"
           >
-            Skip for now
+            {t("settings.voice.skip")}
           </button>
         </div>
       )}

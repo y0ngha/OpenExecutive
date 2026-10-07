@@ -25,8 +25,9 @@ import {
   shouldRefreshOnFocus,
 } from "@/lib/narrativeFreshness";
 import { reviewRanLabel } from "@/lib/rhythmCards";
+import { displayLocale, t, tp } from "@/i18n/index.ts";
 import InfoTip from "./InfoTip";
-import { REPLIES_WAITING_TIP, ReplyCardItem, useReplyCards } from "./RepliesWaiting";
+import { ReplyCardItem, repliesWaitingTip, useReplyCards } from "./RepliesWaiting";
 import Icon from "./Icon";
 import {
   HandledPanelBody,
@@ -326,8 +327,8 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
   useEffect(() => {
     let cancelled = false;
     getToday()
-      .then((t) => { if (!cancelled) setToday(t); })
-      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load"); })
+      .then((data) => { if (!cancelled) setToday(data); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : t("briefing.home.loadFailed")); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
@@ -360,7 +361,7 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
     }, 120);
   };
 
-  const dateLabel = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const dateLabel = new Date().toLocaleDateString(displayLocale(), { weekday: "long", month: "long", day: "numeric" });
 
   const departments = today?.departments ?? [];
   const activeDepts = departments.filter((d) => d.goal_count > 0 || d.awaiting_count > 0);
@@ -448,8 +449,13 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
         tiles.push({
           key: "dueSoon",
           value: String(view?.items.length ?? "–"),
-          label: "Due soon",
-          sub: overdue > 0 ? `${overdue} overdue` : view && view.items.length > 0 ? "this week" : `${view?.later ?? 0} later`,
+          label: t("briefing.home.dueSoon"),
+          sub:
+            overdue > 0
+              ? t("briefing.home.overdueCount", { n: overdue })
+              : view && view.items.length > 0
+                ? t("briefing.home.thisWeek")
+                : t("briefing.home.laterCount", { n: view?.later ?? 0 }),
           subTone: overdue > 0 ? "amber" : undefined,
         });
       }
@@ -457,15 +463,15 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
         tiles.push({
           key: "projects",
           value: String(projects.projects?.length ?? "–"),
-          label: "Your projects",
-          sub: "active",
+          label: t("briefing.home.yourProjects"),
+          sub: t("briefing.home.active"),
         });
       }
       if (weeklyReview) {
         tiles.push({
           key: "weeklyReview",
-          value: "Ready",
-          label: "This week's review",
+          value: t("briefing.home.ready"),
+          label: t("briefing.home.weeklyReview"),
           sub: reviewRanLabel(weeklyReview.completed_at) || weeklyReview.period || "",
         });
       }
@@ -474,15 +480,15 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
       tiles.push({
         key: "departments",
         value: String(deptValue),
-        label: "Departments",
+        label: t("briefing.home.departments"),
         sub:
           attentionDepts.length > 0
             ? deptAtRiskCount > 0
-              ? "at risk"
-              : "need attention"
+              ? t("briefing.home.atRisk")
+              : t("briefing.home.needAttention")
             : activeDepts.length > 0
-              ? "on track"
-              : "not set up yet",
+              ? t("briefing.home.onTrack")
+              : t("briefing.home.notSetUp"),
         subTone: attentionDepts.length > 0 ? "amber" : activeDepts.length > 0 ? "emerald" : undefined,
       });
       if (showPeople && today) {
@@ -492,19 +498,19 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
         tiles.push({
           key: "people",
           value: String(busy > 0 ? busy : people.length),
-          label: "People",
-          sub: busy > 0 ? s.text : "all clear",
+          label: t("briefing.home.people"),
+          sub: busy > 0 ? s.text : t("briefing.home.allClear"),
           subTone: s.hasOverdue ? "rose" : busy > 0 ? "amber" : "emerald",
         });
       }
     }
     if (otherProposals.length > 0)
-      tiles.push({ key: "team", value: String(otherProposals.length), label: "Across the team", sub: "with teammates" });
+      tiles.push({ key: "team", value: String(otherProposals.length), label: t("briefing.home.acrossTeam"), sub: t("briefing.home.withTeammates") });
     if (inFlight.length > 0)
       tiles.push({
         key: "inFlight",
         value: String(inFlight.length),
-        label: "Under way",
+        label: t("briefing.home.underWay"),
         sub: inFlightNext(inFlight),
         subTone: inFlight.some((f) => f.overdue) ? "amber" : undefined,
       });
@@ -512,23 +518,23 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
       tiles.push({
         key: "handled",
         value: String(handledRows.length),
-        label: "Handled overnight",
-        sub: "by the Executive",
+        label: t("briefing.home.handledOvernight"),
+        sub: t("briefing.home.byExecutive"),
         subTone: "emerald",
       });
     if (monitoringProposals.length > 0)
       tiles.push({
         key: "monitoring",
         value: String(monitoringProposals.length),
-        label: "Monitoring",
-        sub: monitoringProposals.length === 1 ? "signal" : "signals",
+        label: t("briefing.home.monitoring"),
+        sub: tp("briefing.home.signals", monitoringProposals.length),
       });
     if (practiceClients.length > 0)
       tiles.push({
         key: "clients",
         value: String(practiceClients.length),
-        label: "Across your clients",
-        sub: "parked clients",
+        label: t("briefing.home.acrossClients"),
+        sub: t("briefing.home.parkedClients"),
       });
   }
 
@@ -565,13 +571,16 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
     ...(staleNeedsYouIds.length > 0
       ? [
           {
-            label: `Dismiss ${staleNeedsYouIds.length} older than ${NEEDS_YOU_DISMISS_OLDER_THAN_DAYS} days`,
+            label: t("briefing.home.dismissOlder", {
+              n: staleNeedsYouIds.length,
+              days: NEEDS_YOU_DISMISS_OLDER_THAN_DAYS,
+            }),
             onSelect: () => void handleBulkDismiss(staleNeedsYouIds),
           },
         ]
       : []),
     {
-      label: recheckBusy ? "Re-checking…" : "Re-check relevance",
+      label: recheckBusy ? t("briefing.home.rechecking") : t("briefing.home.recheck"),
       onSelect: () => void handleRecheck(),
       disabled: recheckBusy,
     },
@@ -581,17 +590,17 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
   const hasBrief = Boolean(today && (today.narrative || today.narrative_stale));
   const briefFreshness = today
     ? today.narrative_stale
-      ? "Refreshing…"
+      ? t("briefing.home.refreshing")
       : narrativeUpdatedLabel(today.narrative_generated_at, new Date())
     : null;
 
   const quietBanner =
     isQuiet && activeDepts.length > 0 ? (
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3">
-        <span className={`text-[15px] ${TONE_TEXT.emerald}`}>Quiet day — nothing needs your attention.</span>
+        <span className={`text-[15px] ${TONE_TEXT.emerald}`}>{t("briefing.home.quietDay")}</span>
         {!solo && (
           <Link href="/departments" className="text-sm font-medium text-accent hover:underline">
-            Set up a check-in →
+            {t("briefing.home.setUpCheckIn")}
           </Link>
         )}
       </div>
@@ -619,12 +628,12 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
           <header className="mb-6">
             <p className="text-sm font-medium text-fg-muted">{dateLabel}</p>
             <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-fg">
-              {showHeader ? greeting(firstName) : "Today"}
+              {showHeader ? greeting(firstName) : t("briefing.home.today")}
             </h1>
             {today && (
               <p className="mt-2 text-base sm:text-lg text-fg-muted leading-snug">
                 {summary.length === 0
-                  ? "All clear — nothing needs you right now."
+                  ? t("briefing.home.allClearNow")
                   : summary.map((part, i) => (
                       <span key={part.text}>
                         {part.target.kind === "href" ? (
@@ -659,14 +668,14 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
                 type="text"
                 value={askText}
                 onChange={(e) => setAskText(e.target.value)}
-                placeholder="Ask your Executive anything…"
-                aria-label="Ask your Executive"
+                placeholder={t("briefing.home.askPlaceholder")}
+                aria-label={t("briefing.home.askLabel")}
                 className="min-w-0 flex-1 bg-transparent py-2 text-base text-fg placeholder:text-fg-muted focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={!askText.trim()}
-                aria-label="Ask"
+                aria-label={t("briefing.home.ask")}
                 className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-accent-strong text-white transition-colors hover:bg-accent-strong/90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Icon name="arrow-send" size="w-4 h-4" />
@@ -674,7 +683,7 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
             </form>
           )}
 
-          {loading && <p className="text-fg-muted text-[15px]">Loading…</p>}
+          {loading && <p className="text-fg-muted text-[15px]">{t("common.loading")}</p>}
           {error && (
             <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-[15px] text-rose-700 dark:text-rose-300">
               {error}
@@ -690,10 +699,10 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
               <section id={NEEDS_YOU_ID} className="mb-8 scroll-mt-4">
                 <div className="mb-3 flex items-center gap-2">
                   <h2 className="text-lg font-semibold text-fg">
-                    Needs you
+                    {t("briefing.home.needsYou")}
                     {needsYouCount > 0 && <span className="ml-1.5 font-normal text-fg-muted">({needsYouCount})</span>}
                   </h2>
-                  {replies.cards.length > 0 && <InfoTip align="left">{REPLIES_WAITING_TIP}</InfoTip>}
+                  {replies.cards.length > 0 && <InfoTip align="left">{repliesWaitingTip()}</InfoTip>}
                   <div className="ml-auto flex items-center gap-1">
                     {hasBrief && (
                       <button
@@ -703,10 +712,10 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
                           !today.narrative ? " animate-pulse" : ""
                         }`}
                       >
-                        {today.narrative ? "Read today's brief" : "Catching up on today…"}
+                        {today.narrative ? t("briefing.home.readBrief") : t("briefing.home.catchingUp")}
                       </button>
                     )}
-                    {showNeedsYouMenu && <OverflowMenu size="sm" label="Needs you options" items={needsYouMenu} />}
+                    {showNeedsYouMenu && <OverflowMenu size="sm" label={t("briefing.home.needsYouOptions")} items={needsYouMenu} />}
                   </div>
                 </div>
                 {replies.notice && (
@@ -726,14 +735,14 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
                           onClick={() => setShowAllNeedsYou((v) => !v)}
                           className={buttonClass("secondary", "md")}
                         >
-                          {showAllNeedsYou ? "Show fewer" : `Show ${hiddenCount} more`}
+                          {showAllNeedsYou ? t("briefing.home.showFewer") : t("briefing.home.showMore", { n: hiddenCount })}
                         </button>
                       </div>
                     )}
                   </div>
                 ) : !isQuiet ? (
                   <p className="rounded-2xl border border-dashed border-line px-4 py-5 text-[15px] text-fg-muted">
-                    Nothing waiting on you.
+                    {t("briefing.home.nothingWaiting")}
                   </p>
                 ) : null}
               </section>
@@ -747,24 +756,24 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
               {tiles.length > 0 && (
                 <section aria-labelledby="sec-everything-else" className="mb-8">
                   <h2 id="sec-everything-else" className="mb-3 text-lg font-semibold text-fg">
-                    Everything else
+                    {t("briefing.home.everythingElse")}
                   </h2>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {tiles.map((t) => (
+                    {tiles.map((tile) => (
                       <button
-                        key={t.key}
+                        key={tile.key}
                         type="button"
-                        onClick={() => setOpenPanel(t.key)}
+                        onClick={() => setOpenPanel(tile.key)}
                         aria-haspopup="dialog"
                         className="flex min-h-[7.5rem] flex-col items-start rounded-2xl border border-line bg-surface-elevated p-4 text-left transition-colors hover:border-line-strong hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
                       >
                         <span className="text-2xl sm:text-3xl font-bold tracking-tight text-fg tabular-nums">
-                          {t.value}
+                          {tile.value}
                         </span>
-                        <span className="mt-1 text-[15px] font-medium text-fg">{t.label}</span>
-                        {t.sub && (
-                          <span className={`mt-0.5 text-sm ${t.subTone ? TONE_TEXT[t.subTone] : "text-fg-muted"}`}>
-                            {t.sub}
+                        <span className="mt-1 text-[15px] font-medium text-fg">{tile.label}</span>
+                        {tile.sub && (
+                          <span className={`mt-0.5 text-sm ${tile.subTone ? TONE_TEXT[tile.subTone] : "text-fg-muted"}`}>
+                            {tile.sub}
                           </span>
                         )}
                       </button>
@@ -776,7 +785,7 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
               <SidePanel
                 open={openPanel === "brief"}
                 onClose={() => setOpenPanel(null)}
-                title="Today's brief"
+                title={t("briefing.home.todaysBrief")}
                 subtitle={<span aria-live="polite">{briefFreshness ?? dateLabel}</span>}
                 width="lg"
               >
@@ -790,26 +799,26 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
               <SidePanel
                 open={openPanel === "departments"}
                 onClose={() => setOpenPanel(null)}
-                title="Departments"
+                title={t("briefing.home.departments")}
                 width="lg"
-                footer={panelFooterLink("/departments", "View all departments")}
+                footer={panelFooterLink("/departments", t("briefing.home.viewAllDepartments"))}
               >
                 <DepartmentsPanelBody departments={departments} onContinue={onContinue} />
               </SidePanel>
               <SidePanel
                 open={openPanel === "people"}
                 onClose={() => setOpenPanel(null)}
-                title="People"
+                title={t("briefing.home.people")}
                 width="lg"
-                footer={panelFooterLink("/people", "View all people")}
+                footer={panelFooterLink("/people", t("briefing.home.viewAllPeople"))}
               >
                 <PeoplePanelBody people={today.people} />
               </SidePanel>
               <SidePanel
                 open={openPanel === "team"}
                 onClose={() => setOpenPanel(null)}
-                title="Across the team"
-                subtitle="Waiting on someone else"
+                title={t("briefing.home.acrossTeam")}
+                subtitle={t("briefing.home.waitingOnOthers")}
                 width="lg"
               >
                 <div className="space-y-4">
@@ -825,14 +834,14 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
                     />
                   ))}
                   {otherProposals.length === 0 && (
-                    <p className="text-[15px] text-fg-muted">Nothing waiting on anyone else.</p>
+                    <p className="text-[15px] text-fg-muted">{t("briefing.home.nothingWaitingOthers")}</p>
                   )}
                 </div>
               </SidePanel>
-              <SidePanel open={openPanel === "inFlight"} onClose={() => setOpenPanel(null)} title="Under way">
+              <SidePanel open={openPanel === "inFlight"} onClose={() => setOpenPanel(null)} title={t("briefing.home.underWay")}>
                 <InFlightPanelBody inFlight={inFlight} />
               </SidePanel>
-              <SidePanel open={openPanel === "handled"} onClose={() => setOpenPanel(null)} title="Handled overnight">
+              <SidePanel open={openPanel === "handled"} onClose={() => setOpenPanel(null)} title={t("briefing.home.handledOvernight")}>
                 <HandledPanelBody
                   items={handledOvernight}
                   onReopen={handleReopen}
@@ -840,7 +849,7 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
                   onJumpToAlert={jumpToAlert}
                 />
               </SidePanel>
-              <SidePanel open={openPanel === "monitoring"} onClose={() => setOpenPanel(null)} title="Monitoring">
+              <SidePanel open={openPanel === "monitoring"} onClose={() => setOpenPanel(null)} title={t("briefing.home.monitoring")}>
                 <MonitoringPanelBody
                   proposals={monitoringProposals}
                   onContinue={onContinue}
@@ -851,8 +860,8 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
               <SidePanel
                 open={openPanel === "clients"}
                 onClose={() => setOpenPanel(null)}
-                title="Across your clients"
-                footer={panelFooterLink("/clients", "Manage clients")}
+                title={t("briefing.home.acrossClients")}
+                footer={panelFooterLink("/clients", t("briefing.home.manageClients"))}
               >
                 <PracticeClientsPanelBody clients={practiceClients} />
               </SidePanel>
@@ -861,16 +870,20 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
                   <SidePanel
                     open={openPanel === "projects"}
                     onClose={() => setOpenPanel(null)}
-                    title="Your projects"
-                    footer={panelFooterLink("/goals", "Goals")}
+                    title={t("briefing.home.yourProjects")}
+                    footer={panelFooterLink("/goals", t("briefing.home.goals"))}
                   >
                     <ProjectsPanelBody state={projects} />
                   </SidePanel>
                   <SidePanel
                     open={openPanel === "dueSoon"}
                     onClose={() => setOpenPanel(null)}
-                    title="Due soon"
-                    footer={principalId != null ? panelFooterLink(`/people/${principalId}`, "All open items") : undefined}
+                    title={t("briefing.home.dueSoon")}
+                    footer={
+                      principalId != null
+                        ? panelFooterLink(`/people/${principalId}`, t("briefing.home.allOpenItems"))
+                        : undefined
+                    }
                   >
                     <DueSoonPanelBody state={openLoops} />
                   </SidePanel>
@@ -878,7 +891,7 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
                     <SidePanel
                       open={openPanel === "weeklyReview"}
                       onClose={() => setOpenPanel(null)}
-                      title="This week's review"
+                      title={t("briefing.home.weeklyReview")}
                     >
                       <WeeklyReviewPanelBody review={weeklyReview} />
                     </SidePanel>

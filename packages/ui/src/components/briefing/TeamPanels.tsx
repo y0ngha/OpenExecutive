@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { t, tp, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import type { DepartmentBriefItem, PersonBriefItem } from "@/lib/api";
 
 import { Chip, ClickableBriefingItem, PanelIntro, TONE_TEXT, formatRelTime, type ContinueHandler } from "./shared";
@@ -37,13 +39,13 @@ export function DeptCard({
         <span className="flex-shrink-0 text-xs text-fg-muted">{dept.authority_level.replace("_", " ")}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-fg-muted">
-          {dept.goal_count} goal{dept.goal_count !== 1 ? "s" : ""}
-        </span>
-        {dept.at_risk_count > 0 && <Chip tone="amber">{dept.at_risk_count} at risk</Chip>}
-        {dept.off_track_count > 0 && <Chip tone="rose">{dept.off_track_count} off track</Chip>}
-        {!hasIssues && dept.goal_count > 0 && <Chip tone="emerald">on track</Chip>}
-        {dept.awaiting_count > 0 && <Chip tone="sky">{dept.awaiting_count} awaiting</Chip>}
+        <span className="text-fg-muted">{tp("briefing.dept.goals", dept.goal_count)}</span>
+        {dept.at_risk_count > 0 && <Chip tone="amber">{t("briefing.dept.atRiskCount", { n: dept.at_risk_count })}</Chip>}
+        {dept.off_track_count > 0 && (
+          <Chip tone="rose">{t("briefing.dept.offTrackCount", { n: dept.off_track_count })}</Chip>
+        )}
+        {!hasIssues && dept.goal_count > 0 && <Chip tone="emerald">{t("briefing.home.onTrack")}</Chip>}
+        {dept.awaiting_count > 0 && <Chip tone="sky">{t("briefing.dept.awaitingCount", { n: dept.awaiting_count })}</Chip>}
       </div>
       {/* The actual off-track / at-risk goals, inline — so the row is
           insightful at rest instead of a count you have to click into. */}
@@ -58,12 +60,14 @@ export function DeptCard({
               <span className="min-w-0">
                 <span className="text-fg">{g.key_result}</span>
                 {(g.current || g.target) && (
-                  <span className="text-fg-subtle"> — {g.current || "—"} vs {g.target || "—"}</span>
+                  <span className="text-fg-subtle">
+                    {t("briefing.dept.versus", { current: g.current || "—", target: g.target || "—" })}
+                  </span>
                 )}
               </span>
             </div>
           ))}
-          {attentionGoalOverflow > 0 && <div className="pl-4 text-xs text-fg-subtle">+{attentionGoalOverflow} more</div>}
+          {attentionGoalOverflow > 0 && <div className="pl-4 text-xs text-fg-subtle">{t("briefing.dept.more", { n: attentionGoalOverflow })}</div>}
         </div>
       )}
     </ClickableBriefingItem>
@@ -86,24 +90,26 @@ export function DepartmentsPanelBody({
   const onTrack = active.filter((d) => d.at_risk_count === 0 && d.off_track_count === 0 && d.awaiting_count === 0);
   const quietCount = onTrack.length + inactive.length;
   const quietSummary = [
-    onTrack.length > 0 ? `${onTrack.length} on track` : null,
-    inactive.length > 0 ? `${inactive.length} inactive` : null,
+    onTrack.length > 0 ? t("briefing.dept.onTrackCount", { n: onTrack.length }) : null,
+    inactive.length > 0 ? t("briefing.dept.inactiveCount", { n: inactive.length }) : null,
   ]
     .filter(Boolean)
     .join(" · ");
   return (
     <>
       <PanelIntro>
-        <span className={TONE_TEXT.amber}>At risk</span> / <span className={TONE_TEXT.rose}>off track</span> = goal
-        health. <span className={TONE_TEXT.sky}>Awaiting</span> = items waiting on the department head.{" "}
-        <span className="text-fg">Inactive</span> = no goals or check-ins set up yet. Tap a department to talk it
-        through.
+        {tRich("briefing.dept.intro", {
+          atRisk: <span className={TONE_TEXT.amber}>{t("briefing.dept.legendAtRisk")}</span>,
+          offTrack: <span className={TONE_TEXT.rose}>{t("briefing.dept.legendOffTrack")}</span>,
+          awaiting: <span className={TONE_TEXT.sky}>{t("briefing.dept.legendAwaiting")}</span>,
+          inactive: <span className="text-fg">{t("briefing.dept.legendInactive")}</span>,
+        })}
       </PanelIntro>
       {active.length === 0 && (
         <div className="py-3">
-          <p className="mb-2 text-[15px] text-fg-muted">No department has a check-in set up yet.</p>
+          <p className="mb-2 text-[15px] text-fg-muted">{t("briefing.dept.noneActive")}</p>
           <Link href="/departments" className="text-sm font-medium text-accent hover:underline">
-            Pick one to activate →
+            {t("briefing.dept.pickOne")}
           </Link>
         </div>
       )}
@@ -144,21 +150,22 @@ export function DepartmentsPanelBody({
 }
 
 // Compact label for an authority-scope token (see people/models.py).
-const AUTHORITY_LABELS: Record<string, string> = {
-  spend_lt_2k: "spend<2k",
-  spend_lt_10k: "spend<10k",
-  spend_gt_10k: "spend>10k",
-  hiring_signoff: "hiring",
-  vendor_onboarding: "vendors",
-  customer_credit: "credit",
-  legal_sign: "legal",
-  board_comms: "board",
-  meeting_scheduling: "meetings",
-  wildcard: "all",
+const AUTHORITY_LABELS: Record<string, MessageKey> = {
+  spend_lt_2k: "briefing.authority.spendLt2k",
+  spend_lt_10k: "briefing.authority.spendLt10k",
+  spend_gt_10k: "briefing.authority.spendGt10k",
+  hiring_signoff: "briefing.authority.hiring",
+  vendor_onboarding: "briefing.authority.vendors",
+  customer_credit: "briefing.authority.credit",
+  legal_sign: "briefing.authority.legal",
+  board_comms: "briefing.authority.board",
+  meeting_scheduling: "briefing.authority.meetings",
+  wildcard: "briefing.authority.all",
 };
 
 function authorityLabel(token: string): string {
-  return AUTHORITY_LABELS[token] ?? token;
+  const key = AUTHORITY_LABELS[token];
+  return key ? t(key) : token;
 }
 
 // Status chip text + tone. `overdue` repaints the attention states red.
@@ -166,13 +173,16 @@ function personStatusChip(person: PersonBriefItem): { label: string; tone: "rose
   switch (person.status) {
     case "needs_reply":
       return {
-        label: person.awaiting_reply_count > 1 ? `${person.awaiting_reply_count} awaiting reply` : "Awaiting reply",
+        label:
+          person.awaiting_reply_count > 1
+            ? t("briefing.person.awaitingReplyCount", { n: person.awaiting_reply_count })
+            : t("briefing.person.awaitingReply"),
         tone: person.overdue ? "rose" : "amber",
       };
     case "awaiting":
-      return { label: `${person.awaiting_count} to action`, tone: person.overdue ? "rose" : "sky" };
+      return { label: t("briefing.person.toAction", { n: person.awaiting_count }), tone: person.overdue ? "rose" : "sky" };
     case "on_leave":
-      return { label: "On leave", tone: "neutral" };
+      return { label: t("briefing.person.onLeave"), tone: "neutral" };
     default:
       return null; // "clear" — no chip, shown as subtle text instead
   }
@@ -198,10 +208,12 @@ function PersonRow({ person }: { person: PersonBriefItem }) {
           </div>
         </div>
         <div className="flex-shrink-0 text-right">
-          {chip ? <Chip tone={chip.tone}>{chip.label}</Chip> : <span className="text-sm text-fg-subtle">Clear</span>}
+          {chip ? <Chip tone={chip.tone}>{chip.label}</Chip> : <span className="text-sm text-fg-subtle">{t("briefing.person.clear")}</span>}
           {chip && person.status === "awaiting" && person.soonest_sla_at && (
             <div className={`mt-0.5 text-xs ${person.overdue ? TONE_TEXT.rose : "text-fg-muted"}`}>
-              SLA {person.overdue ? "overdue" : `in ${formatRelTime(person.soonest_sla_at)}`}
+              {person.overdue
+                ? t("briefing.person.slaOverdue")
+                : t("briefing.person.slaIn", { when: formatRelTime(person.soonest_sla_at) })}
             </div>
           )}
         </div>
@@ -214,10 +226,10 @@ function PersonRow({ person }: { person: PersonBriefItem }) {
           <span className="inline-flex items-center gap-1.5 text-xs text-fg-subtle">
             <span className={`h-2 w-2 rounded-full ${person.reachable_now ? "bg-emerald-400" : "bg-slate-500"}`} />
             {person.reachable_now
-              ? "Available"
+              ? t("briefing.person.available")
               : person.next_window_at
-                ? `Back in ${formatRelTime(person.next_window_at)}`
-                : "Away"}
+                ? t("briefing.person.backIn", { when: formatRelTime(person.next_window_at) })
+                : t("briefing.person.away")}
           </span>
         )}
         {pills.map((tok) => (
@@ -238,11 +250,11 @@ export function peopleSummary(people: PersonBriefItem[]): { text: string; hasOve
   const onLeave = people.filter((p) => p.status === "on_leave").length;
   const overdue = people.filter((p) => p.overdue).length;
   const parts: string[] = [];
-  if (needsReply > 0) parts.push(`${needsReply} to reply`);
-  if (awaiting > 0) parts.push(`${awaiting} to action`);
-  if (overdue > 0) parts.push(`${overdue} overdue`);
-  if (onLeave > 0) parts.push(`${onLeave} on leave`);
-  return { text: parts.length > 0 ? parts.join(" · ") : "All clear", hasOverdue: overdue > 0 };
+  if (needsReply > 0) parts.push(t("briefing.person.toReplyCount", { n: needsReply }));
+  if (awaiting > 0) parts.push(t("briefing.person.toAction", { n: awaiting }));
+  if (overdue > 0) parts.push(t("briefing.home.overdueCount", { n: overdue }));
+  if (onLeave > 0) parts.push(t("briefing.person.onLeaveCount", { n: onLeave }));
+  return { text: parts.length > 0 ? parts.join(" · ") : t("briefing.person.allClear"), hasOverdue: overdue > 0 };
 }
 
 export function PeoplePanelBody({ people }: { people: PersonBriefItem[] }) {

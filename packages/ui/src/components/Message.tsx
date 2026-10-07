@@ -12,6 +12,7 @@ import { loadsInline } from "@/lib/markdownImages";
 import { isMailboxLink } from "@/lib/replyCards";
 import { hostOf } from "@/lib/url";
 import FeatureName from "@/components/FeatureName";
+import { t, tp } from "@/i18n/index.ts";
 
 interface MessageProps {
   role: "user" | "assistant";
@@ -68,12 +69,12 @@ function FeedbackButtons({
     );
   };
   return (
-    <div className="mt-2 flex items-center gap-1" aria-label="Rate this reply">
-      {button("up", "👍", "Helpful")}
-      {button("down", "👎", "Not helpful")}
+    <div className="mt-2 flex items-center gap-1" aria-label={t("chat.message.rate")}>
+      {button("up", "👍", t("chat.message.helpful"))}
+      {button("down", "👎", t("chat.message.notHelpful"))}
       {value && (
         <span className="ml-1 text-xs text-fg-muted" role="status">
-          {value === "up" ? "Marked helpful" : "Marked not helpful"}
+          {t(value === "up" ? "chat.message.markedHelpful" : "chat.message.markedNotHelpful")}
         </span>
       )}
     </div>
@@ -181,7 +182,7 @@ export default function Message({
         {actions && actions.length > 0 && (
           <div
             className="mt-3 flex flex-wrap gap-1.5"
-            aria-label={`${actions.length} action${actions.length === 1 ? "" : "s"} taken`}
+            aria-label={tp("chat.message.actionsTaken", actions.length)}
           >
             {actions.map((action, i) => (
               <ActionChip key={`${action.tool}-${i}`} action={action} />
@@ -192,7 +193,7 @@ export default function Message({
         {sources && !isStreaming && <AnswerSourcesFooter sources={sources} />}
 
         {stopped && !isStreaming && (
-          <p className="mt-2 text-xs text-fg-muted">Stopped by you</p>
+          <p className="mt-2 text-xs text-fg-muted">{t("chat.message.stopped")}</p>
         )}
 
         {onFeedback && !isStreaming && (

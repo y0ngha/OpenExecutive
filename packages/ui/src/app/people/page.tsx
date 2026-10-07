@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import SectionTabs, { sectionPanelProps } from "@/components/ui/SectionTabs";
 import SidePanel from "@/components/ui/SidePanel";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { t, tp, type MessageKey } from "@/i18n/index.ts";
 import {
   createPerson,
   getPeopleViewer,
@@ -34,17 +35,18 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const ALL_SCOPES = [
-  { value: "spend_lt_2k", label: "Spend <$2K", hint: "Receives proposals for any spend under $2K." },
-  { value: "spend_lt_10k", label: "Spend <$10K", hint: "Receives proposals for spend under $10K." },
-  { value: "spend_gt_10k", label: "Spend >$10K", hint: "Receives proposals for spend over $10K." },
-  { value: "hiring_signoff", label: "Hiring", hint: "Receives proposals related to hiring decisions." },
-  { value: "vendor_onboarding", label: "Vendors", hint: "Receives proposals for vendor contracts." },
-  { value: "customer_credit", label: "Credit", hint: "Receives proposals involving credit or debt." },
-  { value: "legal_sign", label: "Legal", hint: "Receives proposals with legal implications." },
-  { value: "board_comms", label: "Board", hint: "Receives proposals before board communications." },
-  { value: "meeting_scheduling", label: "Meetings", hint: "Receives meetings the Executive wants to book." },
-  { value: "wildcard", label: "All (wildcard)", hint: "Receives anything no one else is scoped for — usually the principal." },
+// Labels and hints are dictionary keys, looked up where they render.
+const ALL_SCOPES: { value: string; label: MessageKey; hint: MessageKey }[] = [
+  { value: "spend_lt_2k", label: "people.scope.spendLt2k", hint: "people.scope.spendLt2kHint" },
+  { value: "spend_lt_10k", label: "people.scope.spendLt10k", hint: "people.scope.spendLt10kHint" },
+  { value: "spend_gt_10k", label: "people.scope.spendGt10k", hint: "people.scope.spendGt10kHint" },
+  { value: "hiring_signoff", label: "people.scope.hiring", hint: "people.scope.hiringHint" },
+  { value: "vendor_onboarding", label: "people.scope.vendors", hint: "people.scope.vendorsHint" },
+  { value: "customer_credit", label: "people.scope.credit", hint: "people.scope.creditHint" },
+  { value: "legal_sign", label: "people.scope.legal", hint: "people.scope.legalHint" },
+  { value: "board_comms", label: "people.scope.board", hint: "people.scope.boardHint" },
+  { value: "meeting_scheduling", label: "people.scope.meetings", hint: "people.scope.meetingsHint" },
+  { value: "wildcard", label: "people.scope.wildcard", hint: "people.scope.wildcardHint" },
 ];
 
 const CHANNELS = ["any", "slack", "discord", "telegram", "email"];
@@ -58,7 +60,14 @@ const KINDS: PersonKind[] = ["team", "contact"];
 const TONE_DOT = { ok: "bg-emerald-500", warn: "bg-amber-500", muted: "bg-fg-subtle" } as const;
 
 function channelLabel(channel: string): string {
-  return channel === "any" ? "Any channel" : channel.charAt(0).toUpperCase() + channel.slice(1);
+  return channel === "any" ? t("people.person.anyChannel") : channel.charAt(0).toUpperCase() + channel.slice(1);
+}
+
+// The raw channel values as the select shows them; brand names stay as-is.
+function channelOption(channel: string): string {
+  if (channel === "any") return t("people.channel.any");
+  if (channel === "email") return t("people.channel.email");
+  return channel;
 }
 
 function PersonCard({ person, today }: { person: Person; today: string }) {
@@ -79,7 +88,7 @@ function PersonCard({ person, today }: { person: Person; today: string }) {
           </span>
           {person.is_principal && (
             <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
-              Principal
+              {t("people.person.principal")}
             </span>
           )}
         </div>
@@ -172,8 +181,8 @@ function ScopePicker({ selected, onToggle }: { selected: string[]; onToggle: (va
                 : "bg-surface-elevated border-line text-fg-muted hover:border-line-strong"
             }`}
           >
-            <div className="text-[15px] font-medium">{label}</div>
-            <div className="text-[13px] leading-snug mt-0.5 text-fg-muted">{hint}</div>
+            <div className="text-[15px] font-medium">{t(label)}</div>
+            <div className="text-[13px] leading-snug mt-0.5 text-fg-muted">{t(hint)}</div>
           </button>
         );
       })}
@@ -340,13 +349,13 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
       });
       onCreated(person);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Create failed");
+      setErr(e instanceof Error ? e.message : t("people.dept.createFailed"));
     } finally {
       setSaving(false);
     }
   }
 
-  const title = contact ? "Add contact" : "Add person";
+  const title = contact ? t("people.list.addContact") : t("people.list.addPerson");
   return (
     <SidePanel
       open
@@ -360,17 +369,17 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
             onClick={submit}
             className="flex-1"
           >
-            {saving ? "Creating…" : title}
+            {saving ? t("people.dept.creating") : title}
           </Button>
           <Button disabled={saving} onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       }
     >
         <div className="space-y-4">
           {canAddContacts && !form.is_principal && (
-            <div role="radiogroup" aria-label="Team member or contact" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div role="radiogroup" aria-label={t("people.add.kindGroup")} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {KINDS.map((k) => (
                 <button
                   key={k}
@@ -384,11 +393,11 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
                       : "bg-surface-elevated border-line text-fg-muted hover:border-line-strong"
                   } ${suggestedCls("kind")}`}
                 >
-                  <div className="text-[15px] font-semibold">{k === "team" ? "Team member" : "Contact"}</div>
+                  <div className="text-[15px] font-semibold">{k === "team" ? t("people.add.teamMember") : t("people.add.contact")}</div>
                   <div className="text-sm leading-snug mt-1 text-fg-muted">
                     {k === "team"
-                      ? "Works with you: can sign in, message the Executive and approve."
-                      : "Outside the team and private to you: emailed or invited only when you ask."}
+                      ? t("people.add.teamMemberHint")
+                      : t("people.add.contactHint")}
                   </div>
                 </button>
               ))}
@@ -397,28 +406,28 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
 
           {/* Always-visible: the 10-second path */}
           <label className={LABEL_CLS}>
-            Full name *
+            {t("people.add.fullNameRequired")}
             <input
               ref={nameRef}
               value={form.full_name}
               onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, full_name: v })); clearSuggested("full_name"); }}
               className={`${INPUT_CLS} ${suggestedCls("full_name")}`}
-              placeholder="Sarah Chen"
+              placeholder={t("people.add.namePlaceholder")}
             />
           </label>
 
           <label className={LABEL_CLS}>
-            {contact ? "Role and company" : "Role"}
+            {contact ? t("people.add.roleAndCompany") : t("people.add.role")}
             <input
               value={form.role}
               onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, role: v })); clearSuggested("role"); }}
               className={`${INPUT_CLS} ${suggestedCls("role")}`}
-              placeholder={contact ? "Head of Procurement, Acme" : "CFO (fractional)"}
+              placeholder={contact ? t("people.add.contactRolePlaceholder") : t("people.add.rolePlaceholder")}
             />
           </label>
 
           <label className={LABEL_CLS}>
-            Email
+            {t("people.add.email")}
             <input
               type="email"
               value={form.email}
@@ -441,15 +450,15 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
               className="mt-0.5 w-5 h-5 rounded accent-indigo-500 flex-shrink-0"
             />
             <span>
-              <span className="block text-[15px] font-medium text-fg">This is me — Primary</span>
-              <span className="block text-sm text-fg-muted">Marks you as the primary decision-maker.</span>
+              <span className="block text-[15px] font-medium text-fg">{t("people.add.thisIsMe")}</span>
+              <span className="block text-sm text-fg-muted">{t("people.add.thisIsMeHint")}</span>
             </span>
           </label>
           )}
 
           {/* Contact & routing */}
           <DisclosureSection
-            label={contact ? "Chat IDs" : "Contact & routing"}
+            label={contact ? t("people.add.chatIds") : t("people.add.contactRouting")}
             open={showContact}
             onToggle={() => setShowContact((v) => !v)}
           >
@@ -457,24 +466,26 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={LABEL_CLS}>
-                  Preferred channel
+                  {t("people.add.preferredChannel")}
                   <select
                     value={form.preferred_channel}
                     onChange={(e) => setForm((f) => ({ ...f, preferred_channel: e.target.value }))}
                     className={INPUT_CLS}
                   >
                     {CHANNELS.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c} value={c}>{channelOption(c)}</option>
                     ))}
                   </select>
                 </label>
                 <p className={HINT_CLS}>
-                  Proposals routed to this person are sent via {form.preferred_channel === "any" ? "any available channel" : form.preferred_channel}.
+                  {t("people.add.sentVia", {
+                    channel: form.preferred_channel === "any" ? t("people.add.anyAvailableChannel") : form.preferred_channel,
+                  })}
                 </p>
               </div>
               <div>
                 <label className={LABEL_CLS}>
-                  Expected reply within
+                  {t("people.add.expectedReply")}
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -483,18 +494,18 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
                       onChange={(e) => setForm((f) => ({ ...f, response_sla_hours: e.target.value }))}
                       className={`${INPUT_CLS} flex-1 min-w-0`}
                     />
-                    <span className="text-sm text-fg-muted flex-shrink-0">hours</span>
+                    <span className="text-sm text-fg-muted flex-shrink-0">{t("people.add.hours")}</span>
                   </div>
                 </label>
                 <p className={HINT_CLS}>
-                  Items show as overdue on Home after {form.response_sla_hours || 24}h with no reply.
+                  {t("people.add.overdueHint", { n: form.response_sla_hours || 24 })}
                 </p>
               </div>
             </div>
             )}
 
             <label className={LABEL_CLS}>
-              Slack user ID
+              {t("people.add.slackUserId")}
               <input
                 value={form.slack_user_id}
                 onChange={(e) => setForm((f) => ({ ...f, slack_user_id: e.target.value }))}
@@ -504,7 +515,7 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
             </label>
 
             <label className={LABEL_CLS}>
-              Discord user ID
+              {t("people.add.discordUserId")}
               <input
                 value={form.discord_user_id}
                 onChange={(e) => setForm((f) => ({ ...f, discord_user_id: e.target.value }))}
@@ -512,12 +523,12 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
                 placeholder="123456789012345678"
               />
               <span className={HINT_CLS}>
-                Right-click your Discord username and &quot;Copy User ID&quot; (developer mode required).
+                {t("people.add.discordHint")}
               </span>
             </label>
 
             <label className={LABEL_CLS}>
-              Telegram chat ID
+              {t("people.dept.telegramChatId")}
               <input
                 value={form.telegram_chat_id}
                 onChange={(e) => setForm((f) => ({ ...f, telegram_chat_id: e.target.value }))}
@@ -530,11 +541,11 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
           {/* Approval authority — a contact approves nothing */}
           {!contact && (
           <DisclosureSection
-            label="Approval authority"
+            label={t("people.add.approvalAuthority")}
             open={showAuthority}
             onToggle={() => setShowAuthority((v) => !v)}
           >
-            <div className="text-sm text-fg-muted">What this person approves</div>
+            <div className="text-sm text-fg-muted">{t("people.add.whatApproves")}</div>
             <ScopePicker selected={form.authority_scope} onToggle={toggleScope} />
           </DisclosureSection>
           )}
@@ -550,18 +561,18 @@ function AddPersonModal({ initialKind, canAddContacts, onCreated, onClose }: Add
 // Page
 // ---------------------------------------------------------------------------
 
-const TAB_COPY: Record<PeopleTab, { label: string; blurb: string; empty: string; add: string }> = {
+const TAB_COPY: Record<PeopleTab, { label: MessageKey; blurb: MessageKey; empty: MessageKey; add: MessageKey }> = {
   team: {
-    label: "Team",
-    blurb: "People who work with you. They can sign in, message the Executive and approve what their authority covers.",
-    empty: "No team members yet.",
-    add: "Add person",
+    label: "people.list.team",
+    blurb: "people.list.teamBlurb",
+    empty: "people.list.teamEmpty",
+    add: "people.list.addPerson",
   },
   contacts: {
-    label: "Contacts",
-    blurb: "Clients, contractors and advisors outside the team — private to you. The Executive emails or invites them only when you ask it to; they can't sign in or message it, and nobody else on the team sees them.",
-    empty: "No contacts yet.",
-    add: "Add contact",
+    label: "people.list.contacts",
+    blurb: "people.list.contactsBlurb",
+    empty: "people.list.contactsEmpty",
+    add: "people.list.addContact",
   },
 };
 
@@ -588,7 +599,7 @@ export default function PeoplePage() {
     setLoading(true);
     listPeople({ includeContacts: true })
       .then(setPeople)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+      .catch((e) => setError(e instanceof Error ? e.message : t("people.dept.loadFailed")))
       .finally(() => setLoading(false));
   }
 
@@ -628,11 +639,11 @@ export default function PeoplePage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
             <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">People</h1>
-              <p className="text-[15px] text-fg-muted mt-2 max-w-2xl">{copy.blurb}</p>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">{t("people.list.title")}</h1>
+              <p className="text-[15px] text-fg-muted mt-2 max-w-2xl">{t(copy.blurb)}</p>
             </div>
             <Button variant="primary" onClick={() => setShowAdd(true)} className="flex-shrink-0 self-start">
-              {copy.add}
+              {t(copy.add)}
             </Button>
           </div>
 
@@ -640,21 +651,21 @@ export default function PeoplePage() {
             <div className="mb-6">
               <SectionTabs
                 idBase={tabsId}
-                label="Team or contacts"
+                label={t("people.list.tabsLabel")}
                 active={activeTab}
                 onChange={setTab}
                 disabled={(workspaceLoading || viewerLoading) && tab === null}
-                tabs={tabs.map((t) => ({
-                  id: t,
-                  label: TAB_COPY[t].label,
-                  count: loading ? undefined : peopleForTab(people, t, mode).length,
+                tabs={tabs.map((id) => ({
+                  id,
+                  label: t(TAB_COPY[id].label),
+                  count: loading ? undefined : peopleForTab(people, id, mode).length,
                 }))}
               />
             </div>
           )}
 
           <div {...(tabs.length > 1 ? sectionPanelProps(tabsId, activeTab) : {})}>
-          {loading && <p className="text-fg-muted text-[15px]">Loading…</p>}
+          {loading && <p className="text-fg-muted text-[15px]">{t("common.loading")}</p>}
           {error && (
             <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[15px] mb-4">
               {error}
@@ -662,9 +673,9 @@ export default function PeoplePage() {
           )}
           {!loading && !error && shown.length === 0 && (
             <div className="rounded-2xl border border-line bg-surface-elevated p-10 text-center">
-              <p className="text-fg-muted text-[15px] mb-5">{copy.empty}</p>
+              <p className="text-fg-muted text-[15px] mb-5">{t(copy.empty)}</p>
               <Button variant="primary" onClick={() => setShowAdd(true)}>
-                {activeTab === "contacts" ? "Add your first contact" : "Add your first person"}
+                {activeTab === "contacts" ? t("people.list.addFirstContact") : t("people.list.addFirstPerson")}
               </Button>
             </div>
           )}
@@ -677,8 +688,7 @@ export default function PeoplePage() {
 
           {hidden > 0 && (
             <p className="text-sm text-fg-muted mt-5">
-              {hidden === 1 ? "1 other team member is" : `${hidden} other team members are`} hidden while you
-              use Open Executive just for yourself. Switch to team mode in Settings to see them.
+              {tp("people.list.hiddenTeam", hidden)}
             </p>
           )}
           </div>

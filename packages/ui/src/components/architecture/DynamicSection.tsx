@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
+import { t } from '@/i18n/index.ts';
 
 // Sanitizer for the section Markdown. Even though the content is
 // authored and version-controlled, we keep defence-in-depth: tighten the
@@ -12,7 +13,7 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 // link targets to http(s) or fragment-only.
 const SAFE_SCHEMA = {
   ...defaultSchema,
-  tagNames: (defaultSchema.tagNames ?? []).filter((t) => t !== 'img'),
+  tagNames: (defaultSchema.tagNames ?? []).filter((tag) => tag !== 'img'),
   attributes: {
     ...defaultSchema.attributes,
     a: [
@@ -92,20 +93,20 @@ export default function DynamicSection({ id, title, sub, basePath = 'architectur
 
       {status === 'loading' && !content && (
         <div className="rounded-lg bg-surface border border-line px-4 py-8 text-center text-xs text-fg-muted animate-pulse">
-          Loading…
+          {t('common.loading')}
         </div>
       )}
 
       {status === 'error' && (
         <div className="rounded-lg bg-red-950/40 border border-red-900 px-4 py-3 text-xs text-red-300">
-          <div className="font-medium mb-1">Failed to load</div>
+          <div className="font-medium mb-1">{t('misc.architecture.failedToLoad')}</div>
           <div className="font-mono">{error}</div>
           <button
             type="button"
             onClick={load}
             className="mt-2 underline text-red-200 hover:text-red-100"
           >
-            Retry
+            {t('misc.architecture.retry')}
           </button>
         </div>
       )}

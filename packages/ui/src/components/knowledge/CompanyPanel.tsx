@@ -32,6 +32,8 @@ import Icon from "@/components/Icon";
 import Button, { buttonClass } from "@/components/ui/Button";
 import OverflowMenu, { type OverflowItem } from "@/components/ui/OverflowMenu";
 import SidePanel from "@/components/ui/SidePanel";
+import { displayLocale, t, tp } from "@/i18n/index.ts";
+import { domainLabel } from "./SourceTree";
 
 interface CompanyPanelProps {
   /** Reports how many documents are listed, for the tab's count. */
@@ -98,7 +100,7 @@ export default function CompanyPanel({ onCountChange }: CompanyPanelProps) {
       // next sync purges them, so list any source with a run on record.
       await loadSynced(srcs.filter((s) => s.enabled || s.last_run).map((s) => s.id));
     } catch {
-      setError("Failed to load documents");
+      setError(t("audit.company.loadFailed"));
     } finally {
       setLoaded(true);
     }
@@ -145,12 +147,14 @@ export default function CompanyPanel({ onCountChange }: CompanyPanelProps) {
     const failed: string[] = [];
     for (const [i, file] of files.entries()) {
       setUploadProgress(
-        files.length > 1 ? `Adding ${i + 1} of ${files.length}: ${file.name}…` : `Adding ${file.name}…`
+        files.length > 1
+          ? t("audit.company.addingMany", { i: i + 1, total: files.length, name: file.name })
+          : t("audit.company.addingOne", { name: file.name })
       );
       try {
         await uploadDocument(file);
       } catch (e) {
-        failed.push(e instanceof Error ? e.message : `Failed to upload ${file.name}`);
+        failed.push(e instanceof Error ? e.message : t("audit.company.uploadFailed", { name: file.name }));
       }
     }
     setUploadProgress(null);
@@ -159,18 +163,18 @@ export default function CompanyPanel({ onCountChange }: CompanyPanelProps) {
     try {
       setUploads(await listDocuments());
     } catch {
-      setError("Failed to refresh documents");
+      setError(t("audit.company.refreshFailed"));
     }
   }
 
   async function handleDelete(row: DocRow) {
-    if (!confirm(`Delete "${row.name}"? The Executive will stop using it.`)) return;
+    if (!confirm(t("audit.company.confirmDelete", { name: row.name }))) return;
     setError(null);
     try {
       await deleteDocument(row.ref);
       setUploads((prev) => prev.filter((d) => d.filename !== row.ref));
     } catch {
-      setError("Failed to delete document");
+      setError(t("audit.company.deleteFailed"));
     }
   }
 
@@ -186,7 +190,7 @@ export default function CompanyPanel({ onCountChange }: CompanyPanelProps) {
         setViewing({ source: row.source, name: doc.name, url: doc.url, content: doc.content });
       }
     } catch {
-      setError("Failed to load document");
+      setError(t("audit.company.loadDocFailed"));
     } finally {
       setViewLoading(null);
     }
@@ -213,7 +217,7 @@ export default function CompanyPanel({ onCountChange }: CompanyPanelProps) {
     <div className="space-y-6 max-w-4xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <p className="text-[15px] text-fg-muted max-w-xl">
-          Your own files, plus anything synced from a connected source.
+          {t("audit.company.intro")}
         </p>
         <label
           className={buttonClass(
@@ -223,7 +227,7 @@ export default function CompanyPanel({ onCountChange }: CompanyPanelProps) {
           )}
         >
           <Icon name="plus" size="w-5 h-5" />
-          Add documents
+          {t("audit.company.addDocuments")}
           <input
             ref={fileInputRef}
             type="file"
@@ -268,10 +272,10 @@ export default function CompanyPanel({ onCountChange }: CompanyPanelProps) {
         ) : (
           <p className="text-[15px] text-fg-muted">
             {rows.length === 0 && loaded
-              ? "No documents yet. Drop files here to add your first ones."
-              : "Drop files here to add them"}
+              ? t("audit.company.emptyDrop")
+              : t("audit.company.drop")}
             <span className="block text-sm text-fg-subtle mt-1">
-              PDF, Word, Excel, CSV, Markdown or text, up to 50 MB each
+              {t("audit.company.accepted")}
             </span>
           </p>
         )}
@@ -293,15 +297,15 @@ export default function CompanyPanel({ onCountChange }: CompanyPanelProps) {
                         : "text-fg-muted border-line hover:text-fg hover:bg-surface-overlay"
                     }`}
                   >
-                    {opt === "all" ? `All (${rows.length})` : SOURCE_LABELS[opt]}
+                    {opt === "all" ? t("audit.company.allCount", { n: rows.length }) : SOURCE_LABELS[opt]}
                   </button>
                 ))}
               {rows.length > 8 && (
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by name…"
-                  aria-label="Search documents by name"
+                  placeholder={t("audit.company.searchPlaceholder")}
+                  aria-label={t("audit.company.searchLabel")}
                   className="w-full sm:w-60 sm:ml-auto h-10 rounded-xl border border-line bg-surface-elevated px-3 text-sm text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent/40"
                 />
               )}
@@ -320,7 +324,7 @@ export default function CompanyPanel({ onCountChange }: CompanyPanelProps) {
             ))}
             {shown.length === 0 && (
               <li className="px-5 py-8 text-[15px] text-fg-subtle text-center">
-                No documents match.
+                {t("audit.company.noMatch")}
               </li>
             )}
           </ul>
@@ -348,14 +352,14 @@ function SourcesStrip({
     return (
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-line bg-surface-overlay/50 px-5 py-4">
         <p className="flex-1 text-[15px] text-fg-muted">
-          Connect Google Drive, OneDrive or Notion to bring documents in automatically.
+          {t("audit.company.connectHint")}
         </p>
         {/* Sources are connected with environment settings; the guide says how. */}
         <Link
           href="/guide#knowledge"
           className={buttonClass("secondary", "md", "self-start sm:self-auto")}
         >
-          How to connect
+          {t("audit.company.howToConnect")}
         </Link>
       </div>
     );
@@ -382,25 +386,28 @@ function SourcesStrip({
                 onClick={() => onSyncNow(s.id)}
                 disabled={s.syncing}
               >
-                {s.syncing ? "Syncing…" : "Sync now"}
+                {s.syncing ? t("audit.company.syncing") : t("audit.company.syncNow")}
               </Button>
             </div>
             <p className="text-sm text-fg-muted mt-1.5">
               {s.syncing
-                ? "Checking for new and changed files…"
+                ? t("audit.company.checking")
                 : s.last_run
-                  ? `Last synced ${formatRelativeTime(s.last_run)} · ${s.file_count} ${
-                      s.file_count === 1 ? "file" : "files"
-                    }`
-                  : "Not synced yet"}
-              <span className="text-fg-subtle"> · syncs {formatInterval(s.interval_minutes)}</span>
+                  ? t("audit.company.lastSynced", {
+                      time: formatRelativeTime(s.last_run),
+                      files: tp("audit.company.files", s.file_count),
+                    })
+                  : t("audit.company.notSynced")}
+              <span className="text-fg-subtle">
+                {t("audit.company.syncsEvery", { interval: formatInterval(s.interval_minutes) })}
+              </span>
             </p>
             {(s.last_error || message) && (
               <p className="text-sm text-red-500 mt-1.5">
                 {message ?? s.last_error}{" "}
                 {!message && (
                   <Link href="/guide#knowledge" className="underline">
-                    How to fix
+                    {t("audit.company.howToFix")}
                   </Link>
                 )}
               </p>
@@ -425,24 +432,27 @@ function DocListRow({
 }) {
   const details: string[] = [];
   if (row.source === "upload") {
-    if (row.addedAt) details.push(`Added ${new Date(row.addedAt).toLocaleDateString()}`);
+    if (row.addedAt) details.push(t("audit.company.added", { date: new Date(row.addedAt).toLocaleDateString(displayLocale()) }));
     if (row.sizeBytes !== null) details.push(formatSize(row.sizeBytes));
   } else {
-    if (!row.indexed) details.push("No readable text");
-    if (row.addedAt) details.push(`Synced ${formatRelativeTime(row.addedAt)}`);
+    if (!row.indexed) details.push(t("audit.company.noText"));
+    if (row.addedAt) details.push(t("audit.company.synced", { time: formatRelativeTime(row.addedAt) }));
     if (row.editedAt)
       details.push(
-        `edited in ${SOURCE_LABELS[row.source]} ${new Date(row.editedAt).toLocaleDateString()}`
+        t("audit.company.editedIn", {
+          source: SOURCE_LABELS[row.source],
+          date: new Date(row.editedAt).toLocaleDateString(displayLocale()),
+        })
       );
   }
   const source = SOURCE_LABELS[row.source];
   const menu: OverflowItem[] = [];
-  if (row.url) menu.push({ label: `Open in ${source} ↗`, href: row.url, external: true });
+  if (row.url) menu.push({ label: t("audit.company.openIn", { source }), href: row.url, external: true });
   if (row.source === "upload") {
-    menu.push({ label: "Delete", danger: true, onSelect: onDelete });
+    menu.push({ label: t("common.delete"), danger: true, onSelect: onDelete });
   } else {
     // Synced files are removed at their source; say so where Delete would be.
-    menu.push({ label: `Managed in ${source}: remove it there`, disabled: true });
+    menu.push({ label: t("audit.company.managedIn", { source }), disabled: true });
   }
   return (
     <li className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3.5">
@@ -461,7 +471,7 @@ function DocListRow({
           <span className={`h-2 w-2 rounded-full flex-shrink-0 ${SOURCE_DOT[row.source]}`} aria-hidden />
           <span className="flex-shrink-0">{source}</span>
           {row.domain && (
-            <span className="hidden sm:inline flex-shrink-0 capitalize text-fg-subtle">· {row.domain}</span>
+            <span className="hidden sm:inline flex-shrink-0 capitalize text-fg-subtle">· {domainLabel(row.domain)}</span>
           )}
           {details.length > 0 && <span className="truncate">· {details.join(" · ")}</span>}
         </p>
@@ -469,10 +479,10 @@ function DocListRow({
       <div className="flex items-center gap-1 flex-shrink-0">
         {row.indexed && (
           <Button size="sm" className="!h-10" onClick={onView} disabled={loading}>
-            {loading ? "Loading…" : "View"}
+            {loading ? t("common.loading") : t("audit.company.view")}
           </Button>
         )}
-        <OverflowMenu items={menu} label={`More actions for ${row.name}`} />
+        <OverflowMenu items={menu} label={t("audit.company.moreActionsFor", { name: row.name })} />
       </div>
     </li>
   );
@@ -488,8 +498,8 @@ function Viewer({ doc, onClose }: { doc: Viewing | null; onClose: () => void }) 
       subtitle={
         doc
           ? doc.source === "upload"
-            ? "Uploaded document"
-            : `From ${SOURCE_LABELS[doc.source]}`
+            ? t("audit.company.uploaded")
+            : t("audit.company.from", { source: SOURCE_LABELS[doc.source] })
           : undefined
       }
       footer={
@@ -500,7 +510,7 @@ function Viewer({ doc, onClose }: { doc: Viewing | null; onClose: () => void }) 
             rel="noopener noreferrer"
             className={buttonClass("secondary", "md")}
           >
-            Open original ↗
+            {t("audit.company.openOriginal")}
           </a>
         ) : undefined
       }
@@ -520,7 +530,9 @@ function Viewer({ doc, onClose }: { doc: Viewing | null; onClose: () => void }) 
 // folder or page, so the viewer never fetches its images (a remote image is a
 // read beacon) and opens its links in a new tab, away from the app.
 const SAFE_MARKDOWN: Components = {
-  img: ({ alt }) => <span className="text-fg-subtle">[image{alt ? `: ${alt}` : ""}]</span>,
+  img: ({ alt }) => <span className="text-fg-subtle">
+      {alt ? t("audit.company.imageAlt", { alt: String(alt) }) : t("audit.company.image")}
+    </span>,
   a: ({ href, children }) => (
     <a href={href} target="_blank" rel="noopener noreferrer nofollow">
       {children}

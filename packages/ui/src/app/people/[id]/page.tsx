@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import SectionTabs, { sectionPanelProps } from "@/components/ui/SectionTabs";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { displayLocale, t, type MessageKey } from "@/i18n/index.ts";
 import {
   archivePerson,
   assignOpenLoop,
@@ -33,20 +34,28 @@ import { isContact, shouldOfferTeamMode } from "@/lib/peopleKinds";
 // Constants
 // ---------------------------------------------------------------------------
 
-const ALL_SCOPES = [
-  { value: "spend_lt_2k", label: "Spend <$2K", hint: "Receives proposals for any spend under $2K." },
-  { value: "spend_lt_10k", label: "Spend <$10K", hint: "Receives proposals for spend under $10K." },
-  { value: "spend_gt_10k", label: "Spend >$10K", hint: "Receives proposals for spend over $10K." },
-  { value: "hiring_signoff", label: "Hiring", hint: "Receives proposals related to hiring decisions." },
-  { value: "vendor_onboarding", label: "Vendors", hint: "Receives proposals for vendor contracts." },
-  { value: "customer_credit", label: "Credit", hint: "Receives proposals involving credit or debt." },
-  { value: "legal_sign", label: "Legal", hint: "Receives proposals with legal implications." },
-  { value: "board_comms", label: "Board", hint: "Receives proposals before board communications." },
-  { value: "meeting_scheduling", label: "Meetings", hint: "Receives meetings the Executive wants to book." },
-  { value: "wildcard", label: "All (wildcard)", hint: "Receives anything no one else is scoped for — usually the principal." },
+// Labels and hints are dictionary keys, looked up where they render.
+const ALL_SCOPES: { value: string; label: MessageKey; hint: MessageKey }[] = [
+  { value: "spend_lt_2k", label: "people.scope.spendLt2k", hint: "people.scope.spendLt2kHint" },
+  { value: "spend_lt_10k", label: "people.scope.spendLt10k", hint: "people.scope.spendLt10kHint" },
+  { value: "spend_gt_10k", label: "people.scope.spendGt10k", hint: "people.scope.spendGt10kHint" },
+  { value: "hiring_signoff", label: "people.scope.hiring", hint: "people.scope.hiringHint" },
+  { value: "vendor_onboarding", label: "people.scope.vendors", hint: "people.scope.vendorsHint" },
+  { value: "customer_credit", label: "people.scope.credit", hint: "people.scope.creditHint" },
+  { value: "legal_sign", label: "people.scope.legal", hint: "people.scope.legalHint" },
+  { value: "board_comms", label: "people.scope.board", hint: "people.scope.boardHint" },
+  { value: "meeting_scheduling", label: "people.scope.meetings", hint: "people.scope.meetingsHint" },
+  { value: "wildcard", label: "people.scope.wildcard", hint: "people.scope.wildcardHint" },
 ];
 
 const CHANNELS = ["any", "slack", "discord", "telegram", "email"];
+
+// The raw channel values as shown; brand names stay as-is.
+function channelOption(channel: string): string {
+  if (channel === "any") return t("people.channel.any");
+  if (channel === "email") return t("people.channel.email");
+  return channel;
+}
 
 const INPUT_CLS =
   "w-full h-11 px-3 rounded-xl bg-surface-input/60 border border-line text-[15px] text-fg placeholder-fg-subtle focus:outline-none focus:border-accent";
@@ -69,16 +78,15 @@ function OutreachSection({ personId }: { personId: number }) {
       .catch(() => setRows([]));
   }, [personId]);
 
-  if (!rows) return <p className="text-[15px] text-fg-muted">Loading…</p>;
+  if (!rows) return <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>;
   return (
     <section>
-      <h2 className={SECTION_TITLE_CLS}>How they respond</h2>
+      <h2 className={SECTION_TITLE_CLS}>{t("people.detail.howTheyRespond")}</h2>
       <p className={INTRO_CLS}>
-        Proactive messages over the last 30 days. Kinds they reliably ignore are
-        sent less often.
+        {t("people.detail.respondIntro")}
       </p>
       {rows.length === 0 && (
-        <p className="text-[15px] text-fg-muted">No proactive messages to them in the last 30 days.</p>
+        <p className="text-[15px] text-fg-muted">{t("people.detail.noProactive")}</p>
       )}
       <div className="space-y-2">
         {rows.map((r) => {
@@ -91,8 +99,10 @@ function OutreachSection({ personId }: { personId: number }) {
             >
               <span className="text-fg capitalize">{r.label}</span>
               <span className="text-sm text-fg-muted">
-                {resolved > 0 ? `${answered} of ${resolved} answered` : "no answers yet"}
-                {r.pending > 0 ? ` · ${r.pending} pending` : ""}
+                {resolved > 0
+                  ? t("people.detail.answered", { answered, resolved })
+                  : t("people.detail.noAnswers")}
+                {r.pending > 0 ? t("people.detail.pending", { n: r.pending }) : ""}
               </span>
             </div>
           );
@@ -129,13 +139,13 @@ function WorkingStyleSection({ personId }: { personId: number }) {
       setStyle(await action());
       setEditing(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      setError(e instanceof Error ? e.message : t("people.detail.saveFailed"));
     } finally {
       setBusy(false);
     }
   }
 
-  if (!style) return <p className="text-[15px] text-fg-muted">Loading…</p>;
+  if (!style) return <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>;
   const rules = draft
     .split("\n")
     .map((line) => line.replace(/^[-•]\s*/, "").trim())
@@ -143,7 +153,7 @@ function WorkingStyleSection({ personId }: { personId: number }) {
   return (
     <section>
       <div className="flex items-start justify-between gap-3">
-        <h2 className={SECTION_TITLE_CLS}>How I work with them</h2>
+        <h2 className={SECTION_TITLE_CLS}>{t("people.detail.howIWork")}</h2>
         {!editing && (
           <div className="flex items-center gap-1 flex-shrink-0 -mt-1.5">
             <Button
@@ -154,19 +164,19 @@ function WorkingStyleSection({ personId }: { personId: number }) {
                 setEditing(true);
               }}
             >
-              Edit rules
+              {t("people.detail.editRules")}
             </Button>
             <OverflowMenu
-              label="More working-style actions"
+              label={t("people.detail.moreStyleActions")}
               items={[
                 {
-                  label: style.locked ? "Unlock (keep learning)" : "Lock (stop learning)",
+                  label: style.locked ? t("people.detail.unlock") : t("people.detail.lock"),
                   disabled: busy,
                   onSelect: () => void run(() => savePersonWorkingStyle(personId, null, !style.locked)),
                 },
                 ...(style.rules.length > 0
                   ? [{
-                      label: "Reset what was learned",
+                      label: t("people.detail.reset"),
                       danger: true,
                       disabled: busy,
                       onSelect: () =>
@@ -182,10 +192,8 @@ function WorkingStyleSection({ personId }: { personId: number }) {
         )}
       </div>
       <p className={INTRO_CLS}>
-        How replies are written for them, learned from their own 👍/👎 and requests.
-        {style.locked
-          ? " Locked — kept as is."
-          : " Updated as they use it; rules you type are always kept. Lock it to stop learning."}
+        {t("people.detail.styleIntro")}
+        {style.locked ? t("people.detail.styleLocked") : t("people.detail.styleUnlocked")}
       </p>
       {error && <p className="text-sm text-rose-500 mb-3">{error}</p>}
       {editing ? (
@@ -194,11 +202,11 @@ function WorkingStyleSection({ personId }: { personId: number }) {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={STYLE_TEXTAREA_ROWS}
-            placeholder="One rule per line, e.g. Lead with the recommendation, then the numbers."
+            placeholder={t("people.detail.rulesPlaceholder")}
             className="w-full px-3 py-2.5 rounded-xl border border-line bg-surface-input/60 text-[15px] text-fg focus:outline-none focus:border-accent"
           />
           {rules.length > MAX_STYLE_RULES && (
-            <p className="text-sm text-amber-500">At most {MAX_STYLE_RULES} rules.</p>
+            <p className="text-sm text-amber-500">{t("people.detail.atMostRules", { n: MAX_STYLE_RULES })}</p>
           )}
           <div className="flex gap-2">
             <Button
@@ -206,15 +214,15 @@ function WorkingStyleSection({ personId }: { personId: number }) {
               disabled={busy || rules.length > MAX_STYLE_RULES}
               onClick={() => run(() => savePersonWorkingStyle(personId, rules, style.locked))}
             >
-              {busy ? "Saving…" : "Save"}
+              {busy ? t("common.saving") : t("common.save")}
             </Button>
             <Button disabled={busy} onClick={() => setEditing(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </div>
       ) : style.rules.length === 0 ? (
-        <p className="text-[15px] text-fg-muted">Nothing learned yet.</p>
+        <p className="text-[15px] text-fg-muted">{t("people.detail.nothingLearned")}</p>
       ) : (
         <ul className="space-y-2">
           {style.rules.map((r) => (
@@ -261,7 +269,7 @@ function OpenLoopsSection({
     if (!canList) return;
     getPersonOpenLoops(personId)
       .then(setLoops)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+      .catch((e) => setError(e instanceof Error ? e.message : t("people.dept.loadFailed")));
   }, [personId, canList]);
 
   async function close(loopId: number) {
@@ -271,7 +279,7 @@ function OpenLoopsSection({
       await closeOpenLoop(loopId, "done");
       setLoops((prev) => (prev ?? []).filter((l) => l.loop_id !== loopId));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to close");
+      setError(e instanceof Error ? e.message : t("people.detail.closeFailed"));
     } finally {
       setClosing(null);
     }
@@ -292,12 +300,12 @@ function OpenLoopsSection({
         );
       }
       setAssigned(
-        `Assigned — due ${new Date(loop.due_at).toLocaleDateString()}. They'll be followed up if it isn't done by then.`,
+        t("people.detail.assigned", { date: new Date(loop.due_at).toLocaleDateString(displayLocale()) }),
       );
       setTask("");
       setDueDate("");
     } catch (err) {
-      setAssignError(err instanceof Error ? err.message : "Couldn't assign the task");
+      setAssignError(err instanceof Error ? err.message : t("people.detail.assignFailed"));
     } finally {
       setAssigning(false);
     }
@@ -307,18 +315,17 @@ function OpenLoopsSection({
   const now = mountedAt;
   return (
     <section className="mt-8">
-      <h2 className={SECTION_TITLE_CLS}>Open loops</h2>
+      <h2 className={SECTION_TITLE_CLS}>{t("people.detail.openLoops")}</h2>
       <p className={INTRO_CLS}>
-        Things they committed to, were asked for in conversation, or were assigned here.
-        Overdue ones are followed up automatically; close one once it&apos;s done.
+        {t("people.detail.openLoopsIntro")}
       </p>
       {canList && (
         <>
           {error && <p className="text-sm text-rose-500 mb-3">{error}</p>}
           {loops === null ? (
-            !error && <p className="text-[15px] text-fg-muted">Loading…</p>
+            !error && <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>
           ) : loops.length === 0 ? (
-            <p className="text-[15px] text-fg-muted">Nothing open.</p>
+            <p className="text-[15px] text-fg-muted">{t("people.detail.nothingOpen")}</p>
           ) : (
             <div className="space-y-2">
               {loops.map((l) => {
@@ -331,8 +338,9 @@ function OpenLoopsSection({
                     <div className="min-w-0">
                       <p className="text-fg">{l.description}</p>
                       <p className={`text-sm mt-0.5 ${overdue ? "text-amber-600 dark:text-amber-400" : "text-fg-muted"}`}>
-                        {overdue ? "Overdue since " : "Due "}
-                        {new Date(l.due_at).toLocaleDateString()}
+                        {t(overdue ? "people.detail.overdueSince" : "people.detail.dueOn", {
+                          date: new Date(l.due_at).toLocaleDateString(displayLocale()),
+                        })}
                       </p>
                     </div>
                     <Button
@@ -340,7 +348,7 @@ function OpenLoopsSection({
                       onClick={() => close(l.loop_id)}
                       className="flex-shrink-0"
                     >
-                      {closing === l.loop_id ? "Closing…" : "Mark done"}
+                      {closing === l.loop_id ? t("people.detail.closing") : t("people.detail.markDone")}
                     </Button>
                   </div>
                 );
@@ -352,17 +360,17 @@ function OpenLoopsSection({
       {canAssign && (
         <form onSubmit={assign} className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-end">
           <label className={`flex-1 ${LABEL_CLS}`}>
-            Assign a task
+            {t("people.detail.assignTask")}
             <input
               value={task}
               onChange={(e) => setTask(e.target.value)}
               maxLength={200}
-              placeholder="e.g. send the vendor quote"
+              placeholder={t("people.detail.taskPlaceholder")}
               className={INPUT_CLS}
             />
           </label>
           <label className={LABEL_CLS}>
-            Due (optional)
+            {t("people.detail.dueOptional")}
             <input
               type="date"
               value={dueDate}
@@ -371,7 +379,7 @@ function OpenLoopsSection({
             />
           </label>
           <Button type="submit" variant="primary" disabled={assigning || !task.trim()}>
-            {assigning ? "Assigning…" : "Assign"}
+            {assigning ? t("people.detail.assigning") : t("people.detail.assign")}
           </Button>
         </form>
       )}
@@ -383,7 +391,15 @@ function OpenLoopsSection({
 
 type PersonTab = "overview" | "approvals" | "respond" | "style";
 
-const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAY_NAMES: MessageKey[] = [
+  "people.weekday.mon",
+  "people.weekday.tue",
+  "people.weekday.wed",
+  "people.weekday.thu",
+  "people.weekday.fri",
+  "people.weekday.sat",
+  "people.weekday.sun",
+];
 
 // ---------------------------------------------------------------------------
 // Disclosure section — collapsible panel used in edit mode
@@ -449,13 +465,13 @@ function WindowRow({ win, onChange, onRemove }: WindowRowProps) {
                 : "bg-surface-elevated border-line text-fg-muted hover:border-line-strong"
             }`}
           >
-            {name}
+            {t(name)}
           </button>
         ))}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <label className={LABEL_CLS}>
-          Start
+          {t("people.detail.start")}
           <input
             type="time"
             value={win.start_local}
@@ -464,7 +480,7 @@ function WindowRow({ win, onChange, onRemove }: WindowRowProps) {
           />
         </label>
         <label className={LABEL_CLS}>
-          End
+          {t("people.detail.end")}
           <input
             type="time"
             value={win.end_local}
@@ -473,7 +489,7 @@ function WindowRow({ win, onChange, onRemove }: WindowRowProps) {
           />
         </label>
         <label className={LABEL_CLS}>
-          Timezone
+          {t("people.detail.timezone")}
           <input
             value={win.timezone}
             onChange={(e) => onChange({ ...win, timezone: e.target.value })}
@@ -483,13 +499,13 @@ function WindowRow({ win, onChange, onRemove }: WindowRowProps) {
         </label>
       </div>
       {win.weekdays.length === 0 && (
-        <p className="text-sm text-amber-600 dark:text-amber-400">Select at least one day.</p>
+        <p className="text-sm text-amber-600 dark:text-amber-400">{t("people.detail.selectDay")}</p>
       )}
       {win.end_local <= win.start_local && win.start_local !== "" && win.end_local !== "" && (
-        <p className="text-sm text-amber-600 dark:text-amber-400">End time must be after start time.</p>
+        <p className="text-sm text-amber-600 dark:text-amber-400">{t("people.detail.endAfterStart")}</p>
       )}
       <Button variant="danger" onClick={onRemove}>
-        Remove window
+        {t("people.detail.removeWindow")}
       </Button>
     </div>
   );
@@ -573,7 +589,7 @@ export default function PersonDetailPage() {
           setShowAdvanced(true);
         }
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+      .catch((e) => setError(e instanceof Error ? e.message : t("people.dept.loadFailed")))
       .finally(() => setLoading(false));
   }, [personId]);
 
@@ -637,7 +653,7 @@ export default function PersonDetailPage() {
   async function save() {
     const trimmedName = form.full_name.trim();
     if (!trimmedName) {
-      setSaveErr("Full name is required.");
+      setSaveErr(t("people.detail.nameRequired"));
       return;
     }
     setSaving(true);
@@ -674,21 +690,21 @@ export default function PersonDetailPage() {
       }
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
-      setSaveErr(e instanceof Error ? e.message : "Save failed");
+      setSaveErr(e instanceof Error ? e.message : t("people.dept.saveFailed"));
     } finally {
       setSaving(false);
     }
   }
 
   async function doArchive() {
-    if (!window.confirm("Archive this person? Archiving removes them from routing and the active roster: they won't receive new assignments, but their history is preserved.")) return;
+    if (!window.confirm(t("people.detail.archiveConfirm"))) return;
     setArchiving(true);
     setSaveErr(null);
     try {
       await archivePerson(personId);
       router.push("/people");
     } catch (e) {
-      setSaveErr(e instanceof Error ? e.message : "Archive failed");
+      setSaveErr(e instanceof Error ? e.message : t("people.detail.archiveFailed"));
       setArchiving(false);
     }
   }
@@ -699,20 +715,20 @@ export default function PersonDetailPage() {
   const contactView = editing ? formContact : contact;
   const tabs: { id: PersonTab; label: string }[] = person
     ? [
-        { id: "overview", label: "Overview" },
-        ...(contactView ? [] : [{ id: "approvals" as const, label: "Approvals & availability" }]),
+        { id: "overview", label: t("people.detail.overview") },
+        ...(contactView ? [] : [{ id: "approvals" as const, label: t("people.detail.approvalsTab") }]),
         ...(person.archived || contact
           ? []
           : [
-              { id: "respond" as const, label: "How they respond" },
-              { id: "style" as const, label: "How I work with them" },
+              { id: "respond" as const, label: t("people.detail.howTheyRespond") },
+              { id: "style" as const, label: t("people.detail.howIWork") },
             ]),
       ]
     : [];
-  const activeTab: PersonTab = tabs.some((t) => t.id === tab) ? tab : "overview";
+  const activeTab: PersonTab = tabs.some((x) => x.id === tab) ? tab : "overview";
   const menuItems =
     person && !person.is_principal && !person.archived
-      ? [{ label: archiving ? "Archiving…" : "Archive person", danger: true, disabled: archiving, onSelect: () => void doArchive() }]
+      ? [{ label: archiving ? t("people.detail.archiving") : t("people.detail.archive"), danger: true, disabled: archiving, onSelect: () => void doArchive() }]
       : [];
 
   return (
@@ -720,7 +736,7 @@ export default function PersonDetailPage() {
       {offerFor && <TeamModeOffer name={offerFor} onDone={() => setOfferFor(null)} />}
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-          {loading && <p className="text-fg-muted text-[15px]">Loading…</p>}
+          {loading && <p className="text-fg-muted text-[15px]">{t("common.loading")}</p>}
           {error && (
             <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[15px]">
               {error}
@@ -739,27 +755,27 @@ export default function PersonDetailPage() {
                     {person.full_name}
                   </h1>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <span className="text-[15px] text-fg-muted">{person.role || "No role set"}</span>
+                    <span className="text-[15px] text-fg-muted">{person.role || t("people.detail.noRole")}</span>
                     {person.is_principal && (
                       <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">
-                        Principal
+                        {t("people.person.principal")}
                       </span>
                     )}
                     {contact && (
                       <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                        Contact
+                        {t("people.add.contact")}
                       </span>
                     )}
                     {person.archived && (
                       <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-500">
-                        Archived
+                        {t("people.detail.archived")}
                       </span>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {saved && (
-                    <span className="text-sm text-emerald-600 dark:text-emerald-400">Saved ✓</span>
+                    <span className="text-sm text-emerald-600 dark:text-emerald-400">{t("people.detail.savedCheck")}</span>
                   )}
                   {editing ? (
                     <>
@@ -768,7 +784,7 @@ export default function PersonDetailPage() {
                         disabled={saving || !form.full_name.trim()}
                         onClick={save}
                       >
-                        {saving ? "Saving…" : "Save"}
+                        {saving ? t("common.saving") : t("common.save")}
                       </Button>
                       <Button
                         disabled={saving}
@@ -778,15 +794,15 @@ export default function PersonDetailPage() {
                           setSaveErr(null);
                         }}
                       >
-                        Cancel
+                        {t("common.cancel")}
                       </Button>
                     </>
                   ) : (
                     <Button variant="primary" onClick={() => setEditing(true)}>
-                      Edit
+                      {t("common.edit")}
                     </Button>
                   )}
-                  <OverflowMenu label={`More actions for ${person.full_name}`} items={menuItems} />
+                  <OverflowMenu label={t("people.dept.moreActions", { title: person.full_name })} items={menuItems} />
                 </div>
               </div>
 
@@ -798,7 +814,7 @@ export default function PersonDetailPage() {
 
               {tabs.length > 1 && (
                 <div className="mb-6">
-                  <SectionTabs idBase={tabsId} label="About this person" tabs={tabs} active={activeTab} onChange={setTab} />
+                  <SectionTabs idBase={tabsId} label={t("people.detail.aboutPerson")} tabs={tabs} active={activeTab} onChange={setTab} />
                 </div>
               )}
 
@@ -812,7 +828,7 @@ export default function PersonDetailPage() {
                     {/* Always-visible in edit mode */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <label className={LABEL_CLS}>
-                        Full name
+                        {t("people.detail.fullName")}
                         <input
                           value={form.full_name}
                           onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
@@ -820,7 +836,7 @@ export default function PersonDetailPage() {
                         />
                       </label>
                       <label className={LABEL_CLS}>
-                        {formContact ? "Role and company" : "Role"}
+                        {formContact ? t("people.add.roleAndCompany") : t("people.add.role")}
                         <input
                           value={form.role}
                           onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
@@ -831,46 +847,48 @@ export default function PersonDetailPage() {
 
                     {!person.is_principal && viewerIsPrincipal && (
                       <label className={LABEL_CLS}>
-                        Team member or contact
+                        {t("people.add.kindGroup")}
                         <select
                           value={form.kind}
                           onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as PersonKind }))}
                           className={INPUT_CLS}
                         >
-                          <option value="team">Team member — can sign in, message the Executive and approve</option>
-                          <option value="contact">Contact — outside the team and private to you, emailed only when you ask</option>
+                          <option value="team">{t("people.detail.kindTeamOption")}</option>
+                          <option value="contact">{t("people.detail.kindContactOption")}</option>
                         </select>
                       </label>
                     )}
 
                     {/* Contact & routing */}
                     <DisclosureSection
-                      label="Contact & routing"
+                      label={t("people.add.contactRouting")}
                       open={showContact}
                       onToggle={() => setShowContact((v) => !v)}
                     >
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className={LABEL_CLS}>
-                            Preferred channel
+                            {t("people.add.preferredChannel")}
                             <select
                               value={form.preferred_channel}
                               onChange={(e) => setForm((f) => ({ ...f, preferred_channel: e.target.value }))}
                               className={INPUT_CLS}
                             >
                               {CHANNELS.map((c) => (
-                                <option key={c} value={c}>{c}</option>
+                                <option key={c} value={c}>{channelOption(c)}</option>
                               ))}
                             </select>
                           </label>
                           <p className={HINT_CLS}>
-                            Proposals routed to this person are sent via {form.preferred_channel === "any" ? "any available channel" : form.preferred_channel}.
+                            {t("people.add.sentVia", {
+                              channel: form.preferred_channel === "any" ? t("people.add.anyAvailableChannel") : form.preferred_channel,
+                            })}
                           </p>
                         </div>
                         {!formContact && (
                         <div>
                           <label className={LABEL_CLS}>
-                            Expected reply within
+                            {t("people.add.expectedReply")}
                             <div className="flex items-center gap-2">
                               <input
                                 type="number"
@@ -879,18 +897,18 @@ export default function PersonDetailPage() {
                                 onChange={(e) => setForm((f) => ({ ...f, response_sla_hours: e.target.value }))}
                                 className={`${INPUT_CLS} flex-1 min-w-0`}
                               />
-                              <span className="text-sm text-fg-muted flex-shrink-0">hours</span>
+                              <span className="text-sm text-fg-muted flex-shrink-0">{t("people.add.hours")}</span>
                             </div>
                           </label>
                           <p className={HINT_CLS}>
-                            Items show as overdue on Home after {form.response_sla_hours || 24}h with no reply.
+                            {t("people.add.overdueHint", { n: form.response_sla_hours || 24 })}
                           </p>
                         </div>
                         )}
                       </div>
 
                       <label className={LABEL_CLS}>
-                        Email
+                        {t("people.add.email")}
                         <input
                           type="email"
                           value={form.email}
@@ -900,7 +918,7 @@ export default function PersonDetailPage() {
                       </label>
 
                       <label className={LABEL_CLS}>
-                        Other addresses
+                        {t("people.detail.otherAddresses")}
                         <textarea
                           value={form.email_aliases}
                           onChange={(e) => setForm((f) => ({ ...f, email_aliases: e.target.value }))}
@@ -909,13 +927,12 @@ export default function PersonDetailPage() {
                           className={`${INPUT_CLS} h-auto py-2.5`}
                         />
                         <span className={HINT_CLS}>
-                          One per line. Mail from these reaches them, and they can be emailed
-                          here — but only the address above signs in.
+                          {t("people.detail.otherAddressesHint")}
                         </span>
                       </label>
 
                       <label className={LABEL_CLS}>
-                        Slack user ID
+                        {t("people.add.slackUserId")}
                         <input
                           value={form.slack_user_id}
                           onChange={(e) => setForm((f) => ({ ...f, slack_user_id: e.target.value }))}
@@ -925,7 +942,7 @@ export default function PersonDetailPage() {
                       </label>
 
                       <label className={LABEL_CLS}>
-                        Discord user ID
+                        {t("people.add.discordUserId")}
                         <input
                           value={form.discord_user_id}
                           onChange={(e) => setForm((f) => ({ ...f, discord_user_id: e.target.value }))}
@@ -933,12 +950,12 @@ export default function PersonDetailPage() {
                           placeholder="123456789012345678"
                         />
                         <span className={HINT_CLS}>
-                          Right-click your Discord username and &quot;Copy User ID&quot; (developer mode required).
+                          {t("people.add.discordHint")}
                         </span>
                       </label>
 
                       <label className={LABEL_CLS}>
-                        Telegram chat ID
+                        {t("people.dept.telegramChatId")}
                         <input
                           value={form.telegram_chat_id}
                           onChange={(e) => setForm((f) => ({ ...f, telegram_chat_id: e.target.value }))}
@@ -950,12 +967,12 @@ export default function PersonDetailPage() {
 
                     {/* Advanced */}
                     <DisclosureSection
-                      label="Advanced"
+                      label={t("people.detail.advanced")}
                       open={showAdvanced}
                       onToggle={() => setShowAdvanced((v) => !v)}
                     >
                       <label className={LABEL_CLS}>
-                        On leave until
+                        {t("people.detail.onLeaveUntil")}
                         <input
                           type="date"
                           value={form.on_leave_until}
@@ -968,15 +985,15 @@ export default function PersonDetailPage() {
                 ) : (
                   <dl className="divide-y divide-line">
                     {[
-                      ["Kind", contact ? "Contact — outside the team" : "Team member"],
-                      ["Preferred channel", person.preferred_channel],
-                      ...(contact ? [] : [["Expected reply within", `${person.response_sla_hours} hours`]]),
-                      ["Email", person.email ?? "—"],
-                      ["Other addresses", (person.email_aliases ?? []).join(", ") || "—"],
-                      ["Slack user ID", person.slack_user_id ?? "—"],
-                      ["Discord user ID", person.discord_user_id ?? "—"],
-                      ["Telegram chat ID", person.telegram_chat_id ?? "—"],
-                      ["On leave until", person.on_leave_until ?? "—"],
+                      [t("people.detail.kind"), contact ? t("people.detail.kindContact") : t("people.add.teamMember")],
+                      [t("people.add.preferredChannel"), channelOption(person.preferred_channel)],
+                      ...(contact ? [] : [[t("people.add.expectedReply"), t("people.detail.slaHours", { n: person.response_sla_hours })]]),
+                      [t("people.add.email"), person.email ?? "—"],
+                      [t("people.detail.otherAddresses"), (person.email_aliases ?? []).join(", ") || "—"],
+                      [t("people.add.slackUserId"), person.slack_user_id ?? "—"],
+                      [t("people.add.discordUserId"), person.discord_user_id ?? "—"],
+                      [t("people.dept.telegramChatId"), person.telegram_chat_id ?? "—"],
+                      [t("people.detail.onLeaveUntil"), person.on_leave_until ?? "—"],
                     ].map(([label, value]) => (
                       <div key={label} className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-4 py-3">
                         <dt className="sm:w-48 flex-shrink-0 text-sm text-fg-muted">{label}</dt>
@@ -1001,8 +1018,8 @@ export default function PersonDetailPage() {
               {activeTab === "approvals" && !contactView && (
                 <>
               <section>
-                <h2 className={SECTION_TITLE_CLS}>What this person approves</h2>
-                <p className={INTRO_CLS}>Proposals in these areas are routed to them for approval.</p>
+                <h2 className={SECTION_TITLE_CLS}>{t("people.add.whatApproves")}</h2>
+                <p className={INTRO_CLS}>{t("people.detail.approvesIntro")}</p>
                 {editing ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {ALL_SCOPES.map(({ value, label, hint }) => {
@@ -1019,8 +1036,8 @@ export default function PersonDetailPage() {
                               : "bg-surface-elevated border-line text-fg-muted hover:border-line-strong"
                           }`}
                         >
-                          <div className="text-[15px] font-medium">{label}</div>
-                          <div className="text-[13px] leading-snug mt-0.5 text-fg-muted">{hint}</div>
+                          <div className="text-[15px] font-medium">{t(label)}</div>
+                          <div className="text-[13px] leading-snug mt-0.5 text-fg-muted">{t(hint)}</div>
                         </button>
                       );
                     })}
@@ -1028,21 +1045,21 @@ export default function PersonDetailPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {person.authority_scope.length === 0 ? (
-                      <p className="text-[15px] text-fg-muted">No approval authority.</p>
+                      <p className="text-[15px] text-fg-muted">{t("people.detail.noAuthority")}</p>
                     ) : (
                       person.authority_scope.map((s) => {
                         const entry = ALL_SCOPES.find((x) => x.value === s);
                         return (
                           <span
                             key={s}
-                            title={entry?.hint}
+                            title={entry ? t(entry.hint) : undefined}
                             className={`inline-block px-3 py-1.5 rounded-full border text-sm font-medium ${
                               s === "wildcard"
                                 ? "bg-accent/10 text-accent border-accent/30"
                                 : "bg-surface-elevated text-fg border-line"
                             }`}
                           >
-                            {entry?.label ?? s}
+                            {entry ? t(entry.label) : s}
                           </span>
                         );
                       })
@@ -1053,10 +1070,10 @@ export default function PersonDetailPage() {
 
               <section className="mt-8">
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className={SECTION_TITLE_CLS}>Availability windows</h2>
+                  <h2 className={SECTION_TITLE_CLS}>{t("people.detail.availability")}</h2>
                   {editing && (
                     <Button onClick={addWindow} className="flex-shrink-0 -mt-1.5">
-                      Add window
+                      {t("people.detail.addWindow")}
                     </Button>
                   )}
                 </div>
@@ -1066,7 +1083,7 @@ export default function PersonDetailPage() {
                   <div className="space-y-3">
                     {form.availability.length === 0 && (
                       <p className="text-[15px] text-fg-muted">
-                        No windows — person is considered always available.
+                        {t("people.detail.noWindowsEditing")}
                       </p>
                     )}
                     {form.availability.map((w, i) => (
@@ -1081,7 +1098,7 @@ export default function PersonDetailPage() {
                 ) : (
                   <div>
                     {person.availability.length === 0 ? (
-                      <p className="text-[15px] text-fg-muted">Always available (no windows set).</p>
+                      <p className="text-[15px] text-fg-muted">{t("people.detail.alwaysAvailable")}</p>
                     ) : (
                       <div className="space-y-2">
                         {person.availability.map((w, i) => (
@@ -1092,7 +1109,7 @@ export default function PersonDetailPage() {
                             <div className="flex flex-wrap gap-1">
                               {w.weekdays.map((d) => (
                                 <span key={d} className="px-2 py-0.5 rounded-lg bg-surface-overlay text-sm text-fg">
-                                  {WEEKDAY_NAMES[d] ?? d}
+                                  {WEEKDAY_NAMES[d] ? t(WEEKDAY_NAMES[d]) : d}
                                 </span>
                               ))}
                             </div>

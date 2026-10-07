@@ -73,7 +73,7 @@ BASE ?= origin/main
 TEST_TMPDIR ?= $(shell free=$$(df -Pk /dev/shm 2>/dev/null | awk 'NR==2 {print $$4}'); \
 	if [ "$${free:-0}" -ge 2097152 ]; then echo /dev/shm; else echo "$${TMPDIR:-/tmp}"; fi)
 check: lint
-	cd packages/core && env -u BACKEND_SHARED_SECRET -u OE_PUBLIC_DEPLOYMENT TMPDIR=$(TEST_TMPDIR) \
+	cd packages/core && env -u BACKEND_SHARED_SECRET -u OE_PUBLIC_DEPLOYMENT -u OE_LANGUAGE TMPDIR=$(TEST_TMPDIR) \
 		uv run pytest tests/unit/ tests/integration/ -n auto --dist loadfile -q
 	@if ! git diff --quiet $$(git merge-base $(BASE) HEAD) -- packages/ui \
 		|| [ -n "$$(git ls-files --others --exclude-standard packages/ui)" ]; then \

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { GoalStatusPill } from "@/components/goals/GoalEditor";
 import Button from "@/components/ui/Button";
 import SidePanel from "@/components/ui/SidePanel";
+import { t, tp, type MessageKey } from "@/i18n/index.ts";
 import {
   createDepartment,
   listDepartments,
@@ -13,10 +14,10 @@ import {
   type DepartmentState,
 } from "@/lib/api";
 
-const AUTHORITY_LABELS: Record<string, string> = {
-  auto_execute: "Auto",
-  propose_only: "Propose",
-  escalate: "Escalate",
+const AUTHORITY_LABELS: Record<string, MessageKey> = {
+  auto_execute: "people.dept.authorityShort.auto",
+  propose_only: "people.dept.authorityShort.propose",
+  escalate: "people.dept.authorityShort.escalate",
 };
 
 const AUTHORITY_DOT: Record<string, string> = {
@@ -52,7 +53,7 @@ function AddDepartmentModal({ onCreated, onCancel }: AddDepartmentModalProps) {
       const dept = await createDepartment({ title: form.title.trim(), mission: form.mission });
       onCreated(dept);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Create failed");
+      setErr(e instanceof Error ? e.message : t("people.dept.createFailed"));
     } finally {
       setSaving(false);
     }
@@ -62,38 +63,38 @@ function AddDepartmentModal({ onCreated, onCancel }: AddDepartmentModalProps) {
     <SidePanel
       open
       onClose={saving ? () => {} : onCancel}
-      title="New department"
+      title={t("people.dept.newTitle")}
       footer={
         <div className="flex gap-2">
           <Button variant="primary" disabled={saving || !form.title.trim()} onClick={handleCreate} className="flex-1">
-            {saving ? "Creating…" : "Create"}
+            {saving ? t("people.dept.creating") : t("people.dept.create")}
           </Button>
           <Button disabled={saving} onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       }
     >
       <div className="space-y-4">
         <label className="text-sm text-fg-muted flex flex-col gap-1.5">
-          <span>Name <span className="text-rose-500">*</span></span>
+          <span>{t("people.dept.name")} <span className="text-rose-500">*</span></span>
           <input
             ref={titleRef}
             value={form.title}
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             onKeyDown={(e) => { if (e.key === "Enter" && form.title.trim()) handleCreate(); }}
             className={`${INPUT_CLS} h-11`}
-            placeholder="Customer Success"
+            placeholder={t("people.dept.namePlaceholder")}
           />
         </label>
         <label className="text-sm text-fg-muted flex flex-col gap-1.5">
-          <span>Mission <span className="text-fg-subtle">(optional)</span></span>
+          <span>{t("people.dept.mission")} <span className="text-fg-subtle">{t("people.dept.optionalParen")}</span></span>
           <textarea
             value={form.mission}
             onChange={(e) => setForm((f) => ({ ...f, mission: e.target.value }))}
             rows={4}
             className={`${INPUT_CLS} py-2.5 resize-none`}
-            placeholder="What does this department own?"
+            placeholder={t("people.dept.missionPlaceholder")}
           />
         </label>
         {err && <p className="text-sm text-rose-500">{err}</p>}
@@ -111,7 +112,7 @@ export default function DepartmentsPage() {
   useEffect(() => {
     listDepartments()
       .then(setDepts)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+      .catch((e) => setError(e instanceof Error ? e.message : t("people.dept.loadFailed")))
       .finally(() => setLoading(false));
   }, []);
 
@@ -121,17 +122,17 @@ export default function DepartmentsPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
             <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">Departments</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">{t("people.dept.title")}</h1>
               <p className="text-[15px] text-fg-muted mt-2">
-                Each department wraps a specialist agent with persistent Goals, authority level, and cadences.
+                {t("people.dept.intro")}
               </p>
             </div>
             <Button variant="primary" onClick={() => setAddingDept(true)} className="flex-shrink-0 self-start">
-              Add department
+              {t("people.dept.add")}
             </Button>
           </div>
 
-          {loading && <p className="text-fg-muted text-[15px]">Loading…</p>}
+          {loading && <p className="text-fg-muted text-[15px]">{t("common.loading")}</p>}
           {error && (
             <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[15px] mb-4">
               {error}
@@ -155,13 +156,13 @@ export default function DepartmentsPage() {
                     </div>
                     <span className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line text-[13px] font-medium text-fg">
                       <span aria-hidden="true" className={`h-2 w-2 rounded-full ${AUTHORITY_DOT[cfg.authority_level] ?? "bg-fg-subtle"}`} />
-                      {AUTHORITY_LABELS[cfg.authority_level] ?? cfg.authority_level}
+                      {AUTHORITY_LABELS[cfg.authority_level] ? t(AUTHORITY_LABELS[cfg.authority_level]) : cfg.authority_level}
                     </span>
                   </div>
                   <div className="text-[15px] text-fg-muted mt-1.5">{cfg.charter.mission.slice(0, 80)}{cfg.charter.mission.length > 80 ? "…" : ""}</div>
 
                   <div className="flex flex-wrap items-center gap-2 mt-4 text-sm text-fg-muted">
-                    <span className="mr-1">{ds.goals.length} Goal{ds.goals.length !== 1 ? "s" : ""}</span>
+                    <span className="mr-1">{tp("people.dept.goalCount", ds.goals.length)}</span>
                     {atRisk > 0 && <GoalStatusPill status="at_risk" />}
                     {offTrack > 0 && <GoalStatusPill status="off_track" />}
                     {ds.goals.length > 0 && atRisk === 0 && offTrack === 0 && (

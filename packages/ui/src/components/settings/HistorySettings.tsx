@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import SettingsCard from "@/components/settings/SettingsCard";
 import Switch from "@/components/Switch";
+import { t } from "@/i18n/index.ts";
 import { getHistory, updateHistorySettings, type HistoryState } from "@/lib/api";
 import { personRetentionChoices, retentionLabel } from "@/lib/history";
 
@@ -41,7 +42,7 @@ function useHistoryState(): {
     try {
       setState(await updateHistorySettings(patch));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the setting.");
+      setError(err instanceof Error ? err.message : t("settings.history.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -60,8 +61,8 @@ export function KeepTrackCard() {
   if (state === "loading" || state === null) return null;
   if (state === "error") {
     return (
-      <SettingsCard title="Keep track of what happens">
-        <p className="text-[15px] text-fg-muted">Couldn&apos;t load this setting.</p>
+      <SettingsCard title={t("settings.history.keepTrackTitle")}>
+        <p className="text-[15px] text-fg-muted">{t("settings.history.loadFailed")}</p>
       </SettingsCard>
     );
   }
@@ -72,14 +73,14 @@ export function KeepTrackCard() {
   const company = state.company_retention_days;
   return (
     <SettingsCard
-      title="Keep track of what happens"
+      title={t("settings.history.keepTrackTitle")}
       titleId="keep-track-label"
       description={
         on
           ? state.can_note_replies
-            ? "On: it keeps private notes of what you tell it in chat, and of replies it drafted that you send. Only you see them."
-            : "On: it keeps private notes of what you tell it in chat. Only you see them."
-          : "Off: nothing you say is noted."
+            ? t("settings.history.onWithReplies")
+            : t("settings.history.on")
+          : t("settings.history.off")
       }
       action={
         <Switch
@@ -93,7 +94,7 @@ export function KeepTrackCard() {
       {on && (
         <div className="space-y-3">
           <label className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-            <span className="text-sm text-fg-muted">Keep my notes for</span>
+            <span className="text-sm text-fg-muted">{t("settings.history.keepMineFor")}</span>
             <select
               className={SELECT}
               value={asValue(state.retention_days)}
@@ -102,13 +103,13 @@ export function KeepTrackCard() {
             >
               {personRetentionChoices(state.retention_choices, company, state.retention_days).map((days) => (
                 <option key={asValue(days)} value={asValue(days)}>
-                  {days === null ? `The company default (${retentionLabel(company)})` : retentionLabel(days)}
+                  {days === null ? t("settings.history.companyDefault", { label: retentionLabel(company) }) : retentionLabel(days)}
                 </option>
               ))}
             </select>
           </label>
           <Link href="/memories?tab=history" className="inline-block text-sm font-medium text-accent hover:underline">
-            See your notes
+            {t("settings.history.seeNotes")}
           </Link>
         </div>
       )}
@@ -121,12 +122,12 @@ export function KeepTrackCard() {
  * reads it. */
 export function CompanyRetentionCard() {
   const { state, save, busy, error } = useHistoryState();
-  if (state === "loading") return <p className="text-[15px] text-fg-muted">Loading…</p>;
+  if (state === "loading") return <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>;
   if (state === "error" || state === null) {
     return (
       <SettingsCard>
         <p className="text-[15px] text-fg-muted">
-          {state === null ? "Notes are kept for people on the People list, signed in as themselves." : "Couldn't load this setting."}
+          {state === null ? t("settings.history.peopleOnly") : t("settings.history.loadFailed")}
         </p>
       </SettingsCard>
     );
@@ -135,12 +136,12 @@ export function CompanyRetentionCard() {
   const company = state.company_retention_days;
   return (
     <SettingsCard
-      title="How long notes last"
-      description="Notes are forgotten after this, unless their person pins them. Each person can choose a shorter time for their own notes."
+      title={t("settings.history.retentionTitle")}
+      description={t("settings.history.retentionDescription")}
     >
       {state.can_set_company_retention ? (
         <label className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-          <span className="text-sm text-fg-muted">For everyone</span>
+          <span className="text-sm text-fg-muted">{t("settings.history.forEveryone")}</span>
           <select
             className={SELECT}
             value={asValue(company)}
@@ -149,23 +150,23 @@ export function CompanyRetentionCard() {
           >
             {state.retention_choices.map((days) => (
               <option key={asValue(days)} value={asValue(days)}>
-                {days === null ? "Until they're forgotten" : retentionLabel(days)}
+                {days === null ? t("settings.history.untilForgotten") : retentionLabel(days)}
               </option>
             ))}
           </select>
         </label>
       ) : (
         <p className="text-[15px] text-fg">
-          {company === null ? "Notes are kept until they're forgotten." : `Notes last ${retentionLabel(company)}.`}{" "}
-          <span className="text-fg-muted">The owner of this Open Executive sets this.</span>
+          {company === null ? t("settings.history.keptUntilForgotten") : t("settings.history.notesLast", { label: retentionLabel(company) })}{" "}
+          <span className="text-fg-muted">{t("settings.history.ownerSets")}</span>
         </p>
       )}
       <p className="mt-3 text-sm text-fg-muted">
         {state.effective_retention_days === company
           ? ""
-          : `Your own notes last ${retentionLabel(state.effective_retention_days)}. `}
+          : t("settings.history.yourNotesLast", { label: retentionLabel(state.effective_retention_days) })}
         <Link href="/memories?tab=history" className="font-medium text-accent hover:underline">
-          See your notes
+          {t("settings.history.seeNotes")}
         </Link>
       </p>
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}

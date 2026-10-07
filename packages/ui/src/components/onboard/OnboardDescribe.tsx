@@ -17,6 +17,7 @@ import {
   roleUpdate,
   type RoleForm,
 } from "@/lib/principalRole";
+import { t, type MessageKey } from "@/i18n/index.ts";
 
 // First run: describe your work, then confirm what was understood.
 //
@@ -29,13 +30,10 @@ import {
 
 const MAX_FILES = 8;
 
-const MODES: { mode: WorkspaceMode; title: string; lead: string }[] = [
-  { mode: "solo", title: "Personal", lead: "Your own executive: your goals, your inbox, your mornings." },
-  { mode: "team", title: "Team", lead: "An executive for the whole company, with a lead for each department." },
+const MODES: { mode: WorkspaceMode; title: MessageKey; lead: MessageKey }[] = [
+  { mode: "solo", title: "chat.describe.modeSolo", lead: "chat.describe.modeSoloLead" },
+  { mode: "team", title: "chat.describe.modeTeam", lead: "chat.describe.modeTeamLead" },
 ];
-
-const EXAMPLE =
-  "e.g. I'm Head of Customer Success at a 300-person software company and report to the COO. My team of twelve looks after renewals. This year I want net revenue retention above 110% and a cleaner handoff from sales.";
 
 function browserTimeZone(): string | undefined {
   try {
@@ -97,7 +95,7 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
       toConfirm(await understandOnboarding(text.trim(), files));
     } catch {
       // Not fatal: the text is kept and the person just picks below.
-      setNote("I couldn't read that automatically, so pick below. Your text is kept.");
+      setNote(t("chat.describe.readFailed"));
       toConfirm(null);
     } finally {
       setReading(false);
@@ -133,7 +131,7 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
       }
       onReady({ mode, turn, turns });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save that.");
+      setError(err instanceof Error ? err.message : t("chat.describe.saveFailed"));
       setSaving(false);
     }
   }
@@ -142,24 +140,21 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
     return (
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full">
         <Steps at={1} />
-        <h1 className="text-xl font-semibold text-fg">Set up your Executive</h1>
-        <p className="text-sm text-fg-muted mt-1">
-          Tell me about your work in your own words. I&apos;ll work out the rest and only ask
-          about what&apos;s missing.
-        </p>
+        <h1 className="text-xl font-semibold text-fg">{t("chat.onboard.title")}</h1>
+        <p className="text-sm text-fg-muted mt-1">{t("chat.describe.lead")}</p>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={7}
           autoFocus
           disabled={reading}
-          placeholder={EXAMPLE}
-          aria-label="Describe your work"
+          placeholder={t("chat.conversation.example.solo")}
+          aria-label={t("chat.describe.textLabel")}
           className="mt-6 w-full rounded-lg border border-line-strong bg-surface-overlay px-3 py-2 text-sm text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 resize-none transition-colors disabled:opacity-50"
         />
         <div className="mt-2 flex items-center gap-3">
           <label className="text-xs text-indigo-400 hover:text-indigo-300 cursor-pointer transition-colors">
-            ＋ Attach a one-pager, deck or CV (optional)
+            {t("chat.describe.attach")}
             <input
               type="file"
               multiple
@@ -179,7 +174,7 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
             disabled={!hasInput || reading}
             className="px-5 py-2.5 rounded-lg text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {reading ? "Reading…" : "Continue"}
+            {reading ? t("chat.describe.reading") : t("chat.describe.continue")}
           </button>
           <button
             type="button"
@@ -187,7 +182,7 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
             disabled={reading}
             className="text-sm text-fg-muted hover:text-fg transition-colors cursor-pointer disabled:opacity-50"
           >
-            Skip, I&apos;ll answer questions instead
+            {t("chat.describe.skip")}
           </button>
         </div>
       </div>
@@ -195,8 +190,8 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
   }
 
   const facts: [string, string | null][] = [
-    ["Company", understood?.company ?? null],
-    ["This year", understood?.focus ?? null],
+    [t("chat.describe.factCompany"), understood?.company ?? null],
+    [t("chat.describe.factFocus"), understood?.focus ?? null],
   ];
   const shown = facts.filter(([, v]) => v);
 
@@ -204,16 +199,14 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full">
       <Steps at={2} />
       <h1 className="text-xl font-semibold text-fg">
-        {understood ? "Here’s what I got" : "Who is this for?"}
+        {t(understood ? "chat.describe.gotTitle" : "chat.describe.whoTitle")}
       </h1>
       <p className="text-sm text-fg-muted mt-1">
-        {understood
-          ? "Fix anything that’s off. It all stays editable in Settings."
-          : "One tap. You can switch in Settings or add teammates anytime."}
+        {t(understood ? "chat.describe.gotLead" : "chat.describe.whoLead")}
       </p>
       {note && <p className="text-xs text-amber-400 mt-2">{note}</p>}
 
-      <div role="radiogroup" aria-label="Set up for" className="mt-6 grid gap-3 sm:grid-cols-2">
+      <div role="radiogroup" aria-label={t("chat.describe.modeLabel")} className="mt-6 grid gap-3 sm:grid-cols-2">
         {MODES.map((m) => {
           const on = mode === m.mode;
           return (
@@ -230,8 +223,8 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
                   : "border-line bg-surface-elevated hover:border-line-strong"
               }`}
             >
-              <span className="block text-sm font-semibold text-fg">{m.title}</span>
-              <span className="block text-xs text-fg-muted mt-1 leading-snug">{m.lead}</span>
+              <span className="block text-sm font-semibold text-fg">{t(m.title)}</span>
+              <span className="block text-xs text-fg-muted mt-1 leading-snug">{t(m.lead)}</span>
             </button>
           );
         })}
@@ -253,16 +246,16 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
           {!editing && (form.role_kind || form.role_title || form.reports_to) ? (
             <div className="flex items-start justify-between gap-4 text-sm">
               <div className="text-fg">
-                {[form.role_title, form.reports_to && `reports to ${form.reports_to}`]
+                {[form.role_title, form.reports_to && t("chat.describe.reportsTo", { name: form.reports_to })]
                   .filter(Boolean)
-                  .join(" · ") || "Role set"}
+                  .join(" · ") || t("chat.describe.roleSet")}
               </div>
               <button
                 type="button"
                 onClick={() => setEditing(true)}
                 className="text-xs text-indigo-400 hover:text-indigo-300 cursor-pointer"
               >
-                Edit
+                {t("common.edit")}
               </button>
             </div>
           ) : (
@@ -287,7 +280,7 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
           disabled={!mode || saving || problems.length > 0}
           className="px-5 py-2.5 rounded-lg text-sm font-medium bg-indigo-500 hover:bg-indigo-600 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {saving ? "Saving…" : "Continue"}
+          {saving ? t("common.saving") : t("chat.describe.continue")}
         </button>
         <button
           type="button"
@@ -295,7 +288,7 @@ export default function OnboardDescribe({ onReady }: { onReady: (r: DescribeResu
           disabled={saving}
           className="text-sm text-fg-muted hover:text-fg transition-colors cursor-pointer disabled:opacity-50"
         >
-          Back
+          {t("common.back")}
         </button>
       </div>
     </div>

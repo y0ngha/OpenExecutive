@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatDate } from "@/components/memories/shared";
 import SettingsCard from "@/components/settings/SettingsCard";
+import { t } from "@/i18n/index.ts";
 import {
   listPeopleMemory,
   listPersonConclusions,
@@ -18,9 +19,6 @@ import { cardEntry, noteAboutYou } from "@/lib/aboutYou";
 // returns only the caller's own entry (the principal's included), so this is
 // one person's profile and notes. Read-only: it is not the Executive's own
 // record to edit. Renders nothing when peer memory is off.
-
-const NOTHING_YET =
-  "Nothing learned about you yet. It fills in as you talk with the Executive.";
 
 // Profile lines past this many fold behind a toggle.
 const CARD_PREVIEW_LINES = 4;
@@ -55,19 +53,19 @@ export default function AboutYouCard() {
   if (data?.status === "disabled") return null;
 
   const me = data?.status === "ok" ? data.people[0] : undefined;
-  const learned = me?.last_observed_at ? `Last learned ${formatDate(me.last_observed_at)}.` : null;
+  const learned = me?.last_observed_at ? t("settings.aboutYou.lastLearned", { date: formatDate(me.last_observed_at) }) : null;
 
   return (
     <SettingsCard
-      title="Your profile"
-      description={["Learned from your chats and replies. Only you see this.", learned].filter(Boolean).join(" ")}
+      title={t("settings.aboutYou.title")}
+      description={[t("settings.aboutYou.description"), learned].filter(Boolean).join(" ")}
     >
       {loading ? (
-        <p className="text-[15px] text-fg-muted">Loading…</p>
+        <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>
       ) : failed || !data || data.status === "error" || me?.error ? (
-        <p className="text-[15px] text-fg-muted">Couldn&apos;t load what it knows about you right now.</p>
+        <p className="text-[15px] text-fg-muted">{t("settings.aboutYou.loadFailed")}</p>
       ) : !me || (me.card.length === 0 && me.conclusion_count === 0) ? (
-        <p className="text-[15px] text-fg-muted">{NOTHING_YET}</p>
+        <p className="text-[15px] text-fg-muted">{t("settings.aboutYou.nothingYet")}</p>
       ) : (
         <div className="space-y-5">
           {me.card.length > 0 && <Profile lines={me.card} />}
@@ -104,7 +102,7 @@ function Profile({ lines }: { lines: string[] }) {
           onClick={() => setOpen((o) => !o)}
           className="mt-1 min-h-touch text-[15px] font-medium text-accent hover:underline"
         >
-          {open ? "Show less" : `Show ${hidden} more`}
+          {open ? t("settings.aboutYou.showLess") : t("settings.aboutYou.showMore", { n: hidden })}
         </button>
       )}
     </div>
@@ -166,8 +164,9 @@ function Notes({ item }: { item: PersonMemory }) {
   return (
     <div>
       <h3 className="text-[13px] font-semibold uppercase tracking-wide text-fg-subtle mb-2">
-        Notes · {nextPage !== null ? `${notes.length} of ` : ""}
-        {Math.max(item.conclusion_count, notes.length)}
+        {nextPage !== null
+          ? t("settings.aboutYou.notesOf", { shown: notes.length, total: Math.max(item.conclusion_count, notes.length) })
+          : t("settings.aboutYou.notesCount", { total: Math.max(item.conclusion_count, notes.length) })}
       </h3>
       <div
         ref={paneRef}
@@ -187,14 +186,14 @@ function Notes({ item }: { item: PersonMemory }) {
         {(loading || failed || (hasMore && nextPage === null)) && (
           <div className="px-3 py-2 text-sm text-fg-muted border-t border-line/60">
             {loading ? (
-              "Loading…"
+              t("common.loading")
             ) : failed ? (
               <button onClick={() => void load(nextPage ?? 1)} className="min-h-touch hover:text-fg">
-                Couldn&apos;t load more — retry
+                {t("settings.aboutYou.loadMoreFailed")}
               </button>
             ) : (
               <button onClick={() => void load(1)} className="min-h-touch font-medium text-accent hover:underline">
-                Show all {item.conclusion_count} notes ({remaining} more)
+                {t("settings.aboutYou.showAll", { total: item.conclusion_count, remaining })}
               </button>
             )}
           </div>

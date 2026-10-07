@@ -5,6 +5,8 @@
 // No imports, so `npm test` can exercise this under
 // `node --experimental-strip-types` (see scripts/setupStatus.test.mjs).
 
+import { t, tp } from "../i18n/index.ts";
+
 export type SetupState = "ok" | "warn" | "error" | "off";
 
 /** One light. Mirrors `SetupCheck` in packages/core/openexecutive/api/setup_checks.py. */
@@ -60,7 +62,7 @@ export function isExampleEmail(email: string): boolean {
 export function signInCheck(env: SignInEnv): SetupCheck {
   const check = (state: SetupState, summary: string, fix: string | null = null): SetupCheck => ({
     id: "sign_in",
-    label: "Sign-in",
+    label: t("lib.setup.signIn"),
     state,
     summary,
     fix,
@@ -69,7 +71,7 @@ export function signInCheck(env: SignInEnv): SetupCheck {
   });
 
   if (env.localLogin) {
-    return check("ok", "Local login: no sign-in needed, and only this computer can open the app.");
+    return check("ok", t("lib.setup.localLogin"));
   }
   const googleStarted = Boolean(env.googleClientId?.trim() || env.googleClientSecret?.trim());
   const google = Boolean(env.googleClientId?.trim() && env.googleClientSecret?.trim());
@@ -78,54 +80,54 @@ export function signInCheck(env: SignInEnv): SetupCheck {
   if (oidcStarted && !oidc) {
     return check(
       "error",
-      "SSO sign-in isn't fully set up: it needs AUTH_OIDC_ISSUER, AUTH_OIDC_ID and AUTH_OIDC_SECRET.",
-      "Set all three from the client you registered at your sign-in provider (docs/auth.md), then restart the app.",
+      t("lib.setup.oidcPartial"),
+      t("lib.setup.oidcPartialFix"),
     );
   }
   if (oidc && !env.oidcIssuerAllowed) {
     return check(
       "error",
-      "SSO sign-in is off: AUTH_OIDC_ISSUER must be an https address.",
-      "Use your provider's https issuer address (plain http is accepted only on this computer, for testing), then restart the app.",
+      t("lib.setup.oidcHttp"),
+      t("lib.setup.oidcHttpFix"),
     );
   }
   // With nothing set up at all, Google is what the sign-in page offers.
   if ((googleStarted || !oidc) && !google) {
     return check(
       "error",
-      "Google sign-in isn't fully set up: it needs both AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET.",
-      "Set both from your Google Cloud OAuth client (docs/auth.md), then restart the app.",
+      t("lib.setup.googlePartial"),
+      t("lib.setup.googlePartialFix"),
     );
   }
   const samples = [...env.allowedEmails].filter(isExampleEmail);
   if (samples.length > 0) {
     return check(
       "warn",
-      `ALLOWED_EMAILS still lists sample addresses: ${samples.join(", ")}.`,
-      "Replace them in .env with the addresses of the people who should sign in, then restart the app.",
+      t("lib.setup.sampleEmails", { emails: samples.join(", ") }),
+      t("lib.setup.sampleEmailsFix"),
     );
   }
   if (env.publicDeployment && !env.authUrl?.trim()) {
     return check(
       "warn",
-      "AUTH_URL isn't set, so the sign-in provider can send people back to the wrong address after they sign in.",
-      "Set AUTH_URL to this app's public address (for example https://exec.example.com), then restart the app.",
+      t("lib.setup.noAuthUrl"),
+      t("lib.setup.noAuthUrlFix"),
     );
   }
   if (oidc && env.oidcTrustUnverifiedEmail) {
     return check(
       "warn",
-      "SSO sign-in accepts emails your sign-in provider hasn't verified (AUTH_OIDC_TRUST_UNVERIFIED_EMAIL).",
-      "Keep it only if people can't change their own email at the provider; otherwise mark their emails verified there and remove it (docs/auth.md).",
+      t("lib.setup.unverified"),
+      t("lib.setup.unverifiedFix"),
     );
   }
-  const method = google && oidc ? "Google and SSO sign-in" : oidc ? "SSO sign-in" : "Google sign-in";
+  const method = t(google && oidc ? "lib.setup.methodBoth" : oidc ? "lib.setup.methodSso" : "lib.setup.methodGoogle");
   const listed = env.allowedEmails.size;
   return check(
     "ok",
     listed > 0
-      ? `${method}, for the ${listed} address${listed === 1 ? "" : "es"} in ALLOWED_EMAILS and anyone with an email on the team list.`
-      : `${method}, for anyone with an email on the team list.`,
+      ? tp("lib.setup.okListed", listed, { method })
+      : t("lib.setup.okTeam", { method }),
   );
 }
 
@@ -144,13 +146,13 @@ export function sortChecks(checks: readonly SetupCheck[]): SetupCheck[] {
 /** "5 minutes ago" — how long before `now` an ISO time was. */
 export function formatAgo(iso: string, now: Date = new Date()): string {
   const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "at an unknown time";
+  if (Number.isNaN(then)) return t("lib.ago.unknown");
   const minutes = Math.floor((now.getTime() - then) / 60_000);
-  if (minutes < 1) return "less than a minute ago";
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  if (minutes < 1) return t("lib.ago.lessThanMinute");
+  if (minutes < 60) return tp("lib.ago.minutes", minutes);
   const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-  return `${Math.floor(hours / 24)} days ago`;
+  if (hours < 48) return tp("lib.ago.hours", hours);
+  return t("lib.ago.days", { n: Math.floor(hours / 24) });
 }
 
 /** Only an in-app path is ever rendered as a link. */

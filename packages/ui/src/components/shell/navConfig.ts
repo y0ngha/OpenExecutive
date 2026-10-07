@@ -2,6 +2,9 @@
 // `node --experimental-strip-types` (see scripts/navConfig.test.mjs).
 import type { IconName } from "@/components/Icon";
 import type { RoleKind, WorkspaceMode } from "@/lib/api";
+// Relative, with the extension: node loads this file without the `@/` alias.
+// Labels are getters or built inside functions so t() runs when they are read.
+import { t } from "../../i18n/index.ts";
 
 // Single source of truth for the app's navigation. The one sidebar
 // (`components/shell/AppSidebar.tsx`, rendered by both the chat home and
@@ -70,19 +73,19 @@ export const PROFILE_NAV: Record<
   { label: string; setupLabel: string; description: string }
 > = {
   company: {
-    label: "Company profile",
-    setupLabel: "Set up company",
-    description: "Your company's identity and strategy — set up once, edited any time.",
+    get label() { return t("chat.nav.profile.company"); },
+    get setupLabel() { return t("chat.nav.profile.companySetup"); },
+    get description() { return t("chat.nav.desc.profileCompany"); },
   },
   business: {
-    label: "Business profile",
-    setupLabel: "Set up your business",
-    description: "Your business — what you offer, who you serve, your priorities.",
+    get label() { return t("chat.nav.profile.business"); },
+    get setupLabel() { return t("chat.nav.profile.businessSetup"); },
+    get description() { return t("chat.nav.desc.profileBusiness"); },
   },
   work: {
-    label: "Your work",
-    setupLabel: "Set up your work",
-    description: "Your work — the organisation you work in, who it serves, your priorities.",
+    get label() { return t("chat.nav.profile.work"); },
+    get setupLabel() { return t("chat.nav.profile.workSetup"); },
+    get description() { return t("chat.nav.desc.profileWork"); },
   },
 };
 
@@ -96,30 +99,27 @@ function profileItem(wording: ProfileWording, isOnboarded: boolean): NavItem {
   };
 }
 
-const PEOPLE_DESCRIPTION =
-  "Your roster — who the Executive coordinates with and their approval scopes.";
-
 const GOALS_ITEM: NavItem = {
   href: "/goals",
-  label: "Goals",
+  get label() { return t("chat.nav.goals"); },
   icon: "flag",
-  description: "What you're working towards, grouped by area — add, update and close goals.",
+  get description() { return t("chat.nav.desc.goals"); },
 };
 
 // The Company hub's tabs in a team: who's on it, what you're aiming for,
 // how it's organised, and the profile.
 function companyTabs(isOnboarded: boolean): NavItem[] {
   return [
-    { href: "/people", label: "People", icon: "users", description: PEOPLE_DESCRIPTION },
+    { href: "/people", label: t("chat.nav.people"), icon: "users", description: t("chat.nav.desc.people") },
     {
       ...GOALS_ITEM,
-      description: "Every department's goals in one place — add, update and close them.",
+      description: t("chat.nav.desc.goalsTeam"),
     },
     {
       href: "/departments",
-      label: "Departments",
+      label: t("chat.nav.departments"),
       icon: "grid",
-      description: "Your departments, their goals, how much each may decide on its own, and the expert behind each.",
+      description: t("chat.nav.desc.departments"),
     },
     profileItem("company", isOnboarded),
   ];
@@ -133,34 +133,36 @@ function youTabs(isOnboarded: boolean, roleKind: RoleKind | null): NavItem[] {
     GOALS_ITEM,
     {
       href: "/people",
-      label: "People",
+      label: t("chat.nav.people"),
       icon: "users",
-      description: "The people the Executive knows about — clients, partners, anyone you work with.",
+      description: t("chat.nav.desc.peopleSolo"),
     },
     profileItem(profileWording("solo", roleKind), isOnboarded),
   ];
 }
 
-const WORK_TABS: NavItem[] = [
-  {
-    href: "/jobs",
-    label: "Workflows",
-    icon: "doc",
-    description: "Workflows that produce a deliverable, plus the playbooks the Executive follows.",
-  },
-  {
-    href: "/artifacts",
-    label: "Documents",
-    icon: "book",
-    description: "Your library of finished documents — drafts and workflow outputs.",
-  },
-  {
-    href: "/watchlist",
-    label: "Watch list",
-    icon: "eye",
-    description: "External monitors — tickers, feeds, status pages — that raise alerts.",
-  },
-];
+function workTabs(): NavItem[] {
+  return [
+    {
+      href: "/jobs",
+      label: t("chat.nav.workflows"),
+      icon: "doc",
+      description: t("chat.nav.desc.workflows"),
+    },
+    {
+      href: "/artifacts",
+      label: t("chat.nav.documents"),
+      icon: "book",
+      description: t("chat.nav.desc.documents"),
+    },
+    {
+      href: "/watchlist",
+      label: t("chat.nav.watchList"),
+      icon: "eye",
+      description: t("chat.nav.desc.watchList"),
+    },
+  ];
+}
 
 /**
  * A hub: one menu entry that holds several pages, shown as a row of tabs at
@@ -182,25 +184,25 @@ export function buildHubs({
 }: BuildOpts = {}): Hub[] {
   const work: Hub = {
     key: "work",
-    label: "Work",
+    label: t("chat.nav.work"),
     icon: "briefcase",
-    description: "Workflows, finished documents and the watch list.",
-    tabs: WORK_TABS,
+    description: t("chat.nav.desc.work"),
+    tabs: workTabs(),
   };
   const people: Hub =
     mode === "solo"
       ? {
           key: "you",
-          label: "You",
+          label: t("chat.nav.you"),
           icon: "users",
-          description: "Your goals, the people you work with, and your profile.",
+          description: t("chat.nav.desc.you"),
           tabs: youTabs(isOnboarded, roleKind),
         }
       : {
           key: "company",
-          label: "Company",
+          label: t("chat.nav.company"),
           icon: "building",
-          description: "People, goals, departments and the company profile.",
+          description: t("chat.nav.desc.company"),
           tabs: companyTabs(isOnboarded),
         };
   return [work, people];
@@ -215,10 +217,9 @@ export function hubForPath(pathname: string, opts: BuildOpts = {}): Hub | null {
 
 export const PULSE_NAV_ITEM: NavItem = {
   href: "/memories",
-  label: "Pulse",
+  get label() { return t("chat.nav.pulse"); },
   icon: "activity",
-  description:
-    "The Executive's memory and heartbeat — what it knows and the rhythm it runs on.",
+  get description() { return t("chat.nav.desc.pulse"); },
 };
 
 /** A main-menu entry. A hub's entry is active on any of its tabs. */
@@ -244,26 +245,25 @@ export function buildDestinations({
     label: hub.label,
     icon: hub.icon,
     description: hub.description,
-    alsoActiveOn: hub.tabs.slice(1).map((t) => t.href),
+    alsoActiveOn: hub.tabs.slice(1).map((tab) => tab.href),
   });
   return [
-    { key: "home", href: "/", label: "Home", icon: "home", description: BRIEFING_DESCRIPTION },
+    { key: "home", href: "/", label: t("chat.nav.home"), icon: "home", description: t("chat.nav.desc.home") },
     {
       key: "chats",
       href: "/chats",
-      label: "Chats",
+      label: t("chat.nav.chats"),
       icon: "chat",
-      description: "Every conversation, searchable — including Slack, Telegram and Discord.",
+      description: t("chat.nav.desc.chats"),
     },
     ...hubs.map(hubEntry),
     {
       key: "knowledge",
       href: "/knowledge",
-      label: "Knowledge",
+      label: t("chat.nav.knowledge"),
       icon: "book",
       badge: reviewBadge,
-      description:
-        "Upload company documents so the Executive can ground its answers in your context, and approve what it relies on.",
+      description: t("chat.nav.desc.knowledge"),
     },
     { key: "pulse", ...PULSE_NAV_ITEM },
   ];
@@ -276,26 +276,19 @@ export function isDestinationActive(dest: Destination, pathname: string): boolea
 // Single rail/sidebar entry that leads to the Settings hub.
 export const SETTINGS_NAV_ITEM: NavItem = {
   href: "/settings",
-  label: "Settings",
+  get label() { return t("chat.nav.settings"); },
   icon: "cog",
-  description: "Configuration, diagnostics, and power-user tools.",
+  get description() { return t("chat.nav.desc.settings"); },
 };
 
 // User Guide — in the account menu at the foot of the sidebar so help is
 // always one click away (it also stays listed under Settings → Advanced).
 export const GUIDE_NAV_ITEM: NavItem = {
   href: "/guide",
-  label: "User Guide",
+  get label() { return t("chat.nav.userGuide"); },
   icon: "info",
-  description: "Plain-language overviews of every feature — what each one is and what it does.",
+  get description() { return t("chat.nav.desc.guide"); },
 };
-
-// Descriptions for the two chat-home actions that aren't NavItems (they
-// toggle modes rather than navigate). Shared by MOBILE_PRIMARY, the rail
-// (AppShell), and the chat-home sidebar so the copy lives once.
-export const NEW_CHAT_DESCRIPTION = "Start a fresh conversation with the Executive.";
-export const BRIEFING_DESCRIPTION =
-  "Land on a daily brief of what's happened and what needs you.";
 
 // Where a Settings tool sits on Settings → Advanced: what you open to check
 // on the install, to change how it runs, or to learn how it works.
@@ -306,9 +299,9 @@ export interface AdvancedItem extends NavItem {
 }
 
 export const ADVANCED_GROUPS: { key: AdvancedGroupKey; label: string }[] = [
-  { key: "diagnose", label: "Check & diagnose" },
-  { key: "configure", label: "Configure" },
-  { key: "learn", label: "Learn" },
+  { key: "diagnose", get label() { return t("chat.nav.group.diagnose"); } },
+  { key: "configure", get label() { return t("chat.nav.group.configure"); } },
+  { key: "learn", get label() { return t("chat.nav.group.learn"); } },
 ];
 
 // Admin / power-user tools surfaced on Settings → Advanced rather than
@@ -316,74 +309,66 @@ export const ADVANCED_GROUPS: { key: AdvancedGroupKey; label: string }[] = [
 export const ADVANCED_ITEMS: AdvancedItem[] = [
   {
     href: "/settings/status",
-    label: "Setup status",
+    get label() { return t("chat.nav.setupStatus"); },
     icon: "check-circle",
     group: "diagnose",
-    description:
-      "A light for each part of your setup — AI key, sign-in, channels, schedule — and what to do about anything that isn't working.",
+    get description() { return t("chat.nav.desc.setupStatus"); },
   },
   {
     href: "/council",
-    label: "Agent Council",
+    get label() { return t("chat.nav.agentCouncil"); },
     icon: "users",
     group: "configure",
-    description:
-      "Choose how thorough answers are, and change each agent's model, instructions and the Executive's voice.",
+    get description() { return t("chat.nav.desc.agentCouncil"); },
   },
   {
     href: "/audit",
-    label: "Audit log",
+    get label() { return t("chat.nav.auditLog"); },
     icon: "doc-search",
     group: "diagnose",
-    description:
-      "A searchable record of everything the Executive did: each chat, each question it passed to an expert, each tool it used and each scheduled job.",
+    get description() { return t("chat.nav.desc.auditLog"); },
   },
   {
     href: "/audit/usage",
-    label: "Token usage",
+    get label() { return t("chat.nav.tokenUsage"); },
     icon: "activity",
     group: "diagnose",
-    description:
-      "What the AI has cost: the total, each day, and for each model.",
+    get description() { return t("chat.nav.desc.tokenUsage"); },
   },
   {
     href: "/guide",
-    label: "User Guide",
+    get label() { return t("chat.nav.userGuide"); },
     icon: "info",
     group: "learn",
-    description:
-      "Plain-language overviews of every feature — what each one is and what it does.",
+    get description() { return t("chat.nav.desc.guide"); },
   },
   {
     href: "/architecture",
-    label: "Architecture",
+    get label() { return t("chat.nav.architecture"); },
     icon: "grid",
     group: "learn",
-    description: "Interactive reference docs explaining how the system is built.",
+    get description() { return t("chat.nav.desc.architecture"); },
   },
   {
     href: "/settings/tools",
-    label: "Custom tools",
+    get label() { return t("chat.nav.customTools"); },
     icon: "bolt",
     group: "configure",
-    description:
-      "Tools the Executive built when it didn't have the one it needed: turn each on or off, see its runs, or go back a version.",
+    get description() { return t("chat.nav.desc.customTools"); },
   },
   {
     href: "/demo",
-    label: "Company Simulator",
+    get label() { return t("chat.nav.companySimulator"); },
     icon: "cog",
     group: "configure",
-    description:
-      "Load a ready-made demo company, save a copy of your current data, or have AI make up a new one.",
+    get description() { return t("chat.nav.desc.companySimulator"); },
   },
   {
     href: "/clients",
-    label: "Client Companies",
+    get label() { return t("chat.nav.clientCompanies"); },
     icon: "building",
     group: "configure",
-    description:
-      "For fractional work: switch between the companies you work for.",
+    get description() { return t("chat.nav.desc.clientCompanies"); },
   },
 ];
 
@@ -421,51 +406,51 @@ export interface SettingsPageDef {
 export const SETTINGS_PAGES: SettingsPageDef[] = [
   {
     id: "executive",
-    label: "Your Executive",
+    get label() { return t("chat.nav.yourExecutive"); },
     href: "/settings/executive",
     icon: "cog",
-    description: "Pause it, what it does without asking you, and the voice it answers in.",
+    get description() { return t("chat.nav.desc.yourExecutive"); },
     hashes: ["executive", "on-its-own"],
   },
   {
     id: "act-as-me",
-    label: "Act as me",
+    get label() { return t("chat.nav.actAsMe"); },
     href: "/settings/act-as-me",
     icon: "mail",
-    description: "Your mailbox, drafts and replies sent as you, and how you write.",
+    get description() { return t("chat.nav.desc.actAsMe"); },
     hashes: ["act-as-me"],
   },
   {
     id: "memory",
-    label: "About you",
+    get label() { return t("chat.nav.aboutYou"); },
     href: "/settings/memory",
     icon: "user",
-    description: "What the Executive has learned about you, and the private notes it keeps.",
+    get description() { return t("chat.nav.desc.aboutYou"); },
     hashes: ["memory"],
   },
   {
     id: "workspace",
-    label: "Workspace",
+    get label() { return t("chat.nav.workspace"); },
     href: "/settings/workspace",
     icon: "building",
-    description: "Just you or your team, time zone, email domains.",
+    get description() { return t("chat.nav.desc.workspace"); },
     hashes: ["workspace"],
   },
   {
     id: "advanced",
-    label: "Advanced",
+    get label() { return t("chat.nav.advanced"); },
     href: "/settings/advanced",
     icon: "grid",
-    description: "Agent Council, audit log, token usage, setup status, simulator, guide.",
+    get description() { return t("chat.nav.desc.advanced"); },
     // The old Tools section, and the anchors of its groups.
     hashes: ["tools", ...ADVANCED_GROUPS.map((g) => `tools-${g.key}`)],
   },
   {
     id: "about",
-    label: "About",
+    get label() { return t("chat.nav.about"); },
     href: "/settings/about",
     icon: "info",
-    description: "The version this install runs, and whether a newer one is out.",
+    get description() { return t("chat.nav.desc.about"); },
     hashes: ["about"],
   },
 ];
@@ -494,9 +479,9 @@ export function buildMobilePrimary(opts: BuildOpts = {}): Destination[] {
   const newChat: Destination = {
     key: "new",
     href: "/?new=1",
-    label: "New chat",
+    label: t("chat.nav.newChat"),
     icon: "plus",
-    description: NEW_CHAT_DESCRIPTION,
+    description: t("chat.nav.desc.newChat"),
   };
   const people = all.find((d) => d.key === "company" || d.key === "you")!;
   return [pick("home"), pick("chats"), newChat, pick("work"), people];

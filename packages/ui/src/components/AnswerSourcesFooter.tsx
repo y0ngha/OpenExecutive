@@ -13,6 +13,7 @@ import {
   type AnswerSource,
   type AnswerSources,
 } from "@/lib/answerSources";
+import { t } from "@/i18n/index.ts";
 
 function SourceItem({ source }: { source: AnswerSource }) {
   const link = sourceLink(source.url);
@@ -74,7 +75,7 @@ export default function AnswerSourcesFooter({ sources }: { sources: AnswerSource
             className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg transition-colors cursor-pointer"
           >
             <Icon name="book" size="w-3.5 h-3.5" />
-            Sources ({count})
+            {t("misc.sources.toggle", { count })}
             <Icon
               name="chevron-right"
               size="w-3.5 h-3.5"
@@ -83,7 +84,7 @@ export default function AnswerSourcesFooter({ sources }: { sources: AnswerSource
           </button>
           {open ? (
             <div id={listId} className="mt-2 rounded-lg border border-line bg-surface-elevated/40 px-3 py-2 space-y-2">
-              <p className="text-[11px] text-fg-subtle">Looked at for this answer</p>
+              <p className="text-[11px] text-fg-subtle">{t("misc.sources.lookedAt")}</p>
               {groups.map((group) => (
                 <div key={group.kind}>
                   <div className="text-[11px] font-medium text-fg-muted">{group.label}</div>

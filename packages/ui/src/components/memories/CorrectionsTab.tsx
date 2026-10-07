@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
+import { t, type MessageKey } from "@/i18n/index.ts";
 import { EmptyState, formatDate } from "./shared";
 
 // The "what stuck" view: facts and corrections the principal or a teammate
@@ -26,13 +27,10 @@ import { EmptyState, formatDate } from "./shared";
 // the owner's own fact. The owner sets, per teammate, whether theirs need
 // approval (on by default).
 
-const EMPTY =
-  "No corrections yet — when you correct a figure or a fact in chat, the Executive keeps it here and uses it everywhere.";
-
-const KIND_LABEL: Record<StandingFact["kind"], string> = {
-  fact: "Fact",
-  correction: "Correction",
-  profile: "Profile",
+const KIND_LABEL: Record<StandingFact["kind"], MessageKey> = {
+  fact: "people.corrections.kind.fact",
+  correction: "people.corrections.kind.correction",
+  profile: "people.corrections.kind.profile",
 };
 
 const KIND_PILL: Record<StandingFact["kind"], string> = {
@@ -44,8 +42,8 @@ const KIND_PILL: Record<StandingFact["kind"], string> = {
 const HISTORY_STATUSES = new Set<StandingFact["status"]>(["superseded", "retired", "declined"]);
 
 function channelLabel(channel: string): string {
-  if (!channel) return "chat";
-  if (channel === "web") return "web chat";
+  if (!channel) return t("people.corrections.channelChat");
+  if (channel === "web") return t("people.corrections.channelWeb");
   if (channel === "google_chat") return "Google Chat";
   return channel.charAt(0).toUpperCase() + channel.slice(1);
 }
@@ -85,11 +83,11 @@ export default function CorrectionsTab({ onCount }: { onCount: (n: number) => vo
 
   const handleRetire = useCallback(
     async (fact: StandingFact) => {
-      if (!window.confirm(`Stop using this everywhere?\n\n${fact.statement}`)) return;
+      if (!window.confirm(t("people.corrections.retireConfirm", { statement: fact.statement }))) return;
       try {
         await retireStandingFact(fact.id);
       } catch {
-        window.alert("Failed to retire.");
+        window.alert(t("people.corrections.retireFailed"));
         return;
       }
       void refresh();
@@ -102,7 +100,7 @@ export default function CorrectionsTab({ onCount }: { onCount: (n: number) => vo
       try {
         await reviewStandingFact(fact.id, decision);
       } catch {
-        window.alert(decision === "approve" ? "Failed to approve." : "Failed to decline.");
+        window.alert(decision === "approve" ? t("people.corrections.approveFailed") : t("people.corrections.declineFailed"));
         return;
       }
       void refresh();
@@ -115,12 +113,12 @@ export default function CorrectionsTab({ onCount }: { onCount: (n: number) => vo
       const saved = await setFactApprovalRule(rule.person_id, !rule.needs_approval);
       setRules((prev) => prev.map((r) => (r.person_id === saved.person_id ? saved : r)));
     } catch {
-      window.alert("Failed to change who needs approval.");
+      window.alert(t("people.corrections.ruleFailed"));
     }
   }, []);
 
-  if (loading) return <div className="text-fg-muted text-[15px] py-4">Loading…</div>;
-  if (failed) return <EmptyState message="Corrections are unavailable right now." />;
+  if (loading) return <div className="text-fg-muted text-[15px] py-4">{t("common.loading")}</div>;
+  if (failed) return <EmptyState message={t("people.corrections.unavailable")} />;
 
   const proposed = facts.filter((f) => f.status === "proposed");
   const active = facts.filter((f) => f.status === "active");
@@ -130,16 +128,16 @@ export default function CorrectionsTab({ onCount }: { onCount: (n: number) => vo
   return (
     <div className="space-y-3 py-3">
       {facts.length === 0 ? (
-        <EmptyState message={EMPTY} />
+        <EmptyState message={t("people.corrections.empty")} />
       ) : (
         <p className="text-sm text-fg-muted">
-          These hold in every conversation, brief, scheduled run and alert review.
+          {t("people.corrections.intro")}
         </p>
       )}
       {proposed.length > 0 && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4">
           <div className="pt-3 text-sm font-semibold text-amber-500">
-            {canReview ? "Waiting for your approval" : "Waiting for the owner's approval"}
+            {canReview ? t("people.corrections.waitingYours") : t("people.corrections.waitingOwner")}
           </div>
           <div className="divide-y divide-line">
             {proposed.map((f) => (
@@ -156,7 +154,7 @@ export default function CorrectionsTab({ onCount }: { onCount: (n: number) => vo
       )}
       {facts.length > 0 &&
         (active.length === 0 ? (
-          <div className="text-[15px] text-fg-muted py-4">Nothing active — every correction has been replaced or retired.</div>
+          <div className="text-[15px] text-fg-muted py-4">{t("people.corrections.nothingActive")}</div>
         ) : (
           <div className="divide-y divide-line">
             {active.map((f) => (
@@ -174,7 +172,9 @@ export default function CorrectionsTab({ onCount }: { onCount: (n: number) => vo
             onClick={() => setShowHistory((v) => !v)}
             className="h-10 text-sm font-medium text-accent hover:underline"
           >
-            {showHistory ? "Hide" : "Show"} history ({history.length})
+            {showHistory
+              ? t("people.corrections.hideHistory", { n: history.length })
+              : t("people.corrections.showHistory", { n: history.length })}
           </button>
           {showHistory && (
             <div className="divide-y divide-line opacity-70">
@@ -187,11 +187,9 @@ export default function CorrectionsTab({ onCount }: { onCount: (n: number) => vo
       )}
       {canReview && rules.length > 0 && (
         <div className="border-t border-line pt-3">
-          <div className="text-base font-semibold text-fg">Teammates&apos; corrections</div>
+          <div className="text-base font-semibold text-fg">{t("people.corrections.teammatesTitle")}</div>
           <p className="text-sm text-fg-muted mb-2">
-            Teammates can correct facts too; theirs are marked with their name and wait for your
-            approval. Untick &ldquo;needs my approval&rdquo; to trust a teammate&apos;s corrections straight
-            away (one that would replace yours still waits).
+            {t("people.corrections.teammatesBody")}
           </p>
           <ul className="space-y-1">
             {rules.map((r) => (
@@ -204,7 +202,7 @@ export default function CorrectionsTab({ onCount }: { onCount: (n: number) => vo
                     onChange={() => void handleRule(r)}
                   />
                   <span>{r.full_name}</span>
-                  <span className="text-sm text-fg-muted">— needs my approval</span>
+                  <span className="text-sm text-fg-muted">{t("people.corrections.needsMyApproval")}</span>
                 </label>
               </li>
             ))}
@@ -235,24 +233,24 @@ function FactRow({
       <div className="flex items-start justify-between gap-3 mb-1.5">
         <div className="flex flex-wrap items-center gap-2 text-sm text-fg-muted min-w-0 pt-1.5">
           <span className={`px-2 py-0.5 rounded border font-medium ${KIND_PILL[fact.kind]}`}>
-            {KIND_LABEL[fact.kind]}
+            {t(KIND_LABEL[fact.kind])}
           </span>
           <span className="truncate" title={fact.subject}>{fact.subject}</span>
-          <span>· {formatDate(fact.created_at)} via {channelLabel(fact.source_channel)}</span>
+          <span>{t("people.corrections.via", { date: formatDate(fact.created_at), channel: channelLabel(fact.source_channel) })}</span>
           {fact.recorded_by_role === "teammate" && (
-            <span className="text-fg">· per {fact.recorded_by_name || "a teammate"}</span>
+            <span className="text-fg">{t("people.corrections.per", { name: fact.recorded_by_name || t("people.corrections.aTeammate") })}</span>
           )}
         </div>
         {(onApprove || onDecline) && (
           <div className="shrink-0 flex gap-2">
             {onApprove && (
               <Button variant="primary" size="sm" className="!h-10" onClick={onApprove}>
-                Approve
+                {t("common.approve")}
               </Button>
             )}
             {onDecline && (
               <Button variant="danger" size="sm" className="!h-10" onClick={onDecline}>
-                Decline
+                {t("people.corrections.decline")}
               </Button>
             )}
           </div>
@@ -260,8 +258,8 @@ function FactRow({
         {onRetire && (
           <OverflowMenu
             size="sm"
-            label="Correction actions"
-            items={[{ label: "Retire (stop using it)", danger: true, onSelect: onRetire }]}
+            label={t("people.corrections.actions")}
+            items={[{ label: t("people.corrections.retire"), danger: true, onSelect: onRetire }]}
           />
         )}
         {fact.kind === "profile" && fact.status === "active" && (
@@ -269,7 +267,7 @@ function FactRow({
             href="/company-profile"
             className="shrink-0 h-9 inline-flex items-center text-sm font-medium text-accent hover:underline"
           >
-            Company profile
+            {t("people.corrections.companyProfile")}
           </Link>
         )}
       </div>
@@ -285,16 +283,20 @@ function FactRow({
         </div>
       )}
       {fact.status === "proposed" && replaces && (
-        <div className="text-sm text-fg-subtle mt-1">Would replace: {replaces.statement}</div>
+        <div className="text-sm text-fg-subtle mt-1">{t("people.corrections.wouldReplace", { statement: replaces.statement })}</div>
       )}
       {fact.status === "superseded" && (
         <div className="text-sm text-fg-subtle mt-1">
-          Replaced{replacedBy ? ` by: ${replacedBy.statement}` : ""}
+          {replacedBy
+            ? t("people.corrections.replacedBy", { statement: replacedBy.statement })
+            : t("people.corrections.replaced")}
         </div>
       )}
       {(fact.status === "retired" || fact.status === "declined") && (
         <div className="text-sm text-fg-subtle mt-1">
-          {fact.status === "declined" ? "Declined" : "Retired"} {fact.retired_at ? formatDate(fact.retired_at) : ""}
+          {t(fact.status === "declined" ? "people.corrections.declinedOn" : "people.corrections.retiredOn", {
+            date: fact.retired_at ? formatDate(fact.retired_at) : "",
+          })}
           {fact.retired_reason ? ` — ${fact.retired_reason}` : ""}
         </div>
       )}

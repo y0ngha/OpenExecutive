@@ -1,15 +1,16 @@
 "use client";
 
 import { CommitteePhase } from "@/lib/api";
+import { t, type MessageKey } from "@/i18n/index.ts";
 
 interface Props {
   phase: CommitteePhase | null;
 }
 
-const STEPS: { key: CommitteePhase; label: string }[] = [
-  { key: "drafting", label: "Drafting" },
-  { key: "reviewing", label: "Committee review" },
-  { key: "finalizing", label: "Revising" },
+const STEPS: { key: CommitteePhase; label: MessageKey }[] = [
+  { key: "drafting", label: "misc.committee.drafting" },
+  { key: "reviewing", label: "misc.committee.reviewing" },
+  { key: "finalizing", label: "misc.committee.finalizing" },
 ];
 
 export default function CommitteePhaseIndicator({ phase }: Props) {
@@ -41,7 +42,7 @@ export default function CommitteePhaseIndicator({ phase }: Props) {
                   : "text-fg-subtle"
               }
             >
-              {step.label}
+              {t(step.label)}
             </span>
             {i < STEPS.length - 1 && (
               <span className="text-fg-subtle">→</span>

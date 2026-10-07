@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import Icon from "@/components/Icon";
+import { t } from "@/i18n/index.ts";
 
 // The frame of each page the Settings hub opens: a way back to the hub, a
 // big title, an optional line under it, and the page's cards.
@@ -22,7 +23,7 @@ export default function SettingsSubpage({
           className="-ml-2 inline-flex min-h-touch items-center gap-1.5 rounded-lg px-2 text-[15px] text-fg-muted hover:text-fg hover:bg-surface-overlay transition-colors"
         >
           <Icon name="arrow-left" size="w-4 h-4" />
-          Settings
+          {t("settings.subpage.back")}
         </Link>
         <h1 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-fg">{title}</h1>
         {description && (

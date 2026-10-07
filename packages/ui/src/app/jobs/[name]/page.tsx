@@ -15,6 +15,8 @@ import {
   getWorkflow,
   getWorkflowSample,
 } from "@/lib/api";
+import { t } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 
 type FormState = Record<string, string>;
 
@@ -212,9 +214,9 @@ export default function JobDetailPage() {
   if (loadError) {
     return (
       <div className="flex flex-col h-full bg-surface text-fg items-center justify-center">
-        <div className="text-sm text-red-400 mb-4">Error: {loadError}</div>
+        <div className="text-sm text-red-400 mb-4">{t("jobs.list.error", { error: loadError })}</div>
         <Link href="/jobs" className="text-sm text-fg-muted hover:text-fg">
-          ← Back to workflows
+          {t("jobs.common.backToWorkflows")}
         </Link>
       </div>
     );
@@ -223,7 +225,7 @@ export default function JobDetailPage() {
   if (!workflow) {
     return (
       <div className="flex flex-col h-full bg-surface text-fg-muted items-center justify-center text-sm">
-        Loading…
+        {t("common.loading")}
       </div>
     );
   }
@@ -236,7 +238,7 @@ export default function JobDetailPage() {
         <div className="max-w-3xl mx-auto space-y-8">
           <div>
             <Link href="/jobs" className="text-sm text-fg-muted hover:text-fg">
-              ← Workflows
+              {t("jobs.detail.backShort")}
             </Link>
             <h1 className="mt-2 mb-2 text-2xl sm:text-3xl font-bold tracking-tight text-fg">
               {workflow.title}
@@ -246,20 +248,24 @@ export default function JobDetailPage() {
             </p>
             {(workflow.playbooks?.length ?? 0) > 0 && (
               <p className="mt-2 text-sm text-fg-muted">
-                Follows{" "}
-                {workflow.playbooks!.length === 1 ? "playbook" : "playbooks"}:{" "}
-                {workflow.playbooks!.map((p, i) => (
-                  <span key={p}>
-                    {i > 0 && ", "}
-                    <Link
-                      href={`/jobs?tab=playbooks&playbook=${encodeURIComponent(p)}`}
-                      className="text-accent hover:underline"
-                    >
-                      {p}
-                    </Link>
-                  </span>
-                ))}
-                {" "}— customize it to change how this workflow writes.
+                {tRich(
+                  workflow.playbooks!.length === 1
+                    ? "jobs.detail.followsOne"
+                    : "jobs.detail.followsOther",
+                  {
+                    links: workflow.playbooks!.map((p, i) => (
+                      <span key={p}>
+                        {i > 0 && ", "}
+                        <Link
+                          href={`/jobs?tab=playbooks&playbook=${encodeURIComponent(p)}`}
+                          className="text-accent hover:underline"
+                        >
+                          {p}
+                        </Link>
+                      </span>
+                    )),
+                  }
+                )}
               </p>
             )}
           </div>
@@ -270,16 +276,16 @@ export default function JobDetailPage() {
               className="space-y-6 rounded-2xl border border-line bg-surface-elevated p-5 shadow-sm sm:p-7"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-lg font-semibold text-fg">What it needs</h2>
+                <h2 className="text-lg font-semibold text-fg">{t("jobs.detail.whatItNeeds")}</h2>
                 {/* Fills every field with a realistic sample; each field's
                     own "Use example" fills just that one. */}
                 <button
                   type="button"
                   onClick={handleLoadSample}
-                  title="Load a realistic sample to see what good inputs look like. You can edit anything before running."
+                  title={t("jobs.detail.fillExampleTitle")}
                   className="min-h-10 rounded-lg px-2 text-[15px] font-semibold text-accent hover:underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
-                  Fill with an example
+                  {t("jobs.detail.fillExample")}
                 </button>
               </div>
 
@@ -291,13 +297,13 @@ export default function JobDetailPage() {
                 >
                   <span>
                     {prefillBanner === "suggestion"
-                      ? "Inputs pre-filled from a suggestion. Review and edit before running."
-                      : "Sample inputs loaded. Edit anything before running."}
+                      ? t("jobs.detail.prefilled")
+                      : t("jobs.detail.sampleLoaded")}
                   </span>
                   <button
                     type="button"
                     onClick={() => setPrefillBanner(null)}
-                    aria-label="Dismiss notice"
+                    aria-label={t("jobs.detail.dismiss")}
                     className="shrink-0 -my-1 h-8 w-8 rounded-lg text-fg-muted hover:text-fg hover:bg-surface-overlay focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                   >
                     ×
@@ -330,10 +336,10 @@ export default function JobDetailPage() {
                         <button
                           type="button"
                           onClick={() => handleInsertExample(fieldName, schema)}
-                          aria-label={`Insert example value for ${fieldLabel(fieldName, schema)}`}
+                          aria-label={t("jobs.detail.insertExampleAria", { field: fieldLabel(fieldName, schema) })}
                           className="shrink-0 text-sm text-fg-muted hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded px-1 transition"
                         >
-                          Use example
+                          {t("jobs.detail.useExample")}
                         </button>
                       )}
                     </div>
@@ -377,11 +383,11 @@ export default function JobDetailPage() {
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <Button type="submit" variant="primary" disabled={!allRequiredFilled} className="px-7">
-                  Continue
+                  {t("jobs.detail.continue")}
                 </Button>
                 {Object.keys(props).length > 0 && (
                   <span className="text-sm text-fg-muted">
-                    All fields with * are required.
+                    {t("jobs.detail.requiredNote")}
                   </span>
                 )}
               </div>

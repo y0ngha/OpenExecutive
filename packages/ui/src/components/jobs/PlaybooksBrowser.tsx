@@ -26,6 +26,9 @@ import {
   type SkillMeta,
   type SkillSearchHit,
 } from "@/lib/api";
+import { t, displayLocale, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
+import { domainLabel } from "@/components/knowledge/SourceTree";
 
 // Playbooks are the UI name for the backend's "skills": how the Executive
 // does a piece of work. Workflows (the other tabs) are the runnable jobs.
@@ -33,9 +36,9 @@ import {
 const NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 const DELETE_NOTICE: Record<SkillDeleteOutcome, (name: string) => string> = {
-  deleted: (n) => `Deleted “${n}”.`,
-  reverted: (n) => `“${n}” is back to the built-in version.`,
-  hidden: (n) => `Hid “${n}”. The Executive won't use it until you restore it.`,
+  deleted: (n) => t("jobs.playbooks.noticeDeleted", { name: n }),
+  reverted: (n) => t("jobs.playbooks.noticeReverted", { name: n }),
+  hidden: (n) => t("jobs.playbooks.noticeHidden", { name: n }),
 };
 
 interface EditorState {
@@ -49,10 +52,10 @@ interface EditorState {
   fromDraft?: { name: string; id: string };
 }
 
-const DRAFT_ACTION_LABEL: Record<SkillDraft["action"], string> = {
-  create: "new",
-  update: "change",
-  delete: "delete",
+const DRAFT_ACTION_LABEL: Record<SkillDraft["action"], MessageKey> = {
+  create: "jobs.playbooks.draftActionCreate",
+  update: "jobs.playbooks.draftActionUpdate",
+  delete: "jobs.playbooks.draftActionDelete",
 };
 
 function draftInput(d: SkillDraft): SkillInput {
@@ -94,12 +97,15 @@ function groupByCategory(items: SkillMeta[]): Record<string, SkillMeta[]> {
 function workflowList(skill: SkillMeta): string {
   const titles = skill.used_by.map((w) => w.title);
   if (titles.length === 0) return "";
-  if (titles.length === 1) return `The ${titles[0]} workflow`;
-  return `The ${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]} workflows`;
+  if (titles.length === 1) return t("jobs.playbooks.workflowListOne", { title: titles[0] });
+  return t("jobs.playbooks.workflowListMany", {
+    titles: titles.slice(0, -1).join(", "),
+    last: titles[titles.length - 1],
+  });
 }
 
 function tryInChatHref(name: string): string {
-  const draft = `Use the "${name}" playbook to `;
+  const draft = t("jobs.playbooks.tryInChatDraft", { name });
   return `/?new=1&draft=${encodeURIComponent(draft)}`;
 }
 
@@ -155,7 +161,7 @@ export default function PlaybooksBrowser({
       }
       onCountChange?.(data.filter((s) => !s.hidden).length);
     } catch {
-      setError("Failed to load playbooks");
+      setError(t("jobs.playbooks.loadFailed"));
     }
   }, [showHidden, onCountChange]);
 
@@ -194,7 +200,9 @@ export default function PlaybooksBrowser({
       if (seq !== selectSeqRef.current) return;
       setSelectedDraft(null);
       setError(
-        e instanceof Error ? `${e.message} — it may already have been reviewed.` : "Failed to load draft"
+        e instanceof Error
+          ? t("jobs.playbooks.draftLoadError", { error: e.message })
+          : t("jobs.playbooks.draftLoadFailed")
       );
     }
   }
@@ -202,7 +210,7 @@ export default function PlaybooksBrowser({
   function handleApproveDraft(draft: SkillDraft) {
     if (
       draft.action === "delete" &&
-      !confirm(`Delete the playbook “${draft.name}” as the Executive proposed? This cannot be undone.`)
+      !confirm(t("jobs.playbooks.confirmDeleteDraft", { name: draft.name }))
     )
       return;
     void run(async () => {
@@ -211,10 +219,10 @@ export default function PlaybooksBrowser({
       setSelected(result.skill);
       setNotice(
         draft.action === "delete"
-          ? `Deleted “${draft.name}”.`
+          ? t("jobs.playbooks.noticeDeleted", { name: draft.name })
           : draft.action === "create"
-            ? `Added “${draft.name}” to your playbooks.`
-            : `Applied the change to “${draft.name}”.`
+            ? t("jobs.playbooks.noticeAdded", { name: draft.name })
+            : t("jobs.playbooks.noticeApplied", { name: draft.name })
       );
     });
   }
@@ -223,7 +231,7 @@ export default function PlaybooksBrowser({
     void run(async () => {
       await discardSkillDraft(draft.name, draft.id);
       setSelectedDraft(null);
-      setNotice(`Discarded the Executive's proposal for “${draft.name}”.`);
+      setNotice(t("jobs.playbooks.noticeDiscarded", { name: draft.name }));
     });
   }
 
@@ -238,7 +246,7 @@ export default function PlaybooksBrowser({
       if (seq === selectSeqRef.current) setSelected(skill);
     } catch (e) {
       if (seq !== selectSeqRef.current) return;
-      setError(e instanceof Error ? e.message : "Failed to load playbook");
+      setError(e instanceof Error ? e.message : t("jobs.playbooks.loadOneFailed"));
     }
   }
 
@@ -250,7 +258,7 @@ export default function PlaybooksBrowser({
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
+      setError(e instanceof Error ? e.message : t("jobs.playbooks.genericError"));
     } finally {
       await load();
       const q = submittedQueryRef.current;
@@ -266,17 +274,17 @@ export default function PlaybooksBrowser({
     const workflows = workflowList(skill);
     // A custom workflow re-checks its playbook on every save.
     const resave = skill.used_by.some((w) => w.is_custom)
-      ? " A custom workflow that follows it will need a different playbook (or none) before you can save it again."
+      ? t("jobs.playbooks.confirmResave")
       : "";
     const prompt = skill.customized
-      ? `Revert “${skill.name}” to the built-in version? Your changes will be lost.` +
-        (workflows ? ` ${workflows} will follow the built-in again.` : "")
+      ? t("jobs.playbooks.confirmRevert", { name: skill.name }) +
+        (workflows ? t("jobs.playbooks.confirmRevertFollowers", { workflows }) : "")
       : skill.source === "builtin"
-        ? `Hide “${skill.name}”? The Executive will stop using it. You can restore it from “Show hidden”.` +
-          (workflows ? ` ${workflows} will run without it until you do.` : "") +
+        ? t("jobs.playbooks.confirmHide", { name: skill.name }) +
+          (workflows ? t("jobs.playbooks.confirmHideFollowers", { workflows }) : "") +
           resave
-        : `Delete the playbook “${skill.name}”? This cannot be undone.` +
-          (workflows ? ` ${workflows} will run without it.` : "") +
+        : t("jobs.playbooks.confirmDelete", { name: skill.name }) +
+          (workflows ? t("jobs.playbooks.confirmDeleteFollowers", { workflows }) : "") +
           resave;
     if (!confirm(prompt)) return;
     void run(async () => {
@@ -291,7 +299,7 @@ export default function PlaybooksBrowser({
   function handleRestore(skill: SkillDetail) {
     void run(async () => {
       setSelected(await restoreSkill(skill.name));
-      setNotice(`Restored “${skill.name}”.`);
+      setNotice(t("jobs.playbooks.noticeRestored", { name: skill.name }));
     });
   }
 
@@ -308,8 +316,8 @@ export default function PlaybooksBrowser({
       setSelected(saved);
       setNotice(
         customizing
-          ? `Saved your version of “${saved.name}”. Delete it any time to go back to the built-in.`
-          : `Saved “${saved.name}”.`
+          ? t("jobs.playbooks.noticeSavedCustom", { name: saved.name })
+          : t("jobs.playbooks.noticeSaved", { name: saved.name })
       );
     });
   }
@@ -328,7 +336,7 @@ export default function PlaybooksBrowser({
       const hits = await searchSkills(q, 10);
       if (submittedQueryRef.current === q) setSearchHits(hits);
     } catch {
-      setError("Search failed");
+      setError(t("jobs.playbooks.searchFailed"));
     } finally {
       setIsSearching(false);
     }
@@ -343,10 +351,9 @@ export default function PlaybooksBrowser({
   return (
     <div>
       <p className="mb-5 text-[15px] text-fg-muted max-w-3xl">
-        Playbooks are <span className="text-fg">how</span> the Executive does a
-        piece of work: a method, format, or checklist. In chat it looks one up
-        when your request matches its “When to use”, and some workflows follow
-        them too. Create one here, or ask the Executive to save one from chat.
+        {tRich("jobs.playbooks.intro", {
+          how: <span className="text-fg">{t("jobs.playbooks.introHow")}</span>,
+        })}
       </p>
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -354,12 +361,12 @@ export default function PlaybooksBrowser({
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search playbooks (e.g. 'cash forecast for next quarter')"
-            aria-label="Search playbooks"
+            placeholder={t("jobs.playbooks.searchPlaceholder")}
+            aria-label={t("jobs.playbooks.searchAria")}
             className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface-elevated px-4 text-[15px] text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           <Button type="submit" disabled={isSearching}>
-            {isSearching ? "Searching…" : "Search"}
+            {isSearching ? t("jobs.common.searching") : t("common.search")}
           </Button>
           {searchHits !== null && (
             <Button
@@ -370,7 +377,7 @@ export default function PlaybooksBrowser({
                 submittedQueryRef.current = null;
               }}
             >
-              Clear
+              {t("jobs.playbooks.clear")}
             </Button>
           )}
         </form>
@@ -383,7 +390,7 @@ export default function PlaybooksBrowser({
             openEditor({ mode: "create", customizing: false, initial: EMPTY_INPUT });
           }}
         >
-          + New playbook
+          {t("jobs.playbooks.newButton")}
         </Button>
       </div>
 
@@ -402,9 +409,9 @@ export default function PlaybooksBrowser({
         <div className="md:w-64 flex-shrink-0 space-y-5">
           {searchHits !== null ? (
             <div>
-              <SectionLabel>Results</SectionLabel>
+              <SectionLabel>{t("jobs.playbooks.results")}</SectionLabel>
               {searchHits.length === 0 ? (
-                <p className="text-xs text-fg-subtle px-1">No matches</p>
+                <p className="text-xs text-fg-subtle px-1">{t("jobs.playbooks.noMatches")}</p>
               ) : (
                 searchHits.map((hit) => (
                   <ListButton
@@ -424,9 +431,9 @@ export default function PlaybooksBrowser({
             <>
               {drafts.length > 0 && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2">
-                  <SectionLabel>To review ({drafts.length})</SectionLabel>
+                  <SectionLabel>{t("jobs.playbooks.toReview", { n: drafts.length })}</SectionLabel>
                   <p className="text-[11px] text-fg-subtle px-1 mb-1">
-                    Proposed by the Executive. Nothing changes until you approve.
+                    {t("jobs.playbooks.toReviewHint")}
                   </p>
                   {drafts.map((d) => (
                     <ListButton
@@ -436,32 +443,32 @@ export default function PlaybooksBrowser({
                     >
                       <span className="truncate">{d.name}</span>
                       <span className="text-[10px] text-amber-400 flex-shrink-0">
-                        {DRAFT_ACTION_LABEL[d.action]}
+                        {t(DRAFT_ACTION_LABEL[d.action])}
                       </span>
                     </ListButton>
                   ))}
                 </div>
               )}
               <PlaybookSection
-                title="Yours"
+                title={t("jobs.playbooks.yours")}
                 items={yours}
                 selectedName={selected?.name}
                 onSelect={select}
-                emptyMessage="Playbooks you create, or approve from chat, appear here."
+                emptyMessage={t("jobs.playbooks.yoursEmpty")}
               />
               <PlaybookSection
-                title="Built-in"
+                title={t("jobs.playbooks.builtin")}
                 items={builtin}
                 selectedName={selected?.name}
                 onSelect={select}
               />
               {showHidden && (
                 <PlaybookSection
-                  title="Hidden"
+                  title={t("jobs.playbooks.hidden")}
                   items={hidden}
                   selectedName={selected?.name}
                   onSelect={select}
-                  emptyMessage="No hidden playbooks."
+                  emptyMessage={t("jobs.playbooks.hiddenEmpty")}
                 />
               )}
               <label className="flex min-h-10 items-center gap-2 px-1 text-sm text-fg-muted cursor-pointer">
@@ -470,7 +477,7 @@ export default function PlaybooksBrowser({
                   checked={showHidden}
                   onChange={(e) => setShowHidden(e.target.checked)}
                 />
-                Show hidden
+                {t("jobs.playbooks.showHidden")}
               </label>
             </>
           )}
@@ -516,7 +523,7 @@ export default function PlaybooksBrowser({
             />
           ) : (
             <div className="flex items-center justify-center h-64 text-fg-subtle text-sm">
-              Select a playbook to see its steps.
+              {t("jobs.playbooks.selectPrompt")}
             </div>
           )}
         </div>
@@ -576,12 +583,12 @@ function PlaybookSection({
     <div>
       <SectionLabel>{title}</SectionLabel>
       {categories.length === 0 ? (
-        <p className="text-xs text-fg-subtle px-1">{emptyMessage ?? "None"}</p>
+        <p className="text-xs text-fg-subtle px-1">{emptyMessage ?? t("common.none")}</p>
       ) : (
         categories.map((cat) => (
           <div key={cat} className="mb-3">
             <p className="text-[11px] font-medium text-fg-subtle uppercase tracking-wider mb-0.5 px-1">
-              {cat}
+              {domainLabel(cat)}
             </p>
             {grouped[cat].map((s) => (
               <ListButton
@@ -591,7 +598,7 @@ function PlaybookSection({
               >
                 <span className="truncate">{s.name}</span>
                 {s.customized && (
-                  <span className="text-[10px] text-indigo-400 flex-shrink-0">edited</span>
+                  <span className="text-[10px] text-indigo-400 flex-shrink-0">{t("jobs.playbooks.edited")}</span>
                 )}
               </ListButton>
             ))}
@@ -603,9 +610,9 @@ function PlaybookSection({
 }
 
 function sourceLabel(skill: SkillMeta): string {
-  if (skill.hidden) return "hidden";
-  if (skill.customized) return "built-in · customized";
-  return skill.source === "builtin" ? "built-in" : "yours";
+  if (skill.hidden) return t("jobs.playbooks.sourceHidden");
+  if (skill.customized) return t("jobs.playbooks.sourceCustomized");
+  return skill.source === "builtin" ? t("jobs.playbooks.sourceBuiltin") : t("jobs.playbooks.sourceYours");
 }
 
 function PlaybookView({
@@ -622,17 +629,17 @@ function PlaybookView({
   onRestore: () => void;
 }) {
   const deleteLabel = skill.customized
-    ? "Revert to built-in"
+    ? t("jobs.playbooks.revertToBuiltin")
     : skill.source === "builtin"
-      ? "Hide"
-      : "Delete";
+      ? t("jobs.playbooks.hide")
+      : t("common.delete");
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-indigo-400 uppercase tracking-widest">
-              {skill.category}
+              {domainLabel(skill.category)}
             </span>
             <span className="text-[10px] uppercase tracking-wider text-fg-subtle px-2 py-0.5 border border-line rounded">
               {sourceLabel(skill)}
@@ -640,38 +647,43 @@ function PlaybookView({
           </div>
           <h2 className="text-xl font-bold tracking-tight text-fg mt-1 break-words">{skill.name}</h2>
           <p className="text-[15px] text-fg-muted mt-1">{skill.description}</p>
-          <p className="text-sm text-fg-muted italic mt-1">When to use: {skill.when_to_use}</p>
+          <p className="text-sm text-fg-muted italic mt-1">{t("jobs.playbooks.whenToUseLine", { text: skill.when_to_use })}</p>
           {skill.used_by.length > 0 && (
             <p className="text-sm text-fg-muted mt-1">
-              Followed by{" "}
-              {skill.used_by.map((w, i) => (
-                <span key={w.name}>
-                  {i > 0 && ", "}
-                  <Link href={`/jobs/${encodeURIComponent(w.name)}`} className="text-indigo-400 hover:underline">
-                    {w.title}
-                  </Link>
-                </span>
-              ))}
-              {" "}— {skill.used_by.length === 1 ? "that workflow uses" : "those workflows use"} this
-              playbook{skill.source === "builtin" ? " (or your customized copy)" : ""}.
+              {tRich(
+                skill.used_by.length === 1
+                  ? "jobs.playbooks.followedByOne"
+                  : "jobs.playbooks.followedByOther",
+                {
+                  links: skill.used_by.map((w, i) => (
+                    <span key={w.name}>
+                      {i > 0 && ", "}
+                      <Link href={`/jobs/${encodeURIComponent(w.name)}`} className="text-indigo-400 hover:underline">
+                        {w.title}
+                      </Link>
+                    </span>
+                  )),
+                  custom: skill.source === "builtin" ? t("jobs.playbooks.orCustomCopy") : "",
+                }
+              )}
             </p>
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {skill.hidden ? (
             <Button variant="primary" disabled={busy} onClick={onRestore}>
-              Restore
+              {t("jobs.playbooks.restore")}
             </Button>
           ) : (
             <>
               <Button variant="primary" disabled={busy} onClick={onEdit}>
-                {skill.source === "builtin" ? "Customize" : "Edit"}
+                {skill.source === "builtin" ? t("jobs.playbooks.customize") : t("common.edit")}
               </Button>
               <Link href={tryInChatHref(skill.name)} className={buttonClass("secondary", "md")}>
-                Try in chat
+                {t("jobs.playbooks.tryInChat")}
               </Link>
               <OverflowMenu
-                label={`More for ${skill.name}`}
+                label={t("jobs.playbooks.moreFor", { name: skill.name })}
                 items={[{ label: deleteLabel, danger: true, disabled: busy, onSelect: onDelete }]}
               />
             </>
@@ -715,50 +727,55 @@ function DraftView({
 }) {
   const heading =
     draft.action === "create"
-      ? "New playbook"
+      ? t("jobs.playbooks.newPlaybook")
       : draft.action === "update"
-        ? "Change to an existing playbook"
-        : "Delete a playbook";
+        ? t("jobs.playbooks.headingUpdate")
+        : t("jobs.playbooks.headingDelete");
   const followers = draft.followers;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <span className="text-[10px] uppercase tracking-wider text-amber-400 px-2 py-0.5 border border-amber-500/30 rounded">
-            Proposed by the Executive · {heading}
+            {t("jobs.playbooks.proposedBy", { heading })}
           </span>
           <h2 className="text-xl font-bold tracking-tight text-fg mt-2 break-words">{draft.name}</h2>
           {draft.action !== "delete" && (
             <>
               <p className="text-[15px] text-fg-muted mt-1">{draft.description}</p>
               <p className="text-sm text-fg-muted italic mt-1">
-                When to use: {draft.when_to_use} · {draft.category}
+                {t("jobs.playbooks.whenToUseCategory", { text: draft.when_to_use, category: domainLabel(draft.category) })}
               </p>
             </>
           )}
           <p className="text-xs text-fg-subtle mt-1">
-            Proposed {new Date(draft.proposed_at).toLocaleString()}. Nothing changes until you
-            approve it.
+            {t("jobs.playbooks.proposedAt", {
+              when: new Date(draft.proposed_at).toLocaleString(displayLocale()),
+            })}
           </p>
           {followers.length > 0 && (
             <p className="text-sm text-amber-600 dark:text-amber-300 mt-1">
-              Followed by {followers.map((w) => w.title).join(", ")} — approving changes what
-              {followers.length === 1 ? " that workflow" : " those workflows"} follow.
+              {t(
+                followers.length === 1
+                  ? "jobs.playbooks.draftFollowersOne"
+                  : "jobs.playbooks.draftFollowersOther",
+                { titles: followers.map((w) => w.title).join(", ") }
+              )}
             </p>
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button variant="primary" disabled={busy} onClick={onApprove}>
-            {draft.action === "delete" ? "Approve delete" : "Approve"}
+            {draft.action === "delete" ? t("jobs.playbooks.approveDelete") : t("common.approve")}
           </Button>
           {draft.action !== "delete" && (
             <Button disabled={busy} onClick={onEdit}>
-              Edit, then save
+              {t("jobs.playbooks.editThenSave")}
             </Button>
           )}
           <OverflowMenu
-            label={`More for ${draft.name}`}
-            items={[{ label: "Discard proposal", danger: true, disabled: busy, onSelect: onDiscard }]}
+            label={t("jobs.playbooks.moreFor", { name: draft.name })}
+            items={[{ label: t("jobs.playbooks.discardProposal"), danger: true, disabled: busy, onSelect: onDiscard }]}
           />
         </div>
       </div>
@@ -771,7 +788,7 @@ function DraftView({
       {draft.current && (
         <details open={draft.action === "delete"} className="text-sm">
           <summary className="cursor-pointer text-xs text-fg-muted">
-            {draft.action === "delete" ? "The playbook it would delete" : "Current version"}
+            {draft.action === "delete" ? t("jobs.playbooks.wouldDelete") : t("jobs.playbooks.currentVersion")}
           </summary>
           <div className={`${MARKDOWN_BOX} mt-2`}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft.current.body}</ReactMarkdown>
@@ -816,21 +833,19 @@ function PlaybookEditor({
     >
       <h2 className="text-xl font-bold tracking-tight text-fg">
         {editor.mode === "create"
-          ? "New playbook"
+          ? t("jobs.playbooks.newPlaybook")
           : editor.customizing
-            ? `Customize “${form.name}”`
-            : `Edit “${form.name}”`}
+            ? t("jobs.playbooks.customizeTitle", { name: form.name })
+            : t("jobs.playbooks.editTitle", { name: form.name })}
       </h2>
       {editor.customizing && (
         <p className="text-xs text-fg-muted">
-          Your edits are saved as this company&apos;s version and replace the
-          built-in everywhere, including workflows that follow it. The original
-          is kept; revert to it any time.
+          {t("jobs.playbooks.customizeHint")}
         </p>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Name" hint="Letters, numbers, dashes. Can't be changed later.">
+        <Field label={t("jobs.playbooks.fieldName")} hint={t("jobs.playbooks.fieldNameHint")}>
           <input
             value={form.name}
             disabled={editor.mode === "edit"}
@@ -839,10 +854,10 @@ function PlaybookEditor({
             className={`${input} disabled:opacity-60`}
           />
           {form.name !== "" && !nameOk && (
-            <span className="text-[11px] text-red-400">Use letters, numbers, - or _ only.</span>
+            <span className="text-[11px] text-red-400">{t("jobs.playbooks.fieldNameInvalid")}</span>
           )}
         </Field>
-        <Field label="Category">
+        <Field label={t("jobs.playbooks.fieldCategory")}>
           <select
             value={form.category}
             onChange={(e) => set("category")(e.target.value)}
@@ -850,13 +865,13 @@ function PlaybookEditor({
           >
             {SKILL_CATEGORIES.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {domainLabel(c)}
               </option>
             ))}
           </select>
         </Field>
       </div>
-      <Field label="Description" hint="One line: what this playbook produces.">
+      <Field label={t("jobs.playbooks.fieldDescription")} hint={t("jobs.playbooks.fieldDescriptionHint")}>
         <input
           value={form.description}
           onChange={(e) => set("description")(e.target.value)}
@@ -864,8 +879,8 @@ function PlaybookEditor({
         />
       </Field>
       <Field
-        label="When to use"
-        hint="The Executive matches requests against this to decide when to follow it."
+        label={t("jobs.playbooks.fieldWhenToUse")}
+        hint={t("jobs.playbooks.fieldWhenToUseHint")}
       >
         <input
           value={form.when_to_use}
@@ -873,7 +888,7 @@ function PlaybookEditor({
           className={input}
         />
       </Field>
-      <Field label="Steps" hint="Markdown: the procedure, template, or checklist.">
+      <Field label={t("jobs.playbooks.fieldSteps")} hint={t("jobs.playbooks.fieldStepsHint")}>
         <textarea
           value={form.body}
           onChange={(e) => set("body")(e.target.value)}
@@ -884,10 +899,10 @@ function PlaybookEditor({
 
       <div className="flex gap-2">
         <Button type="submit" variant="primary" disabled={!complete || busy}>
-          {busy ? "Saving…" : "Save"}
+          {busy ? t("common.saving") : t("common.save")}
         </Button>
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("common.cancel")}
         </Button>
       </div>
     </form>

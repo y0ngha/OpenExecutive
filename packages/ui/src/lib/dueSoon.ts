@@ -6,13 +6,12 @@
 // Type-only imports, so `npm test` can exercise this under
 // `node --experimental-strip-types` (see scripts/dueSoon.test.mjs).
 
+import { displayLocale, t } from "../i18n/index.ts";
 import type { OpenLoop, PersonBriefItem } from "@/lib/api";
 
 /** How far ahead the card looks. Matches the brief's DUE THIS WEEK block. */
 export const DUE_SOON_DAYS = 7;
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface DueSoonItem {
@@ -67,16 +66,17 @@ function startOfDay(d: Date): number {
 }
 
 function shortDate(d: Date): string {
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return d.toLocaleDateString(displayLocale(), { month: "short", day: "numeric" });
 }
 
 /** The label for a due time, in the viewer's local calendar. */
 export function dueLabel(due: Date, now: Date): string {
-  if (due.getTime() <= now.getTime()) return `Overdue since ${shortDate(due)}`;
+  if (due.getTime() <= now.getTime()) return t("lib.due.overdueSince", { date: shortDate(due) });
   const days = Math.round((startOfDay(due) - startOfDay(now)) / DAY_MS);
-  if (days <= 0) return "Due today";
-  if (days === 1) return "Due tomorrow";
-  return `Due ${WEEKDAYS[due.getDay()]}, ${shortDate(due)}`;
+  if (days <= 0) return t("lib.due.today");
+  if (days === 1) return t("lib.due.tomorrow");
+  const weekday = due.toLocaleDateString(displayLocale(), { weekday: "short" });
+  return t("lib.due.on", { weekday, date: shortDate(due) });
 }
 
 /** The loops overdue or due within `days` of `now`, labelled; the rest are

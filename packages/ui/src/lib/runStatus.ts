@@ -5,17 +5,30 @@
  * branching separately in each — byte-for-byte identical, and free to drift
  * the moment a seventh status arrives. One source, imported by both.
  */
+import { t } from "../i18n/index.ts";
 import { WorkflowRunStatus } from "@/lib/api";
 
 /** Raw status strings are for the database. "awaiting_human" and "timed_out"
  *  mean nothing to someone scanning a list of jobs. */
 export const RUN_STATUS_LABELS: Record<string, string> = {
-  running: "running",
-  done: "done",
-  error: "failed",
-  awaiting_human: "awaiting sign-off",
-  resolved: "resuming",
-  timed_out: "no reply",
+  get running() {
+    return t("lib.run.running");
+  },
+  get done() {
+    return t("lib.run.done");
+  },
+  get error() {
+    return t("lib.run.failed");
+  },
+  get awaiting_human() {
+    return t("lib.run.awaitingSignOff");
+  },
+  get resolved() {
+    return t("lib.run.resuming");
+  },
+  get timed_out() {
+    return t("lib.run.noReply");
+  },
 };
 
 export function runStatusLabel(status: string): string {

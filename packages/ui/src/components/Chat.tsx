@@ -18,7 +18,7 @@ import {
   ChatMessage,
   CommitteePhase,
   DebugEvent,
-  FALLBACK_ACTIVITY_LABEL,
+  fallbackActivityLabel,
   getFollowupSuggestion,
   getSuggestedPrompts,
   setMessageFeedback,
@@ -34,6 +34,7 @@ import {
 } from "@/lib/queuedMessages";
 import { newClientTurnId } from "@/lib/turn-id";
 import { turnStatus } from "@/lib/turnStatus";
+import { t, tp } from "@/i18n/index.ts";
 
 interface ChatProps {
   onDebugEvent?: (event: DebugEvent) => void;
@@ -62,15 +63,14 @@ interface ChatProps {
 // Static fallbacks used only when the /chat/suggested-prompts fetch fails
 // entirely (network error, aborted, etc). The backend always returns these
 // same values on its own failure paths, so the happy path never shows them.
-const SUGGESTED_PROMPTS = [
-  "Where did we land on this quarter's priorities?",
-  "Pull the team in on a decision I'm sitting on.",
-  "Let's review the board update before it goes out.",
-  "What's changed since our last sync?",
-];
-
-const DEFAULT_PLACEHOLDER = "What's on your mind?";
-const WORKING_PLACEHOLDER = "Add something while it works…";
+function fallbackPrompts(): string[] {
+  return [
+    t("chat.composer.fallbackPrompt1"),
+    t("chat.composer.fallbackPrompt2"),
+    t("chat.composer.fallbackPrompt3"),
+    t("chat.composer.fallbackPrompt4"),
+  ];
+}
 
 // A follow-up is only worth suggesting when the conversation ends on a
 // persisted reply — the backend keys its suggestion on that reply's id.
@@ -78,9 +78,6 @@ function endsOnReply(messages: ChatMessage[] | undefined): boolean {
   const last = messages?.[messages.length - 1];
   return last?.role === "assistant" && Boolean(last.id);
 }
-
-const FALLBACK_SUBTITLE =
-  "Pick up where we left off — decisions to revisit, drafts to push forward, people to pull in.";
 
 export default function Chat({ onDebugEvent, initialMessages, initialSessionId, initialInput, autoSubmitInitialInput, initialMemoryText, onTurnComplete, onTurnStart }: ChatProps) {
   const { data: session } = useSession();
@@ -102,7 +99,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
   const [committeePhase, setCommitteePhase] = useState<CommitteePhase | null>(null);
   const turnClock = useTurnClock(isLoading);
   const [suggested, setSuggested] = useState<string[]>([]);
-  const [subtitle, setSubtitle] = useState<string>(FALLBACK_SUBTITLE);
+  const [subtitle, setSubtitle] = useState<string>(() => t("chat.empty.fallbackSubtitle"));
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(true);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -130,7 +127,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
     getSuggestedPrompts(ctrl.signal)
       .then((r) => {
         if (r.prompts.length >= 4) setSuggested(r.prompts.slice(0, 4));
-        else setSuggested(SUGGESTED_PROMPTS);
+        else setSuggested(fallbackPrompts());
         if (r.subtitle) setSubtitle(r.subtitle);
         setIsLoadingPrompts(false);
       })
@@ -138,7 +135,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
         // Abort on unmount is expected — don't flip loading off so we don't
         // briefly flash the static fallback before the component is gone.
         if (err instanceof DOMException && err.name === "AbortError") return;
-        setSuggested(SUGGESTED_PROMPTS);
+        setSuggested(fallbackPrompts());
         setIsLoadingPrompts(false);
       });
     return () => ctrl.abort();
@@ -272,7 +269,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
 
     const filesForTurn = queuedFollowup ? [] : pendingFiles;
     const userBubbleContent = filesForTurn.length
-      ? `${message}${message ? "\n\n" : ""}📎 ${filesForTurn.length} file${filesForTurn.length === 1 ? "" : "s"} attached`
+      ? `${message}${message ? "\n\n" : ""}${tp("chat.filesAttached", filesForTurn.length)}`
       : message;
 
     if (!queuedFollowup) {
@@ -320,7 +317,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
       const settled = settleQueue(queuedRef.current);
       setQueued([]);
       nextTurn = settled.next;
-      return settled.taken.map((t): ChatMessage => ({ role: "user", content: t }));
+      return settled.taken.map((text): ChatMessage => ({ role: "user", content: text }));
     };
 
     try {
@@ -467,7 +464,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
         }
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: `Something went wrong: ${detail}` },
+          { role: "assistant", content: t("chat.turnFailed", { detail }) },
         ]);
       }
       setStreamingContent("");
@@ -508,7 +505,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
     inCommittee: committeePhase !== null,
     msSinceTurnStart: turnClock.msSinceTurnStart,
     msSinceLastEvent: turnClock.msSinceLastEvent,
-    fallbackLabel: FALLBACK_ACTIVITY_LABEL,
+    fallbackLabel: fallbackActivityLabel(),
   });
 
   // Fill the composer with the suggestion without sending it, so the user
@@ -588,7 +585,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
               </div>
               {/* Not the briefing's headline: Home already greets you. */}
               <h2 className="text-2xl font-bold tracking-tight text-fg mb-2">
-                {firstName ? `What's on your mind, ${firstName}?` : "What's on your mind?"}
+                {firstName ? t("chat.empty.greetingNamed", { name: firstName }) : t("chat.composer.placeholder")}
               </h2>
               <p className="text-fg-muted text-[15px] max-w-md mb-10">
                 {subtitle}
@@ -598,7 +595,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                 className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg"
                 role="status"
                 aria-busy={isLoadingPrompts}
-                aria-label={isLoadingPrompts ? "Loading suggested prompts" : "Suggested prompts"}
+                aria-label={t(isLoadingPrompts ? "chat.empty.loadingPrompts" : "chat.empty.suggestedPrompts")}
               >
                 {isLoadingPrompts
                   ? [0, 1, 2, 3].map((i) => (
@@ -645,7 +642,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                     <p className="whitespace-pre-wrap">{q.text}</p>
                   </div>
                   <p className="mt-1 text-xs text-fg-muted" aria-live="polite">
-                    {q.taken ? "👀 Seen, taking it into this answer" : "Sent while it works"}
+                    {t(q.taken ? "chat.queued.taken" : "chat.queued.sent")}
                   </p>
                 </div>
               ))}
@@ -693,17 +690,17 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                 onClick={() => setCommitteeEnabled(false)}
                 disabled={isLoading}
                 aria-pressed
-                title="Committee review: slower, higher-quality response — adversarial review pass before sending. Click to turn off."
+                title={t("chat.committee.chipTitle")}
                 className="inline-flex min-h-[32px] items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-2.5 text-xs font-medium text-accent hover:bg-accent/15 disabled:opacity-50 cursor-pointer"
               >
                 <Icon name="users" size="w-3.5 h-3.5" />
-                Committee review on
+                {t("chat.committee.chipOn")}
                 <Icon name="close" size="w-3 h-3" />
               </button>
             </div>
           )}
           {pendingFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2" aria-label="Pending attachments">
+            <div className="flex flex-wrap gap-2 mb-2" aria-label={t("chat.attachments.pending")}>
               {pendingFiles.map((f, i) => (
                 <div
                   key={`${f.name}-${f.size}-${i}`}
@@ -715,7 +712,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                   <button
                     type="button"
                     onClick={() => removePendingFile(i)}
-                    aria-label={`Remove ${f.name}`}
+                    aria-label={t("chat.removeNamed", { name: f.name })}
                     className="flex-shrink-0 w-5 h-5 rounded hover:bg-line-strong/50 flex items-center justify-center cursor-pointer"
                   >
                     <Icon name="close" size="w-3 h-3" />
@@ -741,7 +738,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
             />
             {/* The + menu: attach files, and committee review (on/off). */}
             <OverflowMenu
-              label="Add to your message"
+              label={t("chat.composer.addMenu")}
               align="left"
               placement="up"
               icon={<Icon name="plus" size="w-5 h-5" />}
@@ -749,13 +746,13 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                 {
                   label:
                     pendingFiles.length >= MAX_FILES_PER_TURN
-                      ? `Attach files (limit ${MAX_FILES_PER_TURN} per message)`
-                      : "Attach files or photos",
+                      ? t("chat.composer.attachLimit", { n: MAX_FILES_PER_TURN })
+                      : t("chat.composer.attach"),
                   onSelect: () => fileInputRef.current?.click(),
                   disabled: isLoading || pendingFiles.length >= MAX_FILES_PER_TURN,
                 },
                 {
-                  label: committeeEnabled ? "Turn off committee review" : "Committee review (slower, reviewed)",
+                  label: t(committeeEnabled ? "chat.committee.turnOff" : "chat.committee.turnOn"),
                   onSelect: () => setCommitteeEnabled((v) => !v),
                   disabled: isLoading,
                 },
@@ -780,9 +777,9 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                 value={input}
                 onChange={handleTextareaChange}
                 onKeyDown={handleKeyDown}
-                placeholder={isLoading ? WORKING_PLACEHOLDER : followup ?? DEFAULT_PLACEHOLDER}
+                placeholder={isLoading ? t("chat.composer.workingPlaceholder") : followup ?? t("chat.composer.placeholder")}
                 rows={1}
-                aria-label="Message"
+                aria-label={t("chat.composer.messageLabel")}
                 className={
                   "col-start-1 row-start-1 w-full bg-transparent text-fg text-sm sm:text-base leading-relaxed resize-none focus:outline-none disabled:opacity-50 max-h-40 overflow-y-auto " +
                   (showFollowup ? "placeholder:text-transparent" : "placeholder:text-fg-muted")
@@ -795,8 +792,8 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                 type="button"
                 onClick={handleStop}
                 disabled={isStopping}
-                aria-label="Stop the executive"
-                title="Stop — whatever has been written so far is kept"
+                aria-label={t("chat.composer.stopLabel")}
+                title={t("chat.composer.stopTitle")}
                 className="flex-shrink-0 w-11 h-11 rounded-xl bg-surface-overlay border border-line-strong text-fg hover:border-fg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center cursor-pointer"
               >
                 <Icon name="stop" size="w-3.5 h-3.5" fill="currentColor" />
@@ -808,7 +805,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                 type="button"
                 onClick={() => handleSend()}
                 disabled={!input.trim() && pendingFiles.length === 0}
-                aria-label={isLoading ? "Add to what it's working on" : "Send message"}
+                aria-label={t(isLoading ? "chat.composer.addToTurn" : "chat.composer.send")}
                 className="flex-shrink-0 w-11 h-11 rounded-xl bg-accent-strong hover:bg-accent-strong/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center cursor-pointer"
               >
                 <Icon name="arrow-send" size="w-4 h-4" className="text-white" />
@@ -816,25 +813,24 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
             )}
           </div>
           <p className="text-center text-xs text-fg-muted mt-2 inline-flex items-center justify-center gap-1.5 w-full">
-            <span className="hidden sm:inline">Enter to send · Shift+Enter for new line</span>
-            <span className="sm:hidden">Tap send</span>
+            <span className="hidden sm:inline">{t("chat.composer.hintDesktop")}</span>
+            <span className="sm:hidden">{t("chat.composer.hintMobile")}</span>
             {/* The suggestion's hint is also its button: Tab on a keyboard,
                 a tap or click anywhere else. */}
             {showFollowup && (
               <button
                 type="button"
                 onClick={acceptFollowup}
-                title="Use the suggested follow-up (Tab)"
-                aria-label={`Use suggested follow-up: ${followup}`}
+                title={t("chat.followup.title")}
+                aria-label={t("chat.followup.ariaLabel", { text: followup ?? "" })}
                 className="min-h-touch px-1 text-accent hover:underline font-medium cursor-pointer"
               >
-                <span className="hidden sm:inline">· Tab ↹ to use suggestion</span>
-                <span className="sm:hidden">· Use suggestion</span>
+                <span className="hidden sm:inline">{t("chat.followup.hintDesktop")}</span>
+                <span className="sm:hidden">{t("chat.followup.hintMobile")}</span>
               </button>
             )}
             <InfoTip align="right">
-              Your Executive routes your question to the right specialist
-              behind the scenes — you don&apos;t pick which one.
+              {t("chat.composer.routingTip")}
             </InfoTip>
           </p>
         </div>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { t } from "@/i18n/index.ts";
 import type { ProposalItem } from "@/lib/api";
 
 // Pieces every part of the Home briefing shares: the chat hand-off type, the
@@ -35,23 +36,23 @@ export function olderThan(proposals: ProposalItem[], days: number, now: Date = n
 // "soon" (the caller renders "overdue" separately via the backend flag).
 export function formatFuture(iso: string): string {
   const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "soon";
+  if (Number.isNaN(then)) return t("briefing.time.soon");
   const mins = Math.round((then - Date.now()) / 60000);
-  if (mins <= 0) return "soon";
-  if (mins < 60) return `in ${mins}m`;
+  if (mins <= 0) return t("briefing.time.soon");
+  if (mins < 60) return t("briefing.time.inMinutes", { n: mins });
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `in ${hrs}h`;
-  return `in ${Math.round(hrs / 24)}d`;
+  if (hrs < 24) return t("briefing.time.inHours", { n: hrs });
+  return t("briefing.time.inDays", { n: Math.round(hrs / 24) });
 }
 
 export function formatRelTime(iso: string): string {
   try {
     const diff = new Date(iso).getTime() - Date.now();
     const abs = Math.abs(diff);
-    if (abs < 60_000) return "now";
-    if (abs < 3_600_000) return `${Math.round(abs / 60_000)}m`;
-    if (abs < 86_400_000) return `${Math.round(abs / 3_600_000)}h`;
-    return `${Math.round(abs / 86_400_000)}d`;
+    if (abs < 60_000) return t("briefing.time.now");
+    if (abs < 3_600_000) return t("briefing.time.minutes", { n: Math.round(abs / 60_000) });
+    if (abs < 86_400_000) return t("briefing.time.hours", { n: Math.round(abs / 3_600_000) });
+    return t("briefing.time.days", { n: Math.round(abs / 86_400_000) });
   } catch {
     return "—";
   }

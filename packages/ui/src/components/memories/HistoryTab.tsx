@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import SidePanel from "@/components/ui/SidePanel";
+import { t } from "@/i18n/index.ts";
 import {
   forgetHistoryConversation,
   forgetHistoryNote,
@@ -88,12 +89,12 @@ export default function HistoryTab({
     [reload],
   );
 
-  if (loading) return <div className="text-fg-muted text-[15px] py-4">Loading…</div>;
+  if (loading) return <div className="text-fg-muted text-[15px] py-4">{t("common.loading")}</div>;
   const failure = (
     <div className="text-fg-muted text-sm py-3">
-      Couldn&apos;t load your notes.{" "}
+      {t("people.history.loadFailed")}{" "}
       <button onClick={() => void reload()} className="font-medium text-accent hover:underline">
-        Try again
+        {t("common.retry")}
       </button>
     </div>
   );
@@ -112,13 +113,13 @@ export default function HistoryTab({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search your notes"
-            aria-label="Search your notes"
+            placeholder={t("people.history.search")}
+            aria-label={t("people.history.search")}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           {failed && failure}
           {state.notes.length === 0 ? (
-            <EmptyState message="No notes match." />
+            <EmptyState message={t("people.history.noMatch")} />
           ) : (
             <div className="mt-1 divide-y divide-line">
               {state.notes.map((note) => (
@@ -127,27 +128,25 @@ export default function HistoryTab({
                   note={note}
                   onCorrect={() => setCorrecting(note)}
                   onPin={() =>
-                    void act(() => updateHistoryNote(note.id, { pinned: !note.pinned }), "Couldn't change the note.")
+                    void act(() => updateHistoryNote(note.id, { pinned: !note.pinned }), t("people.history.changeFailed"))
                   }
                   onForget={() => {
-                    if (!window.confirm("Forget this note? This cannot be undone.")) return;
-                    void act(() => forgetHistoryNote(note.id), "Couldn't forget the note.");
+                    if (!window.confirm(t("people.history.forgetConfirm"))) return;
+                    void act(() => forgetHistoryNote(note.id), t("people.history.forgetFailed"));
                   }}
                   onDontRemember={() => {
                     if (
-                      !window.confirm(
-                        "Forget every note from this conversation, and never note it again? This cannot be undone.",
-                      )
+                      !window.confirm(t("people.history.dontRememberConfirm"))
                     )
                       return;
-                    void act(() => forgetHistoryConversation(note.id), "Couldn't forget the conversation.");
+                    void act(() => forgetHistoryConversation(note.id), t("people.history.forgetConversationFailed"));
                   }}
                 />
               ))}
             </div>
           )}
           <p className="mt-3 text-xs text-fg-subtle">
-            Only you see these. New notes are kept {retentionPhrase(state.effective_retention_days)}.
+            {t("people.history.footer", { retention: retentionPhrase(state.effective_retention_days) })}
           </p>
         </>
       )}
@@ -162,7 +161,7 @@ export default function HistoryTab({
           try {
             await updateHistoryNote(note.id, { correction });
           } catch (err) {
-            window.alert(err instanceof Error ? err.message : "Couldn't change the note.");
+            window.alert(err instanceof Error ? err.message : t("people.history.changeFailed"));
             return;
           }
           setCorrecting(null);
@@ -174,24 +173,27 @@ export default function HistoryTab({
 }
 
 function retentionPhrase(days: number | null): string {
-  return days === null ? "until you forget them" : days === 365 ? "for a year" : `for ${days} days`;
+  return days === null
+    ? t("people.history.retentionForever")
+    : days === 365
+      ? t("people.history.retentionYear")
+      : t("people.history.retentionDays", { n: days });
 }
 
 function HistoryEmpty({ state }: { state: HistoryState }) {
   if (state.reply_notes) {
     return (
-      <EmptyState message="No notes yet. They're added when you tell the Executive what you promised, agreed or decided." />
+      <EmptyState message={t("people.history.emptyReplyNotes")} />
     );
   }
   return (
     <div className="text-center py-14 px-4 text-fg-muted text-[15px] leading-relaxed">
       <p>
-        Keep track of what happens is off. When it&apos;s on, the Executive keeps private notes of what
-        you tell it, so it can remind you later.
+        {t("people.history.offBody")}
       </p>
       {state.can_keep_notes && (
         <Link href="/settings/memory" className="mt-3 inline-block font-medium text-accent hover:underline">
-          Turn it on in Memory settings
+          {t("people.history.turnOn")}
         </Link>
       )}
     </div>
@@ -222,31 +224,31 @@ function NoteRow({
             {noteWhere(note)}
           </span>
           <span>{formatDate(note.occurred_at)}</span>
-          {note.pinned && <span className="text-xs font-medium text-accent">Pinned</span>}
+          {note.pinned && <span className="text-xs font-medium text-accent">{t("people.history.pinned")}</span>}
         </div>
         <OverflowMenu
           size="sm"
-          label="Note actions"
+          label={t("people.history.noteActions")}
           items={[
-            { label: "Correct", onSelect: onCorrect },
-            { label: note.pinned ? "Unpin" : "Pin", onSelect: onPin },
-            { label: "Don't remember this", onSelect: onDontRemember },
-            { label: "Forget", danger: true, onSelect: onForget },
+            { label: t("people.history.correct"), onSelect: onCorrect },
+            { label: note.pinned ? t("people.history.unpin") : t("people.history.pin"), onSelect: onPin },
+            { label: t("people.history.dontRemember"), onSelect: onDontRemember },
+            { label: t("people.history.forget"), danger: true, onSelect: onForget },
           ]}
         />
       </div>
       <div className="space-y-1">
         <div className="text-[15px] text-fg">
           {noteText(note)}
-          {corrected && <span className="ml-1 text-xs text-fg-subtle">(as you corrected it)</span>}
+          {corrected && <span className="ml-1 text-xs text-fg-subtle">{t("people.history.asCorrected")}</span>}
         </div>
         {note.quote && (
           <div className="text-sm text-fg-muted line-clamp-3" title={note.quote}>
-            Your words: “{note.quote}”
+            {t("people.history.yourWordsQuote", { quote: note.quote })}
           </div>
         )}
         <div className="text-xs text-fg-subtle">
-          {note.due_date ? `Due ${note.due_date} · ` : ""}
+          {note.due_date ? t("people.history.due", { date: note.due_date }) : ""}
           {noteExpiry(note)}
         </div>
       </div>
@@ -280,20 +282,20 @@ function CorrectPanel({
     <SidePanel
       open={note !== null}
       onClose={onClose}
-      title="Correct this note"
+      title={t("people.history.correctTitle")}
       subtitle={note ? `${noteWhere(note)} · ${formatDate(note.occurred_at)}` : undefined}
       footer={
         <div className="flex flex-wrap justify-end gap-2">
           {corrected && (
             <Button variant="ghost" onClick={() => void save("")} disabled={busy}>
-              Use the original
+              {t("people.history.useOriginal")}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button variant="primary" onClick={() => void save(text.trim())} disabled={busy || !text.trim()}>
-            Save
+            {t("common.save")}
           </Button>
         </div>
       }
@@ -305,28 +307,28 @@ function CorrectPanel({
             onChange={(e) => setText(e.target.value)}
             rows={4}
             maxLength={400}
-            aria-label="What the note should say"
+            aria-label={t("people.history.whatItShouldSay")}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           <div className="text-sm text-fg-muted space-y-1">
             {note.counterpart && (
               <div className="break-all">
-                <span className="text-fg-subtle">With: </span>
+                <span className="text-fg-subtle">{t("people.history.with")}</span>
                 {note.counterpart}
               </div>
             )}
             <div>
-              <span className="text-fg-subtle">Noted as: </span>
+              <span className="text-fg-subtle">{t("people.history.notedAs")}</span>
               {note.summary}
             </div>
             {note.quote && (
               <div>
-                <span className="text-fg-subtle">Your words: </span>“{note.quote}”
+                <span className="text-fg-subtle">{t("people.history.yourWords")}</span>“{note.quote}”
               </div>
             )}
           </div>
           <p className="text-xs text-fg-subtle">
-            The Executive uses your version from now on. Your words stay as you wrote them.
+            {t("people.history.correctHint")}
           </p>
         </div>
       )}

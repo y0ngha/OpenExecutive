@@ -11,6 +11,7 @@
 import { useEffect, useState, useRef } from "react";
 import { PROFILE_COPY, type ProfileCopy } from "@/components/company-profile/profileCopy";
 import Button from "@/components/ui/Button";
+import { t, displayLocale } from "@/i18n/index.ts";
 import type { ProfileWording } from "@/components/shell/navConfig";
 import { type CompanyProfile } from "@/lib/api";
 
@@ -99,11 +100,11 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 
 function FieldValue({ children }: { children: React.ReactNode }) {
-  return <p className="text-[15px] text-fg leading-relaxed">{children || <span className="text-fg-subtle italic">Not set</span>}</p>;
+  return <p className="text-[15px] text-fg leading-relaxed">{children || <span className="text-fg-subtle italic">{t("misc.profile.notSet")}</span>}</p>;
 }
 
 function Pills({ items }: { items: string[] }) {
-  if (!items.length) return <span className="text-[15px] text-fg-subtle italic">Not set</span>;
+  if (!items.length) return <span className="text-[15px] text-fg-subtle italic">{t("misc.profile.notSet")}</span>;
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map((item, i) => (
@@ -191,7 +192,7 @@ function Section({
       await onSave();
       setEditing(false);
     } catch {
-      setError("Save failed. Please try again.");
+      setError(t("misc.profile.saveFailed"));
     }
   }
 
@@ -200,8 +201,8 @@ function Section({
       <div className="flex items-center justify-between gap-3 mb-4 min-h-11">
         <h2 className="text-lg font-semibold text-fg">{title}</h2>
         {!editing && (
-          <Button onClick={() => setEditing(true)} aria-label={`Edit ${title}`}>
-            Edit
+          <Button onClick={() => setEditing(true)} aria-label={t("misc.profile.editSection", { title })}>
+            {t("common.edit")}
           </Button>
         )}
       </div>
@@ -213,10 +214,10 @@ function Section({
           {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
           <div className="flex gap-2 mt-5">
             <Button variant="primary" onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : "Save"}
+              {saving ? t("common.saving") : t("common.save")}
             </Button>
             <Button onClick={() => { setEditing(false); setError(null); }} disabled={saving}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </>
@@ -291,22 +292,22 @@ function CompanyBasicsSection({ profile, saving, onSave, pending, copy }: Sectio
       })}
       viewContent={
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <div><FieldLabel>Name</FieldLabel><FieldValue>{profile.name}</FieldValue></div>
-          <div><FieldLabel>Industry</FieldLabel><FieldValue>{profile.industry}</FieldValue></div>
-          <div><FieldLabel>Stage</FieldLabel><FieldValue>{profile.stage}</FieldValue></div>
-          <div><FieldLabel>Founded</FieldLabel><FieldValue>{profile.founding_year?.toString()}</FieldValue></div>
-          <div><FieldLabel>Headcount</FieldLabel><FieldValue>{profile.headcount?.toString()}</FieldValue></div>
-          <div><FieldLabel>ARR</FieldLabel><FieldValue>{profile.annual_revenue_arr != null ? `$${profile.annual_revenue_arr.toLocaleString()}` : undefined}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.name")}</FieldLabel><FieldValue>{profile.name}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.industry")}</FieldLabel><FieldValue>{profile.industry}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.stage")}</FieldLabel><FieldValue>{profile.stage}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.founded")}</FieldLabel><FieldValue>{profile.founding_year?.toString()}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.headcount")}</FieldLabel><FieldValue>{profile.headcount?.toString()}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.arr")}</FieldLabel><FieldValue>{profile.annual_revenue_arr != null ? `$${profile.annual_revenue_arr.toLocaleString(displayLocale())}` : undefined}</FieldValue></div>
         </div>
       }
       editContent={
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><FieldLabel>Name</FieldLabel><Input value={name} onChange={setName} placeholder="Acme Corp" /></div>
-          <div><FieldLabel>Industry</FieldLabel><Input value={industry} onChange={setIndustry} placeholder="B2B SaaS" /></div>
-          <div><FieldLabel>Stage</FieldLabel><Input value={stage} onChange={setStage} placeholder="Series A" /></div>
-          <div><FieldLabel>Founded</FieldLabel><Input value={foundingYear} onChange={setFoundingYear} type="number" placeholder="2022" /></div>
-          <div><FieldLabel>Headcount</FieldLabel><Input value={headcount} onChange={setHeadcount} type="number" placeholder="40" /></div>
-          <div><FieldLabel>ARR ($)</FieldLabel><Input value={arr} onChange={setArr} type="number" placeholder="500000" /></div>
+          <div><FieldLabel>{t("misc.profile.name")}</FieldLabel><Input value={name} onChange={setName} placeholder="Acme Corp" /></div>
+          <div><FieldLabel>{t("misc.profile.industry")}</FieldLabel><Input value={industry} onChange={setIndustry} placeholder="B2B SaaS" /></div>
+          <div><FieldLabel>{t("misc.profile.stage")}</FieldLabel><Input value={stage} onChange={setStage} placeholder={t("misc.profile.stagePlaceholder")} /></div>
+          <div><FieldLabel>{t("misc.profile.founded")}</FieldLabel><Input value={foundingYear} onChange={setFoundingYear} type="number" placeholder="2022" /></div>
+          <div><FieldLabel>{t("misc.profile.headcount")}</FieldLabel><Input value={headcount} onChange={setHeadcount} type="number" placeholder="40" /></div>
+          <div><FieldLabel>{t("misc.profile.arrInput")}</FieldLabel><Input value={arr} onChange={setArr} type="number" placeholder="500000" /></div>
         </div>
       }
     />
@@ -325,21 +326,21 @@ function MissionSection({ profile, saving, onSave, pending, copy }: SectionCompo
 
   return (
     <Section
-      title="Mission & Vision"
+      title={t("misc.profile.missionTitle")}
       editing={editing}
       onEditingChange={setEditing}
       saving={saving}
       onSave={() => onSave({ mission, vision })}
       viewContent={
         <div className="space-y-4">
-          <div><FieldLabel>Mission</FieldLabel><FieldValue>{profile.mission}</FieldValue></div>
-          <div><FieldLabel>Vision</FieldLabel><FieldValue>{profile.vision}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.mission")}</FieldLabel><FieldValue>{profile.mission}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.vision")}</FieldLabel><FieldValue>{profile.vision}</FieldValue></div>
         </div>
       }
       editContent={
         <div className="space-y-3">
-          <div><FieldLabel>Mission</FieldLabel><Textarea value={mission} onChange={setMission} rows={2} placeholder={copy.missionPlaceholder} /></div>
-          <div><FieldLabel>Vision</FieldLabel><Textarea value={vision} onChange={setVision} rows={2} placeholder="Where are you in 5 years?" /></div>
+          <div><FieldLabel>{t("misc.profile.mission")}</FieldLabel><Textarea value={mission} onChange={setMission} rows={2} placeholder={copy.missionPlaceholder} /></div>
+          <div><FieldLabel>{t("misc.profile.vision")}</FieldLabel><Textarea value={vision} onChange={setVision} rows={2} placeholder={t("misc.profile.visionPlaceholder")} /></div>
         </div>
       }
     />
@@ -361,21 +362,21 @@ function TargetCustomerSection({ profile, saving, onSave, pending }: SectionComp
 
   return (
     <Section
-      title="Target Customer"
+      title={t("misc.profile.customerTitle")}
       editing={editing}
       onEditingChange={setEditing}
       saving={saving}
       onSave={() => onSave({ target_customer: { profile: customerProfile, pain_points: textToList(painPoints) } })}
       viewContent={
         <div className="space-y-4">
-          <div><FieldLabel>Customer Profile</FieldLabel><FieldValue>{profile.target_customer.profile}</FieldValue></div>
-          <div><FieldLabel>Pain Points</FieldLabel><Pills items={profile.target_customer.pain_points} /></div>
+          <div><FieldLabel>{t("misc.profile.customerProfile")}</FieldLabel><FieldValue>{profile.target_customer.profile}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.painPoints")}</FieldLabel><Pills items={profile.target_customer.pain_points} /></div>
         </div>
       }
       editContent={
         <div className="space-y-3">
-          <div><FieldLabel>Customer Profile</FieldLabel><Textarea value={customerProfile} onChange={setCustomerProfile} rows={2} placeholder="Who is your ideal customer?" /></div>
-          <div><FieldLabel>Pain Points (one per line)</FieldLabel><Textarea value={painPoints} onChange={setPainPoints} rows={3} placeholder={"Too slow to onboard\nNo visibility into data"} /></div>
+          <div><FieldLabel>{t("misc.profile.customerProfile")}</FieldLabel><Textarea value={customerProfile} onChange={setCustomerProfile} rows={2} placeholder={t("misc.profile.customerPlaceholder")} /></div>
+          <div><FieldLabel>{t("misc.profile.painPointsInput")}</FieldLabel><Textarea value={painPoints} onChange={setPainPoints} rows={3} placeholder={t("misc.profile.painPointsPlaceholder")} /></div>
         </div>
       }
     />
@@ -397,21 +398,21 @@ function CompetitiveSection({ profile, saving, onSave, pending }: SectionCompone
 
   return (
     <Section
-      title="Competitive Landscape"
+      title={t("misc.profile.competitiveTitle")}
       editing={editing}
       onEditingChange={setEditing}
       saving={saving}
       onSave={() => onSave({ competitive_landscape: { primary_competitors: textToList(competitors), competitive_advantages: textToList(advantages) } })}
       viewContent={
         <div className="space-y-4">
-          <div><FieldLabel>Primary Competitors</FieldLabel><Pills items={profile.competitive_landscape.primary_competitors} /></div>
-          <div><FieldLabel>Our Advantages</FieldLabel><Pills items={profile.competitive_landscape.competitive_advantages} /></div>
+          <div><FieldLabel>{t("misc.profile.competitors")}</FieldLabel><Pills items={profile.competitive_landscape.primary_competitors} /></div>
+          <div><FieldLabel>{t("misc.profile.advantages")}</FieldLabel><Pills items={profile.competitive_landscape.competitive_advantages} /></div>
         </div>
       }
       editContent={
         <div className="space-y-3">
-          <div><FieldLabel>Competitors (one per line)</FieldLabel><Textarea value={competitors} onChange={setCompetitors} rows={3} placeholder={"Salesforce\nHubSpot"} /></div>
-          <div><FieldLabel>Our Advantages (one per line)</FieldLabel><Textarea value={advantages} onChange={setAdvantages} rows={3} placeholder={"10x faster onboarding\nOpen source"} /></div>
+          <div><FieldLabel>{t("misc.profile.competitorsInput")}</FieldLabel><Textarea value={competitors} onChange={setCompetitors} rows={3} placeholder={"Salesforce\nHubSpot"} /></div>
+          <div><FieldLabel>{t("misc.profile.advantagesInput")}</FieldLabel><Textarea value={advantages} onChange={setAdvantages} rows={3} placeholder={t("misc.profile.advantagesPlaceholder")} /></div>
         </div>
       }
     />
@@ -433,7 +434,7 @@ function ExternalDependenciesSection({ profile, saving, onSave, pending, copy }:
 
   return (
     <Section
-      title="External Dependencies"
+      title={t("misc.profile.dependenciesTitle")}
       editing={editing}
       onEditingChange={setEditing}
       saving={saving}
@@ -441,14 +442,14 @@ function ExternalDependenciesSection({ profile, saving, onSave, pending, copy }:
       viewContent={
         <div className="space-y-4">
           <p className="text-sm text-fg-subtle">{copy.dependenciesNote}</p>
-          <div><FieldLabel>Vendors &amp; dependencies</FieldLabel><Pills items={profile.vendors ?? []} /></div>
-          <div><FieldLabel>Tracked tickers</FieldLabel><Pills items={profile.tickers ?? []} /></div>
+          <div><FieldLabel>{t("misc.profile.vendors")}</FieldLabel><Pills items={profile.vendors ?? []} /></div>
+          <div><FieldLabel>{t("misc.profile.tickers")}</FieldLabel><Pills items={profile.tickers ?? []} /></div>
         </div>
       }
       editContent={
         <div className="space-y-3">
-          <div><FieldLabel>Vendors (one per line)</FieldLabel><Textarea value={vendors} onChange={setVendors} rows={3} placeholder={"Stripe\nAWS"} /></div>
-          <div><FieldLabel>Tickers (one per line — yours and competitors&apos;)</FieldLabel><Textarea value={tickers} onChange={setTickers} rows={3} placeholder={"CRM\nHUBS"} /></div>
+          <div><FieldLabel>{t("misc.profile.vendorsInput")}</FieldLabel><Textarea value={vendors} onChange={setVendors} rows={3} placeholder={"Stripe\nAWS"} /></div>
+          <div><FieldLabel>{t("misc.profile.tickersInput")}</FieldLabel><Textarea value={tickers} onChange={setTickers} rows={3} placeholder={"CRM\nHUBS"} /></div>
         </div>
       }
     />
@@ -470,21 +471,21 @@ function PrioritiesSection({ profile, saving, onSave, pending }: SectionComponen
 
   return (
     <Section
-      title="Strategic Priorities"
+      title={t("misc.profile.prioritiesTitle")}
       editing={editing}
       onEditingChange={setEditing}
       saving={saving}
       onSave={() => onSave({ strategic_priorities: { current_year: textToList(priorities), north_star_metric: northStar } })}
       viewContent={
         <div className="space-y-4">
-          <div><FieldLabel>This Year&apos;s Priorities</FieldLabel><Pills items={profile.strategic_priorities.current_year} /></div>
-          <div><FieldLabel>North Star Metric</FieldLabel><FieldValue>{profile.strategic_priorities.north_star_metric}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.priorities")}</FieldLabel><Pills items={profile.strategic_priorities.current_year} /></div>
+          <div><FieldLabel>{t("misc.profile.northStar")}</FieldLabel><FieldValue>{profile.strategic_priorities.north_star_metric}</FieldValue></div>
         </div>
       }
       editContent={
         <div className="space-y-3">
-          <div><FieldLabel>Priorities (one per line)</FieldLabel><Textarea value={priorities} onChange={setPriorities} rows={3} placeholder={"Launch v1\nHire 3 engineers"} /></div>
-          <div><FieldLabel>North Star Metric</FieldLabel><Input value={northStar} onChange={setNorthStar} placeholder="MRR or DAU" /></div>
+          <div><FieldLabel>{t("misc.profile.prioritiesInput")}</FieldLabel><Textarea value={priorities} onChange={setPriorities} rows={3} placeholder={t("misc.profile.prioritiesPlaceholder")} /></div>
+          <div><FieldLabel>{t("misc.profile.northStar")}</FieldLabel><Input value={northStar} onChange={setNorthStar} placeholder={t("misc.profile.northStarPlaceholder")} /></div>
         </div>
       }
     />
@@ -506,21 +507,21 @@ function CultureSection({ profile, saving, onSave, pending }: SectionComponentPr
 
   return (
     <Section
-      title="Culture & Values"
+      title={t("misc.profile.cultureTitle")}
       editing={editing}
       onEditingChange={setEditing}
       saving={saving}
       onSave={() => onSave({ culture: { values: textToList(values), operating_principles: textToList(principles) } })}
       viewContent={
         <div className="space-y-4">
-          <div><FieldLabel>Values</FieldLabel><Pills items={profile.culture.values} /></div>
-          <div><FieldLabel>Operating Principles</FieldLabel><Pills items={profile.culture.operating_principles} /></div>
+          <div><FieldLabel>{t("misc.profile.values")}</FieldLabel><Pills items={profile.culture.values} /></div>
+          <div><FieldLabel>{t("misc.profile.principles")}</FieldLabel><Pills items={profile.culture.operating_principles} /></div>
         </div>
       }
       editContent={
         <div className="space-y-3">
-          <div><FieldLabel>Values (one per line)</FieldLabel><Textarea value={values} onChange={setValues} rows={3} placeholder={"Transparency\nBias for action"} /></div>
-          <div><FieldLabel>Operating Principles (one per line)</FieldLabel><Textarea value={principles} onChange={setPrinciples} rows={3} placeholder={"Default to async\nWrite it down"} /></div>
+          <div><FieldLabel>{t("misc.profile.valuesInput")}</FieldLabel><Textarea value={values} onChange={setValues} rows={3} placeholder={t("misc.profile.valuesPlaceholder")} /></div>
+          <div><FieldLabel>{t("misc.profile.principlesInput")}</FieldLabel><Textarea value={principles} onChange={setPrinciples} rows={3} placeholder={t("misc.profile.principlesPlaceholder")} /></div>
         </div>
       }
     />
@@ -542,7 +543,7 @@ function OrgSection({ profile, saving, onSave, pending, copy }: SectionComponent
 
   return (
     <Section
-      title="Org Structure"
+      title={t("misc.profile.orgTitle")}
       editing={editing}
       onEditingChange={setEditing}
       saving={saving}
@@ -550,13 +551,13 @@ function OrgSection({ profile, saving, onSave, pending, copy }: SectionComponent
       viewContent={
         <div className="space-y-4">
           <div><FieldLabel>{copy.departmentsLabel}</FieldLabel><Pills items={profile.org_structure.departments} /></div>
-          <div><FieldLabel>Leadership Team</FieldLabel><Pills items={profile.org_structure.leadership_team} /></div>
+          <div><FieldLabel>{t("misc.profile.leadership")}</FieldLabel><Pills items={profile.org_structure.leadership_team} /></div>
         </div>
       }
       editContent={
         <div className="space-y-3">
-          <div><FieldLabel>{copy.departmentsLabel} (one per line)</FieldLabel><Textarea value={departments} onChange={setDepartments} rows={3} placeholder={"Engineering\nProduct\nGTM"} /></div>
-          <div><FieldLabel>Leadership Team (one per line)</FieldLabel><Textarea value={leadership} onChange={setLeadership} rows={3} placeholder={"Alice Chen, CEO\nBob Smith, CTO"} /></div>
+          <div><FieldLabel>{t("misc.profile.onePerLine", { label: copy.departmentsLabel })}</FieldLabel><Textarea value={departments} onChange={setDepartments} rows={3} placeholder={t("misc.profile.departmentsPlaceholder")} /></div>
+          <div><FieldLabel>{t("misc.profile.leadershipInput")}</FieldLabel><Textarea value={leadership} onChange={setLeadership} rows={3} placeholder={t("misc.profile.leadershipPlaceholder")} /></div>
         </div>
       }
     />
@@ -578,7 +579,7 @@ function FinancialsSection({ profile, saving, onSave, pending }: SectionComponen
 
   return (
     <Section
-      title="Financials"
+      title={t("misc.profile.financialsTitle")}
       editing={editing}
       onEditingChange={setEditing}
       saving={saving}
@@ -591,14 +592,14 @@ function FinancialsSection({ profile, saving, onSave, pending }: SectionComponen
       })}
       viewContent={
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <div><FieldLabel>Monthly Burn</FieldLabel><FieldValue>{profile.financials.burn_rate_monthly != null ? `$${profile.financials.burn_rate_monthly.toLocaleString()}/mo` : undefined}</FieldValue></div>
-          <div><FieldLabel>Runway</FieldLabel><FieldValue>{profile.financials.runway_months != null ? `${profile.financials.runway_months} months` : undefined}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.burn")}</FieldLabel><FieldValue>{profile.financials.burn_rate_monthly != null ? t("misc.profile.burnValue", { amount: profile.financials.burn_rate_monthly.toLocaleString(displayLocale()) }) : undefined}</FieldValue></div>
+          <div><FieldLabel>{t("misc.profile.runway")}</FieldLabel><FieldValue>{profile.financials.runway_months != null ? t("misc.profile.runwayValue", { months: profile.financials.runway_months }) : undefined}</FieldValue></div>
         </div>
       }
       editContent={
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><FieldLabel>Monthly Burn ($)</FieldLabel><Input value={burn} onChange={setBurn} type="number" placeholder="50000" /></div>
-          <div><FieldLabel>Runway (months)</FieldLabel><Input value={runway} onChange={setRunway} type="number" placeholder="18" /></div>
+          <div><FieldLabel>{t("misc.profile.burnInput")}</FieldLabel><Input value={burn} onChange={setBurn} type="number" placeholder="50000" /></div>
+          <div><FieldLabel>{t("misc.profile.runwayInput")}</FieldLabel><Input value={runway} onChange={setRunway} type="number" placeholder="18" /></div>
         </div>
       }
     />

@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/i18n/index.ts";
 import { ROLE_KIND_OPTIONS, ROLE_TEXT_MAX, type RoleForm } from "@/lib/principalRole";
 
 // The principal's role as form fields — the onboarding role step and
@@ -25,7 +26,7 @@ export default function RoleFields({
   return (
     <div className="space-y-4">
       <fieldset>
-        <legend className="text-xs font-medium text-fg mb-1.5">Which describes you best?</legend>
+        <legend className="text-xs font-medium text-fg mb-1.5">{t("settings.role.kindLegend")}</legend>
         <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
           {ROLE_KIND_OPTIONS.map((o) => {
             const selected = value.role_kind === o.kind;
@@ -55,28 +56,28 @@ export default function RoleFields({
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor={`${idPrefix}-title`} className="block text-xs font-medium text-fg mb-1">
-            Your title
+            {t("settings.role.title")}
           </label>
           <input
             id={`${idPrefix}-title`}
             value={value.role_title}
             onChange={(e) => set("role_title", e.target.value)}
             maxLength={ROLE_TEXT_MAX.role_title}
-            placeholder="e.g. Director of Operations"
+            placeholder={t("settings.role.titlePlaceholder")}
             disabled={disabled}
             className={INPUT}
           />
         </div>
         <div>
           <label htmlFor={`${idPrefix}-reports-to`} className="block text-xs font-medium text-fg mb-1">
-            Who you report to <span className="text-fg-subtle font-normal">(optional)</span>
+            {t("settings.role.reportsTo")} <span className="text-fg-subtle font-normal">{t("settings.role.optional")}</span>
           </label>
           <input
             id={`${idPrefix}-reports-to`}
             value={value.reports_to}
             onChange={(e) => set("reports_to", e.target.value)}
             maxLength={ROLE_TEXT_MAX.reports_to}
-            placeholder="e.g. VP of Operations, Dana Ruiz"
+            placeholder={t("settings.role.reportsToPlaceholder")}
             disabled={disabled}
             className={INPUT}
           />
@@ -85,7 +86,7 @@ export default function RoleFields({
 
       <div>
         <label htmlFor={`${idPrefix}-remit`} className="block text-xs font-medium text-fg mb-1">
-          What you&apos;re responsible for
+          {t("settings.role.remit")}
         </label>
         <textarea
           id={`${idPrefix}-remit`}
@@ -93,7 +94,7 @@ export default function RoleFields({
           onChange={(e) => set("remit", e.target.value)}
           maxLength={ROLE_TEXT_MAX.remit}
           rows={2}
-          placeholder="e.g. Our three warehouses, carrier contracts and last-mile delivery"
+          placeholder={t("settings.role.remitPlaceholder")}
           disabled={disabled}
           className={`${INPUT} resize-y`}
         />
@@ -101,14 +102,14 @@ export default function RoleFields({
 
       <div>
         <label htmlFor={`${idPrefix}-measured-on`} className="block text-xs font-medium text-fg mb-1">
-          What you&apos;re measured on <span className="text-fg-subtle font-normal">(optional)</span>
+          {t("settings.role.measuredOn")} <span className="text-fg-subtle font-normal">{t("settings.role.optional")}</span>
         </label>
         <input
           id={`${idPrefix}-measured-on`}
           value={value.measured_on}
           onChange={(e) => set("measured_on", e.target.value)}
           maxLength={ROLE_TEXT_MAX.measured_on}
-          placeholder="e.g. On-time delivery rate and cost per shipment"
+          placeholder={t("settings.role.measuredOnPlaceholder")}
           disabled={disabled}
           className={INPUT}
         />

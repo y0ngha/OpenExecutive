@@ -3,17 +3,29 @@
 // query test). Kept apart from the components so `npm test` can check the
 // mapping (scripts/knowledgeViews.test.mjs).
 
+import { t } from "../i18n/index.ts";
+
 export type KnowledgeView = "company" | "review" | "playbooks" | "reference" | "query";
 
 /** The views under "Advanced", in tab order. */
 export const ADVANCED_VIEWS: readonly KnowledgeView[] = ["review", "playbooks", "reference", "query"];
 
 export const VIEW_LABELS: Record<KnowledgeView, string> = {
-  company: "Company documents",
-  review: "Review queue",
-  playbooks: "Built-in playbooks",
-  reference: "Reference library",
-  query: "Query test",
+  get company() {
+    return t("lib.knowledge.company");
+  },
+  get review() {
+    return t("lib.knowledge.review");
+  },
+  get playbooks() {
+    return t("lib.knowledge.playbooks");
+  },
+  get reference() {
+    return t("lib.knowledge.reference");
+  },
+  get query() {
+    return t("lib.knowledge.query");
+  },
 };
 
 /** What the workspace has open. A built-in file and the new-file form sit

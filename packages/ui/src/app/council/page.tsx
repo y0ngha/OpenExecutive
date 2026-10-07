@@ -31,6 +31,8 @@ import {
   testAgent,
 } from "@/lib/api";
 import Button from "@/components/ui/Button";
+import { t, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import SectionTabs, { sectionPanelProps } from "@/components/ui/SectionTabs";
 import SidePanel from "@/components/ui/SidePanel";
@@ -84,7 +86,7 @@ function unlistedOption(id: string, known: ModelOption[]): PickerOption {
       ? id.slice(0, slash)
       : "other";
   const sibling = known.find((o) => o.provider === provider);
-  const fallbackLabel = provider === "anthropic" ? "Anthropic" : provider === "other" ? "Other" : provider;
+  const fallbackLabel = provider === "anthropic" ? "Anthropic" : provider === "other" ? t("settings.council.otherProvider") : provider;
   return {
     id,
     provider,
@@ -95,19 +97,19 @@ function unlistedOption(id: string, known: ModelOption[]): PickerOption {
   };
 }
 
-const ROUTE_TEXT: Record<ModelOption["route"], string> = {
-  direct: "Anthropic API",
-  openrouter: "via OpenRouter",
-  local: "local backend",
+const ROUTE_TEXT: Record<ModelOption["route"], MessageKey> = {
+  direct: "settings.council.route.direct",
+  openrouter: "settings.council.route.openrouter",
+  local: "settings.council.route.local",
 };
 
 function personaOption(p: PersonaMeta) {
   return (
     <option key={p.slug} value={p.slug}>
       {p.display_name}
-      {p.is_builtin && !p.is_customized ? " · built-in" : ""}
-      {p.is_customized ? " · customized" : ""}
-      {!p.is_builtin ? " · custom" : ""}
+      {p.is_builtin && !p.is_customized ? t("settings.council.persona.builtIn") : ""}
+      {p.is_customized ? t("settings.council.persona.customized") : ""}
+      {!p.is_builtin ? t("settings.council.persona.custom") : ""}
     </option>
   );
 }
@@ -122,12 +124,12 @@ const ADVANCED_KEY = "oe.council.advanced";
 // model, and the utility one can't be test-run.
 type EditorTab = "model" | "instructions" | "prompt" | "test" | "history";
 
-const TAB_LABEL: Record<EditorTab, string> = {
-  model: "Model",
-  instructions: "Instructions",
-  prompt: "Prompt",
-  test: "Test",
-  history: "History",
+const TAB_LABEL: Record<EditorTab, MessageKey> = {
+  model: "settings.council.tab.model",
+  instructions: "settings.council.tab.instructions",
+  prompt: "settings.council.tab.prompt",
+  test: "settings.council.tab.test",
+  history: "settings.council.tab.history",
 };
 
 function editorTabs(d: AgentDetail): EditorTab[] {
@@ -230,7 +232,7 @@ export default function CouncilPage() {
       for (const d of details) if (d) fields[d.name] = d.overridden_fields;
       setOverrideFields(fields);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load agents");
+      setError(err instanceof Error ? err.message : t("settings.council.loadAgentsFailed"));
     }
   }, []);
 
@@ -243,7 +245,7 @@ export default function CouncilPage() {
       setTestResult(null);
       setTestError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load agent");
+      setError(err instanceof Error ? err.message : t("settings.council.loadAgentFailed"));
     }
   }, []);
 
@@ -316,7 +318,7 @@ export default function CouncilPage() {
         setPersonaDisplayNameDraft(p.display_name);
         setPersonaError(null);
       })
-      .catch(() => setPersonaError("Failed to load persona"));
+      .catch(() => setPersonaError(t("settings.council.loadPersonaFailed")));
   }, [selected, draft?.voice_persona_slug]);
 
   const tabIdBase = useId();
@@ -384,7 +386,7 @@ export default function CouncilPage() {
   // Escape, the close button or a click beside the panel are easy to hit by
   // accident, so they ask before throwing unsaved edits away.
   const closePanel = () => {
-    if (dirty && !window.confirm("Discard your unsaved changes to this agent?")) return;
+    if (dirty && !window.confirm(t("settings.council.confirmDiscard"))) return;
     cancelPanel();
   };
 
@@ -430,7 +432,7 @@ export default function CouncilPage() {
       setDraft(detailToDraft(updated));
       refreshAgents();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(err instanceof Error ? err.message : t("settings.council.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -441,8 +443,7 @@ export default function CouncilPage() {
     if (!preset) return;
     if (
       !window.confirm(
-        `Switch every agent to ${preset.label}? This changes each agent's model and deep reasoning; ` +
-          "prompts and instructions stay as they are, and earlier settings move to history."
+        t("settings.council.confirmPreset", { preset: preset.label })
       )
     )
       return;
@@ -453,7 +454,7 @@ export default function CouncilPage() {
       await refreshAgents();
       if (selected) await loadDetail(selected);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to apply preset");
+      setError(err instanceof Error ? err.message : t("settings.council.applyPresetFailed"));
     } finally {
       setApplyingPreset(null);
     }
@@ -464,7 +465,7 @@ export default function CouncilPage() {
 
   const handleReset = async () => {
     if (!selected) return;
-    if (!window.confirm("Reset this agent to defaults? Current override will move to history.")) return;
+    if (!window.confirm(t("settings.council.confirmReset"))) return;
     setResetting(true);
     setError(null);
     try {
@@ -472,7 +473,7 @@ export default function CouncilPage() {
       await loadDetail(selected);
       refreshAgents();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reset failed");
+      setError(err instanceof Error ? err.message : t("settings.council.resetFailed"));
     } finally {
       setResetting(false);
     }
@@ -480,7 +481,7 @@ export default function CouncilPage() {
 
   const handleRollback = async (historyId: number) => {
     if (!selected) return;
-    if (!window.confirm("Restore this earlier version?")) return;
+    if (!window.confirm(t("settings.council.confirmRollback"))) return;
     try {
       const updated = await rollbackAgent(selected, historyId);
       setDetail(updated);
@@ -489,7 +490,7 @@ export default function CouncilPage() {
       const fresh = await listAgentHistory(selected);
       setHistory(fresh);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Rollback failed");
+      setError(err instanceof Error ? err.message : t("settings.council.rollbackFailed"));
     }
   };
 
@@ -508,7 +509,7 @@ export default function CouncilPage() {
       });
       setTestResult(result.response);
     } catch (err) {
-      setTestError(err instanceof Error ? err.message : "Test failed");
+      setTestError(err instanceof Error ? err.message : t("settings.council.testFailed"));
     } finally {
       setTesting(false);
     }
@@ -523,7 +524,7 @@ export default function CouncilPage() {
         agentArea(selectedMeta),
         panelModel ? shortModelName(panelModel.model, labelFor(panelModel.model)) : null,
         panelModel && "deep_reasoning" in panelModel && panelModel.deep_reasoning && modelSupportsDeepReasoning(panelModel.model)
-          ? "deep reasoning"
+          ? t("settings.council.deepReasoningLower")
           : null,
       ]
         .filter(Boolean)
@@ -533,7 +534,7 @@ export default function CouncilPage() {
 
   const saveButton = (
     <Button variant="primary" onClick={handleSave} disabled={saving || !dirty || !detail}>
-      {saving ? "Saving…" : "Save"}
+      {saving ? t("common.saving") : t("common.save")}
     </Button>
   );
 
@@ -541,12 +542,12 @@ export default function CouncilPage() {
     <div className="flex items-center gap-2">
       {advanced && detail && (
         <OverflowMenu
-          label="More agent actions"
+          label={t("settings.council.moreActions")}
           placement="up"
           align="left"
           items={[
             {
-              label: "Reset to default",
+              label: t("settings.council.resetToDefault"),
               onSelect: () => void handleReset(),
               disabled: resetting || !detail.has_override,
               danger: true,
@@ -556,7 +557,7 @@ export default function CouncilPage() {
       )}
       <span className="flex-1" />
       <Button variant="ghost" onClick={cancelPanel}>
-        Cancel
+        {t("common.cancel")}
       </Button>
       {saveButton}
     </div>
@@ -571,13 +572,11 @@ export default function CouncilPage() {
             className="-ml-2 mb-2 inline-flex min-h-touch items-center gap-1.5 rounded-lg px-2 text-[15px] text-fg-muted hover:text-fg hover:bg-surface-overlay transition-colors"
           >
             <Icon name="arrow-left" size="w-4 h-4" />
-            Advanced
+            {t("settings.advanced.title")}
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">Agent Council</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">{t("settings.council.title")}</h1>
           <p className="mt-2 text-[15px] text-fg-muted">
-            Pick how thorough answers should be and add instructions for any agent. Open an
-            agent&apos;s Advanced settings to change its model, prompt and more. Changes apply on
-            the next message.
+            {t("settings.council.intro")}
           </p>
         </div>
 
@@ -590,13 +589,13 @@ export default function CouncilPage() {
         {presets && (
           <section className="rounded-2xl border border-line bg-surface-elevated p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-fg">Quality</h2>
+              <h2 className="text-lg font-semibold text-fg">{t("settings.council.quality")}</h2>
               {presets.active === null && (
                 <span
                   className="text-[10px] uppercase tracking-widest px-2 py-1 rounded bg-accent/10 text-accent border border-accent/20"
-                  title={`${presets.custom_agents.length} agent(s) differ from ${basePresetLabel ?? "the preset"}`}
+                  title={t("settings.council.customTitle", { n: presets.custom_agents.length, preset: basePresetLabel ?? t("settings.council.thePreset") })}
                 >
-                  Custom
+                  {t("settings.council.custom")}
                 </span>
               )}
             </div>
@@ -610,7 +609,7 @@ export default function CouncilPage() {
                     onClick={() => handleApplyPreset(p.id)}
                     disabled={!p.available || current || applyingPreset !== null}
                     aria-pressed={current}
-                    title={p.available ? undefined : "This install offers none of this preset's models"}
+                    title={p.available ? undefined : t("settings.council.presetUnavailable")}
                     className={`flex flex-col items-start justify-start text-left rounded-2xl border-2 p-4 transition-colors disabled:cursor-not-allowed ${
                       current
                         ? "border-accent bg-accent/10"
@@ -620,19 +619,18 @@ export default function CouncilPage() {
                     } ${p.available ? "" : "opacity-40"}`}
                   >
                     <span className="block text-base font-semibold text-fg">
-                      {applyingPreset === p.id ? "Applying…" : p.label}
+                      {applyingPreset === p.id ? t("settings.council.applying") : p.label}
                     </span>
                     <span className="block text-sm text-fg-muted mt-1 leading-relaxed">{p.description}</span>
                     {p.model && (
-                      <span className="block text-[13px] text-fg-subtle mt-2">Uses {shortModelName(p.model)}</span>
+                      <span className="block text-[13px] text-fg-subtle mt-2">{t("settings.council.uses", { model: shortModelName(p.model) })}</span>
                     )}
                   </button>
                 );
               })}
             </div>
             <p className="text-[13px] text-fg-subtle">
-              A preset sets every agent&apos;s model and deep reasoning at once. Changing one agent
-              below marks it Custom; each agent keeps its own history.
+              {t("settings.council.presetNote")}
             </p>
           </section>
         )}
@@ -642,7 +640,9 @@ export default function CouncilPage() {
           className="group flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface-elevated px-5 py-4 text-[15px] text-fg-muted transition-colors hover:border-accent/50 hover:text-fg"
         >
           <span>
-            Voice is set in <span className="font-semibold text-fg">Settings → Your Executive</span>
+            {tRich("settings.council.voiceIsSet", {
+              place: <span className="font-semibold text-fg">{t("settings.council.voicePlace")}</span>,
+            })}
           </span>
           <span aria-hidden="true" className="text-fg-subtle group-hover:text-fg">
             →
@@ -652,9 +652,9 @@ export default function CouncilPage() {
         <section aria-labelledby="council-agents-heading" className="space-y-3">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 id="council-agents-heading" className="text-lg font-semibold text-fg">
-              Your agents
+              {t("settings.council.yourAgents")}
             </h2>
-            <p className="text-[15px] text-fg-muted">Tap one to change how it works</p>
+            <p className="text-[15px] text-fg-muted">{t("settings.council.tapOne")}</p>
           </div>
           <ul className="overflow-hidden rounded-2xl border border-line bg-surface-elevated divide-y divide-line sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3 sm:divide-y-0 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
             {listedAgents.map((a) => {
@@ -688,9 +688,9 @@ export default function CouncilPage() {
                           }`}
                         />
                         {status === "instructions" ? (
-                          "Has your instructions"
+                          t("settings.council.hasInstructions")
                         ) : status === "custom-model" ? (
-                          <span title={`Differs from the ${basePresetLabel ?? ""} preset`}>Custom · {model}</span>
+                          <span title={t("settings.council.differsFrom", { preset: basePresetLabel ?? "" })}>{t("settings.council.customModel", { model })}</span>
                         ) : (
                           model
                         )}
@@ -710,7 +710,7 @@ export default function CouncilPage() {
             })}
           </ul>
           <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setShowAll((v) => !v)}>
-            {showAll ? "Show fewer agents" : "Show all agents"}
+            {showAll ? t("settings.council.showFewer") : t("settings.council.showAll")}
           </Button>
         </section>
       </div>
@@ -718,7 +718,7 @@ export default function CouncilPage() {
       <SidePanel
         open={panelOpen}
         onClose={closePanel}
-        title={panelTitle || "Agent"}
+        title={panelTitle || t("settings.council.agent")}
         subtitle={panelSubtitle}
         width={advanced ? "lg" : "md"}
         footer={panelFooter}
@@ -729,34 +729,33 @@ export default function CouncilPage() {
           </div>
         )}
         {!detail || !draft || detail.name !== selected ? (
-          <p className="text-[15px] text-fg-muted">Loading…</p>
+          <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>
         ) : !advanced ? (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface-elevated px-4 py-3">
               <p className="min-w-0 flex-1 text-sm text-fg-muted">
-                Model, prompt, test runs and history
+                {t("settings.council.advancedHint")}
               </p>
               <Button variant="secondary" onClick={() => setPanelAdvanced(true)}>
-                Advanced settings
+                {t("settings.council.advancedSettings")}
               </Button>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className={FIELD_LABEL}>Additional instructions</span>
+                <span className={FIELD_LABEL}>{t("settings.council.additionalInstructions")}</span>
                 <span className="text-xs text-fg-subtle">
-                  {draft.instructions.length} / {INSTRUCTIONS_MAX_CHARS} chars
+                  {t("settings.council.charsOf", { n: draft.instructions.length, max: INSTRUCTIONS_MAX_CHARS })}
                 </span>
               </div>
               <p className="text-[13px] text-fg-subtle mb-2 leading-relaxed">
-                Added to this agent&apos;s built-in prompt on every call, so it keeps getting
-                our prompt improvements.
+                {t("settings.council.instructionsSimpleHelp")}
               </p>
               <textarea
                 value={draft.instructions}
                 onChange={(e) => setDraft({ ...draft, instructions: e.target.value })}
                 maxLength={INSTRUCTIONS_MAX_CHARS}
                 rows={8}
-                placeholder="e.g. Always quote figures in EUR."
+                placeholder={t("settings.council.instructionsPlaceholderShort")}
                 className={`w-full ${FIELD} py-2.5 text-[15px] resize-y leading-relaxed`}
               />
             </div>
@@ -768,37 +767,37 @@ export default function CouncilPage() {
                 <p className="min-w-0 text-[13px] text-fg-muted font-mono break-words">
                   {detail.name}
                   {detail.name === "executive"
-                    ? " · orchestrator"
+                    ? t("settings.council.kind.orchestrator")
                     : detail.name === "utility_fast"
-                    ? " · utility model knob"
+                    ? t("settings.council.kind.utility")
                     : detail.name === "research"
-                    ? " · research model knob"
-                    : ` · domains: ${detail.domains.join(", ") || "—"}`}
+                    ? t("settings.council.kind.research")
+                    : t("settings.council.kind.domains", { domains: detail.domains.join(", ") || "—" })}
                 </p>
                 {detail.has_override && (
                   <span className="text-[11px] uppercase tracking-widest px-2 py-1 rounded-md bg-accent/10 text-accent border border-accent/20">
-                    Customized
+                    {t("settings.council.customized")}
                   </span>
                 )}
               </div>
               {/* A helper agent has no simple editor: its settings are only here. */}
               {!noInstructions && (
                 <Button variant="secondary" onClick={() => setPanelAdvanced(false)}>
-                  Simple view
+                  {t("settings.council.simpleView")}
                 </Button>
               )}
             </div>
             {dirty && (
               <p className="text-[13px] text-amber-500">
-                Unsaved changes. Save keeps every tab&apos;s edits.
+                {t("settings.council.unsaved")}
               </p>
             )}
 
             <SectionTabs
-              tabs={tabs.map((t) => ({ id: t, label: TAB_LABEL[t] }))}
+              tabs={tabs.map((id) => ({ id, label: t(TAB_LABEL[id]) }))}
               active={activeTab}
               onChange={setTab}
-              label="Agent settings"
+              label={t("settings.council.agentSettings")}
               idBase={tabIdBase}
             />
 
@@ -807,7 +806,7 @@ export default function CouncilPage() {
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <label className="block">
-                      <span className={FIELD_LABEL}>Role</span>
+                      <span className={FIELD_LABEL}>{t("settings.council.role")}</span>
                       <input
                         type="text"
                         value={draft.role}
@@ -816,16 +815,16 @@ export default function CouncilPage() {
                       />
                       {detail.role_default !== draft.role && (
                         <span className="text-xs text-fg-subtle mt-1 block">
-                          Default: {detail.role_default}
+                          {t("settings.council.default", { value: detail.role_default })}
                         </span>
                       )}
                     </label>
 
                     <div className="block">
-                      <span className={FIELD_LABEL}>Model</span>
+                      <span className={FIELD_LABEL}>{t("settings.council.tab.model")}</span>
                       <div className="mt-1.5 flex gap-2">
                         <select
-                          aria-label="Model provider"
+                          aria-label={t("settings.council.modelProvider")}
                           value={currentModel?.provider ?? ""}
                           onChange={(e) => selectProvider(e.target.value)}
                           className={`${FIELD} h-11 w-2/5 min-w-0 text-[15px]`}
@@ -837,7 +836,7 @@ export default function CouncilPage() {
                           ))}
                         </select>
                         <select
-                          aria-label="Model"
+                          aria-label={t("settings.council.tab.model")}
                           value={draft.model}
                           onChange={(e) => selectModel(e.target.value)}
                           className={`${FIELD} h-11 flex-1 min-w-0 text-[15px]`}
@@ -847,7 +846,7 @@ export default function CouncilPage() {
                             .map((o) => (
                               <option key={o.id} value={o.id}>
                                 {o.label}
-                                {o.id === detail.model_default ? " (default)" : ""}
+                                {o.id === detail.model_default ? t("settings.council.defaultSuffix") : ""}
                               </option>
                             ))}
                         </select>
@@ -856,8 +855,8 @@ export default function CouncilPage() {
                         <span className="text-xs text-fg-subtle mt-1 block font-mono break-all">
                           {currentModel.id} ·{" "}
                           {currentModel.unlisted
-                            ? "not in the current allowlist"
-                            : ROUTE_TEXT[currentModel.route]}
+                            ? t("settings.council.notInAllowlist")
+                            : t(ROUTE_TEXT[currentModel.route])}
                         </span>
                       )}
                     </div>
@@ -870,8 +869,8 @@ export default function CouncilPage() {
                       }`}
                       title={
                         modelSupportsDeepReasoning(draft.model)
-                          ? "Adaptive thinking on Claude Opus/Sonnet, and on any OpenRouter model whose catalog entry supports reasoning. Ignored by models that can't reason."
-                          : "Haiku doesn't support adaptive thinking — pick another model to enable deep reasoning."
+                          ? t("settings.council.deepTitleOn")
+                          : t("settings.council.deepTitleHaiku")
                       }
                     >
                       <input
@@ -882,11 +881,10 @@ export default function CouncilPage() {
                         className="mt-0.5 w-5 h-5 flex-shrink-0 rounded border-line-strong bg-surface accent-[rgb(var(--accent-strong))] disabled:cursor-not-allowed"
                       />
                       <span>
-                        <span className="font-semibold text-fg">Deep reasoning</span> (adaptive
-                        thinking — Claude Opus/Sonnet and reasoning-capable OpenRouter models; not
-                        available on Haiku)
+                        <span className="font-semibold text-fg">{t("settings.council.deepReasoning")}</span>{" "}
+                        {t("settings.council.deepReasoningHelp")}
                         <span className="ml-1.5 text-xs text-fg-subtle">
-                          default: {detail.deep_reasoning_default ? "on" : "off"}
+                          {detail.deep_reasoning_default ? t("settings.council.defaultOn") : t("settings.council.defaultOff")}
                         </span>
                       </span>
                     </label>
@@ -894,21 +892,12 @@ export default function CouncilPage() {
 
                   {detail.name === "utility_fast" && (
                     <p className="text-sm text-fg-muted leading-relaxed">
-                      This model is used for fast, non-specialist calls: the Discord response
-                      gate, Discord thread title generation, parsing human approval replies
-                      (Slack/email), and disambiguating inbound messages when multiple
-                      awaiting_human runs exist. Changing it has no effect on specialist
-                      answers — just on these lightweight classification tasks.
+                      {t("settings.council.utilityHelp")}
                     </p>
                   )}
                   {detail.name === "research" && (
                     <p className="text-sm text-fg-muted leading-relaxed">
-                      This model + deep-reasoning setting drives the executive_research
-                      specialist fan-out (the periodic research scan and the manual
-                      “what should we look into?” run). It applies to all specialists’
-                      research turns at once and is independent of their chat models —
-                      lowering it cuts research cost without touching chat quality. Per-domain
-                      research focus is edited under each specialist’s Prompt tab.
+                      {t("settings.council.researchHelp")}
                     </p>
                   )}
                 </>
@@ -917,22 +906,20 @@ export default function CouncilPage() {
               {activeTab === "instructions" && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className={FIELD_LABEL}>Additional instructions</span>
+                    <span className={FIELD_LABEL}>{t("settings.council.additionalInstructions")}</span>
                     <span className="text-xs text-fg-subtle">
-                      {draft.instructions.length} / {INSTRUCTIONS_MAX_CHARS} chars
+                      {t("settings.council.charsOf", { n: draft.instructions.length, max: INSTRUCTIONS_MAX_CHARS })}
                     </span>
                   </div>
                   <p className="text-[13px] text-fg-subtle mb-2 leading-relaxed">
-                    Added after the system prompt (Prompt tab) on every call. Use this to
-                    steer the agent while it keeps receiving updates to its built-in
-                    prompt.
+                    {t("settings.council.instructionsHelp")}
                   </p>
                   <textarea
                     value={draft.instructions}
                     onChange={(e) => setDraft({ ...draft, instructions: e.target.value })}
                     maxLength={INSTRUCTIONS_MAX_CHARS}
                     rows={8}
-                    placeholder="e.g. Always quote figures in EUR. Keep answers under 200 words."
+                    placeholder={t("settings.council.instructionsPlaceholder")}
                     className={`w-full ${FIELD} py-2.5 text-[15px] resize-y leading-relaxed`}
                   />
                 </div>
@@ -945,16 +932,16 @@ export default function CouncilPage() {
                     <div className="rounded-2xl border border-line bg-surface p-5 space-y-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <h3 className="text-base font-semibold text-fg">Voice Persona</h3>
+                          <h3 className="text-base font-semibold text-fg">{t("settings.council.voicePersona")}</h3>
                           <p className="text-sm text-fg-muted mt-0.5">
-                            Sets the Executive&apos;s tone and communication style. The structural prompt stays intact.
+                            {t("settings.council.voicePersonaHelp")}
                           </p>
                         </div>
                         <Button
                           size="sm"
                           onClick={() => { setNewPersonaMode(true); setNewPersonaName(""); setNewPersonaBody(""); }}
                         >
-                          + New
+                          {t("settings.council.newButton")}
                         </Button>
                       </div>
 
@@ -965,7 +952,7 @@ export default function CouncilPage() {
                       {/* Persona selector */}
                       <div>
                         <label className="block text-sm font-semibold text-fg mb-1.5">
-                          Active persona
+                          {t("settings.council.activePersona")}
                         </label>
                         <select
                           value={draft.voice_persona_slug ?? "default"}
@@ -974,13 +961,13 @@ export default function CouncilPage() {
                         >
                           {personas.filter((p) => !p.is_legacy).map(personaOption)}
                           {personas.some((p) => p.is_legacy) && (
-                            <optgroup label="Legacy voices">
+                            <optgroup label={t("settings.council.legacyVoices")}>
                               {personas.filter((p) => p.is_legacy).map(personaOption)}
                             </optgroup>
                           )}
                         </select>
                         <p className="text-[13px] text-fg-subtle mt-1">
-                          Selection saves with Save at the bottom of this panel.
+                          {t("settings.council.selectionSaves")}
                         </p>
                       </div>
 
@@ -989,7 +976,7 @@ export default function CouncilPage() {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-semibold text-fg">
-                              Persona body
+                              {t("settings.council.personaBody")}
                             </span>
                             <div className="flex items-center gap-2">
                               {activePersonaDetail.source_notes && (
@@ -1003,7 +990,7 @@ export default function CouncilPage() {
                             type="text"
                             value={personaDisplayNameDraft}
                             onChange={(e) => setPersonaDisplayNameDraft(e.target.value)}
-                            placeholder="Display name"
+                            placeholder={t("settings.council.displayName")}
                             className={`w-full ${FIELD} h-11 text-[15px]`}
                           />
                           <textarea
@@ -1025,14 +1012,14 @@ export default function CouncilPage() {
                                   setActivePersonaDetail(updated);
                                   setPersonas(await listPersonas());
                                 } catch (e) {
-                                  setPersonaError(e instanceof Error ? e.message : "Save failed");
+                                  setPersonaError(e instanceof Error ? e.message : t("settings.council.saveFailed"));
                                 } finally {
                                   setSavingPersona(false);
                                 }
                               }}
                               disabled={savingPersona || !personaBodyDraft.trim()}
                             >
-                              {savingPersona ? "Saving…" : "Save persona"}
+                              {savingPersona ? t("common.saving") : t("settings.council.savePersona")}
                             </Button>
                             {activePersonaDetail.is_builtin && activePersonaDetail.is_customized && (
                               <Button
@@ -1047,11 +1034,11 @@ export default function CouncilPage() {
                                     setPersonaDisplayNameDraft(restored.display_name);
                                     setPersonas(await listPersonas());
                                   } catch (e) {
-                                    setPersonaError(e instanceof Error ? e.message : "Reset failed");
+                                    setPersonaError(e instanceof Error ? e.message : t("settings.council.resetFailed"));
                                   }
                                 }}
                               >
-                                Reset to built-in
+                                {t("settings.council.resetToBuiltIn")}
                               </Button>
                             )}
                             <Button
@@ -1062,18 +1049,18 @@ export default function CouncilPage() {
                                 try {
                                   const duped = await savePersona(
                                     activePersonaDetail.slug + "-copy",
-                                    activePersonaDetail.display_name + " (copy)",
+                                    activePersonaDetail.display_name + t("settings.council.copySuffix"),
                                     personaBodyDraft,
                                   );
                                   const updated = await listPersonas();
                                   setPersonas(updated);
                                   setDraft((d) => d ? { ...d, voice_persona_slug: duped.slug } : d);
                                 } catch (e) {
-                                  setPersonaError(e instanceof Error ? e.message : "Duplicate failed");
+                                  setPersonaError(e instanceof Error ? e.message : t("settings.council.duplicateFailed"));
                                 }
                               }}
                             >
-                              Duplicate
+                              {t("settings.council.duplicate")}
                             </Button>
                             {!activePersonaDetail.is_builtin && (
                               <Button
@@ -1081,18 +1068,18 @@ export default function CouncilPage() {
                                 size="sm"
                                 onClick={async () => {
                                   if (!activePersonaDetail) return;
-                                  if (!window.confirm(`Delete persona "${activePersonaDetail.display_name}"?`)) return;
+                                  if (!window.confirm(t("settings.council.confirmDeletePersona", { name: activePersonaDetail.display_name }))) return;
                                   try {
                                     await deletePersona(activePersonaDetail.slug);
                                     const updated = await listPersonas();
                                     setPersonas(updated);
                                     setDraft((d) => d ? { ...d, voice_persona_slug: null } : d);
                                   } catch (e) {
-                                    setPersonaError(e instanceof Error ? e.message : "Delete failed");
+                                    setPersonaError(e instanceof Error ? e.message : t("settings.council.deleteFailed"));
                                   }
                                 }}
                               >
-                                Delete
+                                {t("common.delete")}
                               </Button>
                             )}
                           </div>
@@ -1102,19 +1089,19 @@ export default function CouncilPage() {
                       {/* New persona inline form */}
                       {newPersonaMode && (
                         <div className="mt-2 p-4 rounded-xl border border-line-strong bg-surface-elevated space-y-3">
-                          <p className="text-sm font-semibold text-fg">New persona</p>
+                          <p className="text-sm font-semibold text-fg">{t("settings.council.newPersona")}</p>
                           <input
                             type="text"
                             value={newPersonaName}
                             onChange={(e) => setNewPersonaName(e.target.value)}
-                            placeholder="Display name (e.g. Elon Musk)"
+                            placeholder={t("settings.council.displayNameExample")}
                             className={`w-full ${FIELD} h-11 text-[15px]`}
                           />
                           <textarea
                             value={newPersonaBody}
                             onChange={(e) => setNewPersonaBody(e.target.value)}
                             rows={6}
-                            placeholder="Voice and style bullets — e.g. '- Direct and engineering-first...'"
+                            placeholder={t("settings.council.personaBodyPlaceholder")}
                             className={`w-full ${FIELD} py-2.5 font-mono text-[13px] resize-y`}
                           />
                           <div className="flex gap-2">
@@ -1130,15 +1117,15 @@ export default function CouncilPage() {
                                   setDraft((d) => d ? { ...d, voice_persona_slug: created.slug } : d);
                                   setNewPersonaMode(false);
                                 } catch (e) {
-                                  setPersonaError(e instanceof Error ? e.message : "Create failed");
+                                  setPersonaError(e instanceof Error ? e.message : t("settings.council.createFailed"));
                                 }
                               }}
                               disabled={!newPersonaName.trim() || !newPersonaBody.trim()}
                             >
-                              Create
+                              {t("settings.council.create")}
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => setNewPersonaMode(false)}>
-                              Cancel
+                              {t("common.cancel")}
                             </Button>
                           </div>
                         </div>
@@ -1148,8 +1135,8 @@ export default function CouncilPage() {
                   {detail.name !== "utility_fast" && detail.name !== "research" && (
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className={FIELD_LABEL}>System prompt</span>
-                        <span className="text-xs text-fg-subtle">{draft.prompt.length} chars</span>
+                        <span className={FIELD_LABEL}>{t("settings.council.systemPrompt")}</span>
+                        <span className="text-xs text-fg-subtle">{t("settings.council.chars", { n: draft.prompt.length })}</span>
                       </div>
                       <textarea
                         value={draft.prompt}
@@ -1160,9 +1147,7 @@ export default function CouncilPage() {
                       {draft.prompt !== detail.prompt_default && (
                         <>
                           <p className="mt-2 text-[13px] text-amber-500 leading-relaxed">
-                            An edited prompt replaces the built-in one, so future updates to
-                            it won&apos;t reach this agent. Additional instructions (Instructions
-                            tab) don&apos;t have that cost.
+                            {t("settings.council.editedPromptWarning")}
                           </p>
                           <Button
                             variant="ghost"
@@ -1170,7 +1155,7 @@ export default function CouncilPage() {
                             className="mt-1 -ml-3.5"
                             onClick={() => setDraft({ ...draft, prompt: detail.prompt_default })}
                           >
-                            Restore default prompt in editor
+                            {t("settings.council.restorePrompt")}
                           </Button>
                         </>
                       )}
@@ -1181,16 +1166,13 @@ export default function CouncilPage() {
                   {detail.research_focus_default !== null && (
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className={FIELD_LABEL}>Research focus</span>
+                        <span className={FIELD_LABEL}>{t("settings.council.researchFocus")}</span>
                         <span className="text-xs text-fg-subtle">
-                          {(draft.research_focus ?? "").length} chars
+                          {t("settings.council.chars", { n: (draft.research_focus ?? "").length })}
                         </span>
                       </div>
                       <p className="text-[13px] text-fg-subtle mb-2 leading-relaxed">
-                        The domain-scope block appended to this specialist&apos;s research
-                        turn — what external signals it watches. The shared research
-                        contract (output format, recency / grounding / actionability bars)
-                        is fixed and not editable here.
+                        {t("settings.council.researchFocusHelp")}
                       </p>
                       <textarea
                         value={draft.research_focus ?? ""}
@@ -1212,7 +1194,7 @@ export default function CouncilPage() {
                             })
                           }
                         >
-                          Restore default research focus in editor
+                          {t("settings.council.restoreResearchFocus")}
                         </Button>
                       )}
                     </div>
@@ -1223,22 +1205,21 @@ export default function CouncilPage() {
               {activeTab === "test" && (
                 <div className="space-y-3">
                   <div>
-                    <h3 className="text-base font-semibold text-fg">Test this draft</h3>
+                    <h3 className="text-base font-semibold text-fg">{t("settings.council.testTitle")}</h3>
                     <p className="text-sm text-fg-muted mt-0.5">
-                      Run a one-off query with the unsaved settings in these tabs. Nothing is
-                      persisted.
+                      {t("settings.council.testHelp")}
                     </p>
                   </div>
                   <textarea
                     value={testQuery}
                     onChange={(e) => setTestQuery(e.target.value)}
                     rows={3}
-                    placeholder="Ask the specialist something…"
+                    placeholder={t("settings.council.testPlaceholder")}
                     className={`w-full ${FIELD} py-2.5 text-[15px]`}
                   />
                   <div className="flex flex-wrap items-center gap-3">
                     <Button variant="secondary" onClick={handleTest} disabled={testing || !testQuery.trim()}>
-                      {testing ? "Running…" : "Run test"}
+                      {testing ? t("settings.council.running") : t("settings.council.runTest")}
                     </Button>
                     {testError && <span className="text-sm text-red-500">{testError}</span>}
                   </div>
@@ -1252,9 +1233,9 @@ export default function CouncilPage() {
 
               {activeTab === "history" && (
                 <div className="space-y-2">
-                  <h3 className="text-base font-semibold text-fg">Version history</h3>
+                  <h3 className="text-base font-semibold text-fg">{t("settings.council.versionHistory")}</h3>
                   {history.length === 0 && (
-                    <p className="text-sm text-fg-subtle">No prior versions for this agent.</p>
+                    <p className="text-sm text-fg-subtle">{t("settings.council.noHistory")}</p>
                   )}
                   {history.map((h) => (
                     <div
@@ -1273,11 +1254,11 @@ export default function CouncilPage() {
                             h.prompt && `prompt=${h.prompt.slice(0, 60)}…`,
                           ]
                             .filter(Boolean)
-                            .join(" · ") || "(empty override)"}
+                            .join(" · ") || t("settings.council.emptyOverride")}
                         </p>
                       </div>
                       <Button size="sm" onClick={() => handleRollback(h.id)} className="flex-shrink-0">
-                        Restore
+                        {t("settings.council.restore")}
                       </Button>
                     </div>
                   ))}

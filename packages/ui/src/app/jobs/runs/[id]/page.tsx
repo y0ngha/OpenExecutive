@@ -16,6 +16,8 @@ import {
 import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import { runStatusLabel, runStatusTextColor } from "@/lib/runStatus";
+import { t, tp, displayLocale, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 
 // A paused run is resumed by a background worker, so this page has to notice
 // a change it did not cause. Poll quickly at first — an approval that just
@@ -38,7 +40,7 @@ function parseGateState(raw: string | null | undefined): GateState | null {
 }
 
 function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleString(displayLocale());
 }
 
 export default function RunDetailPage() {
@@ -134,9 +136,9 @@ export default function RunDetailPage() {
   if (error && !run) {
     return (
       <div className="flex flex-col h-full bg-surface text-fg items-center justify-center">
-        <div className="text-sm text-red-400 mb-4">Error: {error}</div>
+        <div className="text-sm text-red-400 mb-4">{t("jobs.list.error", { error })}</div>
         <Link href="/jobs" className="text-sm text-fg-muted hover:text-fg">
-          ← Back to workflows
+          {t("jobs.common.backToWorkflows")}
         </Link>
       </div>
     );
@@ -145,7 +147,7 @@ export default function RunDetailPage() {
   if (!run) {
     return (
       <div className="flex flex-col h-full bg-surface text-fg-muted items-center justify-center text-sm">
-        Loading…
+        {t("common.loading")}
       </div>
     );
   }
@@ -155,7 +157,7 @@ export default function RunDetailPage() {
       <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
           <Link href="/jobs?tab=runs" className="text-sm text-fg-muted hover:text-fg">
-            ← Runs
+            {t("jobs.run.backToRuns")}
           </Link>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
@@ -163,21 +165,24 @@ export default function RunDetailPage() {
                 {run.title}
               </h1>
               <div className="text-sm text-fg-muted">
-                {run.workflow_name} · created {formatTimestamp(run.created_at)} ·
-                status <StatusPill status={run.status} />
+                {tRich("jobs.run.meta", {
+                  name: run.workflow_name,
+                  when: formatTimestamp(run.created_at),
+                  status: <StatusPill status={run.status} />,
+                })}
               </div>
             </div>
             {run.artifact && (
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Button variant="primary" onClick={handleCopy}>
-                  {copied ? "Copied!" : "Copy"}
+                  {copied ? t("jobs.run.copied") : t("common.copy")}
                 </Button>
                 <OverflowMenu
-                  trigger="Download"
-                  label="Download"
+                  trigger={t("jobs.run.download")}
+                  label={t("jobs.run.download")}
                   items={[
-                    { label: "Markdown (.md)", onSelect: handleDownload },
-                    { label: "Word (.docx)", onSelect: handleDownloadDocx },
+                    { label: t("jobs.run.downloadMd"), onSelect: handleDownload },
+                    { label: t("jobs.run.downloadDocx"), onSelect: handleDownloadDocx },
                   ]}
                 />
               </div>
@@ -186,13 +191,13 @@ export default function RunDetailPage() {
 
           {error && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
-              Couldn&apos;t refresh just now ({error}). Still retrying.
+              {t("jobs.run.refreshFailed", { error })}
             </div>
           )}
 
           {run.status === "running" && (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-300">
-              This run is still in progress — this page updates itself.
+              {t("jobs.run.inProgress")}
             </div>
           )}
 
@@ -204,24 +209,22 @@ export default function RunDetailPage() {
 
           {run.status === "resolved" && (
             <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 px-4 py-3 text-sm text-indigo-300">
-              Answered — picking the workflow back up now. The remaining steps
-              are running.
+              {t("jobs.run.resolved")}
             </div>
           )}
 
           {run.status === "timed_out" && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-300">
-              <div className="font-medium mb-1">No reply before the deadline</div>
+              <div className="font-medium mb-1">{t("jobs.run.timedOutTitle")}</div>
               <div className="text-xs">
-                The step&apos;s timeout policy was applied, so this run stopped
-                without finishing.
+                {t("jobs.run.timedOutBody")}
               </div>
             </div>
           )}
 
           {run.status === "error" && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-300">
-              <div className="font-medium mb-1">Run failed</div>
+              <div className="font-medium mb-1">{t("jobs.run.failed")}</div>
               <div className="text-xs">{run.error}</div>
             </div>
           )}
@@ -254,7 +257,7 @@ export default function RunDetailPage() {
 
           <details className="rounded-2xl border border-line bg-surface-elevated px-5 py-3 text-sm">
             <summary className="flex min-h-10 items-center text-[15px] font-medium text-fg-muted cursor-pointer">
-              Inputs
+              {t("jobs.run.inputs")}
             </summary>
             <pre className="mt-3 text-xs text-fg whitespace-pre-wrap font-mono">
               {JSON.stringify(run.inputs, null, 2)}
@@ -277,14 +280,12 @@ function StatusPill({ status }: { status: string }) {
 // What the question's delivery state means for the reader. The distinction
 // matters: a suppressed or failed send means nobody has actually been asked,
 // and saying "waiting on them" would be untrue.
-const DELIVERY_NOTES: Record<string, string> = {
-  sent: "The question was sent to them.",
-  self: "The question was put to them directly in the conversation.",
-  suppressed:
-    "The message was held back (duplicate, rate cap, or quiet hours), so they have not been asked yet.",
-  alerted:
-    "They could not be reached on any messaging channel — the request is on their briefing board instead.",
-  failed: "The question could not be delivered, so nobody has been asked yet.",
+const DELIVERY_NOTES: Record<string, MessageKey> = {
+  sent: "jobs.run.deliverySent",
+  self: "jobs.run.deliverySelf",
+  suppressed: "jobs.run.deliverySuppressed",
+  alerted: "jobs.run.deliveryAlerted",
+  failed: "jobs.run.deliveryFailed",
 };
 
 function AwaitingPanel({ run }: { run: WorkflowRunDetail }) {
@@ -310,15 +311,16 @@ function AwaitingPanel({ run }: { run: WorkflowRunDetail }) {
   const delivery = gate?.delivery;
   const undelivered = delivery !== undefined && delivery !== "sent" && delivery !== "self";
   const deadline = run.awaiting_until
-    ? new Date(run.awaiting_until).toLocaleString()
+    ? new Date(run.awaiting_until).toLocaleString(displayLocale())
     : null;
   const done = run.resume_progress?.completed_step_ids.length ?? 0;
 
   return (
     <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-300 space-y-2">
       <div className="font-medium">
-        Waiting for sign-off
-        {run.awaiting_person_id ? ` from person ${run.awaiting_person_id}` : ""}
+        {run.awaiting_person_id
+          ? t("jobs.run.waitingFrom", { id: run.awaiting_person_id })
+          : t("jobs.list.waitingSignOff")}
       </div>
       {gate?.question && (
         <div className="text-fg text-sm whitespace-pre-wrap break-words">
@@ -328,36 +330,34 @@ function AwaitingPanel({ run }: { run: WorkflowRunDetail }) {
       {canAnswer && !answer && (
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button variant="primary" onClick={() => void decide("approve")} disabled={sending}>
-            Approve
+            {t("common.approve")}
           </Button>
           <Button onClick={() => void decide("reject")} disabled={sending}>
-            Decline
+            {t("jobs.run.decline")}
           </Button>
-          <span className="text-sm text-fg-muted">or reply in chat</span>
+          <span className="text-sm text-fg-muted">{t("jobs.run.orReplyInChat")}</span>
         </div>
       )}
       {answer && (
         <div className="text-xs text-fg">
-          {answer === "approve" ? "Approved" : "Declined"} — the run picks up again in a moment.
+          {answer === "approve" ? t("jobs.run.answeredApproved") : t("jobs.run.answeredDeclined")}
         </div>
       )}
       {answerError && <div className="text-xs text-red-300">{answerError}</div>}
       <div className="text-xs space-y-1">
-        {deadline && <div>Deadline {deadline}.</div>}
+        {deadline && <div>{t("jobs.run.deadline", { when: deadline })}</div>}
         {delivery && (
           <div className={undelivered ? "text-red-300" : undefined}>
-            {DELIVERY_NOTES[delivery] ?? `Delivery: ${delivery}.`}
+            {DELIVERY_NOTES[delivery] ? t(DELIVERY_NOTES[delivery]) : t("jobs.run.deliveryOther", { delivery })}
           </div>
         )}
         {run.resume_progress ? (
           <div>
-            {done} step{done === 1 ? "" : "s"} already finished — they run on
-            automatically once this is answered.
+            {tp("jobs.run.stepsFinished", done)}
           </div>
         ) : (
           <div>
-            This run stops at the sign-off; the decision is recorded but no
-            further steps will run.
+            {t("jobs.run.stopsAtSignOff")}
           </div>
         )}
       </div>

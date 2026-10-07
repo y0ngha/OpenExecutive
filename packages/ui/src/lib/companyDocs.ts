@@ -4,6 +4,8 @@
  * the merge, ordering and labels are unit-tested (scripts/companyDocs.test.mjs).
  */
 
+import { t } from "../i18n/index.ts";
+
 export type DocSource = "upload" | "drive" | "onedrive" | "notion";
 
 export interface UploadedDocIn {
@@ -42,7 +44,9 @@ export interface DocRow {
 }
 
 export const SOURCE_LABELS: Record<DocSource, string> = {
-  upload: "Uploaded",
+  get upload() {
+    return t("lib.docs.uploaded");
+  },
   drive: "Google Drive",
   onedrive: "OneDrive",
   notion: "Notion",
@@ -114,7 +118,7 @@ export function formatSize(bytes: number): string {
 export function formatInterval(minutes: number): string {
   if (minutes % 60 === 0 && minutes >= 60) {
     const h = minutes / 60;
-    return h === 1 ? "every hour" : `every ${h} hours`;
+    return h === 1 ? t("lib.docs.everyHour") : t("lib.docs.everyHours", { n: h });
   }
-  return `every ${minutes} min`;
+  return t("lib.docs.everyMinutes", { n: minutes });
 }

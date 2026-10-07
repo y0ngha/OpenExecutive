@@ -2,6 +2,7 @@
 // /clients cockpit board and the briefing's "Across your clients" panel so
 // the two surfaces can never drift.
 
+import { displayLocale, t } from "../i18n/index.ts";
 import type { ClientCockpitCard } from "@/lib/api";
 
 // Renewal badge thresholds (days until renewal_date).
@@ -15,7 +16,7 @@ export function renewalBadge(
     return null;
   }
   return {
-    label: daysToRenewal <= 0 ? "renewal due" : `renewal in ${daysToRenewal}d`,
+    label: daysToRenewal <= 0 ? t("lib.practice.renewalDue") : t("lib.practice.renewalIn", { n: daysToRenewal }),
     urgent: daysToRenewal <= RENEWAL_URGENT_DAYS,
   };
 }
@@ -23,19 +24,19 @@ export function renewalBadge(
 // One-line status summary for a card: counts that need attention, or the
 // card's degraded/inactive state, plus the staleness stamp for parked cards.
 export function clientCountsSummary(c: ClientCockpitCard): string {
-  if (c.error) return "status unavailable";
-  if (!c.has_state) return "not yet activated";
+  if (c.error) return t("lib.practice.unavailable");
+  if (!c.has_state) return t("lib.practice.notActivated");
   const counts =
     [
-      c.overdue_actions ? `${c.overdue_actions} overdue` : null,
-      c.awaiting_replies ? `${c.awaiting_replies} awaiting reply` : null,
-      c.unread_alerts ? `${c.unread_alerts} alerts` : null,
+      c.overdue_actions ? t("lib.summary.overdue", { n: c.overdue_actions }) : null,
+      c.awaiting_replies ? t("lib.summary.awaitingReply", { n: c.awaiting_replies }) : null,
+      c.unread_alerts ? t("lib.practice.alerts", { n: c.unread_alerts }) : null,
     ]
       .filter(Boolean)
-      .join(" · ") || "all quiet";
+      .join(" · ") || t("lib.practice.allQuiet");
   const stamp =
     !c.is_active && c.saved_at
-      ? ` · as of ${new Date(c.saved_at).toLocaleDateString()}`
+      ? ` · ${t("lib.practice.asOf", { date: new Date(c.saved_at).toLocaleDateString(displayLocale()) })}`
       : "";
   return counts + stamp;
 }

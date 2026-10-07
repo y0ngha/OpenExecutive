@@ -10,11 +10,13 @@ import {
 } from "@/lib/api";
 import Icon, { type IconName } from "@/components/Icon";
 import OverflowMenu from "@/components/ui/OverflowMenu";
+import { t, tp } from "@/i18n/index.ts";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import {
   EmptyState,
   LivePulse,
   STATUS_PILL,
+  statusLabel,
   SectionHeading,
   Skeleton,
   type TagTone,
@@ -94,23 +96,22 @@ export default function RhythmSection() {
           </div>
         ) : !hasRhythm ? (
           <div className="px-2 py-8 text-center text-[15px] text-fg-muted">
-            No recurring cadence is scheduled yet. The heartbeat starts once the
-            scheduler is running and a company profile is set.
+            {t("people.cadence.empty")}
           </div>
         ) : (
           <div className="space-y-8">
             <RhythmBlock
-              title="Daily rhythm"
-              subtitle="Your daily briefing cycle — the morning brief and end-of-day digest are sent to you by email or chat (Settings → Setup status shows where); the reflection sets up the morning brief."
+              title={t("people.cadence.dailyTitle")}
+              subtitle={t("people.cadence.dailySubtitle")}
               icon="clipboard"
-              tag="Once a day · for you"
+              tag={t("people.cadence.dailyTag")}
               tagTone="info"
               actions={groups.daily}
             />
             {showsRhythm("departments", mode) && (
               <RhythmBlock
-                title="Department check-ins"
-                subtitle="Each team's cadence — the next scheduled check-in per department."
+                title={t("people.cadence.deptTitle")}
+                subtitle={t("people.cadence.deptSubtitle")}
                 icon="grid"
                 actions={groups.departments}
                 showDepartment
@@ -119,8 +120,8 @@ export default function RhythmSection() {
 
             {showsRhythm("awaiting", mode) && (
               <RhythmBlock
-                title="Awaiting people"
-                subtitle="Paused workflows and nudges waiting on a reply."
+                title={t("people.cadence.awaitingTitle")}
+                subtitle={t("people.cadence.awaitingSubtitle")}
                 icon="bell"
                 actions={groups.awaiting}
               />
@@ -147,37 +148,37 @@ export default function RhythmSection() {
 function activityLine(item: ActivityItem): { verb: string; subject: string } {
   switch (item.kind) {
     case "dm_sent":
-      return { verb: "DM'd", subject: item.target ?? "a colleague" };
+      return { verb: t("people.activity.dmd"), subject: item.target ?? t("people.activity.aColleague") };
     case "email_sent":
-      return { verb: "emailed", subject: item.target ?? "a colleague" };
+      return { verb: t("people.activity.emailed"), subject: item.target ?? t("people.activity.aColleague") };
     case "nudge_sent":
-      return { verb: "nudged", subject: item.target ?? "a stalled item" };
+      return { verb: t("people.activity.nudged"), subject: item.target ?? t("people.activity.aStalledItem") };
     case "cadence_sent":
-      return { verb: "ran cadence for", subject: item.department ?? "a department" };
+      return { verb: t("people.activity.ranCadence"), subject: item.department ?? t("people.activity.aDepartment") };
     case "workflow_resumed":
-      return { verb: "resumed workflow with", subject: item.target ?? "someone" };
+      return { verb: t("people.activity.resumedWorkflow"), subject: item.target ?? t("people.activity.someone") };
     case "proposal_routed":
       // propose_only path — backend marked the action done without dispatching,
       // so describe the intent ("proposed to X") rather than implying a send.
-      return { verb: "proposed to", subject: item.target ?? "an approver" };
+      return { verb: t("people.activity.proposedTo"), subject: item.target ?? t("people.activity.anApprover") };
     case "decision_logged":
-      return { verb: "logged decision:", subject: item.summary };
+      return { verb: t("people.activity.loggedDecision"), subject: item.summary };
     case "advice_given":
-      return { verb: "advised on", subject: item.summary };
+      return { verb: t("people.activity.advisedOn"), subject: item.summary };
     case "workflow_done":
-      return { verb: "completed", subject: item.summary };
+      return { verb: t("people.activity.completed"), subject: item.summary };
     case "initiative_started":
-      return { verb: "kicked off initiative:", subject: item.summary };
+      return { verb: t("people.activity.kickedOff"), subject: item.summary };
     case "decision_resolved":
-      return { verb: "resolved decision:", subject: item.summary };
+      return { verb: t("people.activity.resolvedDecision"), subject: item.summary };
     case "alert_raised":
-      return { verb: "raised alert:", subject: item.summary };
+      return { verb: t("people.activity.raisedAlert"), subject: item.summary };
     case "took_the_lead":
-      return { verb: "took the lead:", subject: item.summary };
+      return { verb: t("people.activity.tookTheLead"), subject: item.summary };
     case "sent_as_you":
-      return { verb: "sent as you:", subject: item.summary };
+      return { verb: t("people.activity.sentAsYou"), subject: item.summary };
     default:
-      return { verb: "acted on", subject: item.summary };
+      return { verb: t("people.activity.actedOn"), subject: item.summary };
   }
 }
 
@@ -198,8 +199,8 @@ const SUMMARY_KINDS = new Set([
 
 // Take the lead and Handle it for me rows say whose name it acted in.
 function actingAs(item: ActivityItem): string | null {
-  if (item.kind === "sent_as_you") return "As you";
-  if (item.kind === "took_the_lead") return "As the Executive";
+  if (item.kind === "sent_as_you") return t("people.activity.asYou");
+  if (item.kind === "took_the_lead") return t("people.activity.asExecutive");
   return null;
 }
 
@@ -254,7 +255,7 @@ export function RecentActivity() {
   if (items.length === 0) {
     return (
       <div className="rounded-2xl border border-line bg-surface-elevated">
-        <EmptyState message="Nothing yet. Actions the Executive takes on its own show up here as they happen." />
+        <EmptyState message={t("people.activity.empty")} />
       </div>
     );
   }
@@ -264,7 +265,7 @@ export function RecentActivity() {
       <div className="flex items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-2">
           <Icon name="activity" size="w-5 h-5" className="text-emerald-500" />
-          <h3 className="text-base font-semibold text-fg">Recent activity</h3>
+          <h3 className="text-base font-semibold text-fg">{t("people.activity.title")}</h3>
         </div>
         <LivePulse />
       </div>
@@ -396,7 +397,7 @@ function RhythmCard({
       <div className="text-right whitespace-nowrap shrink-0">
         {isPending ? (
           <div className="text-sm font-medium text-sky-500" title={absolute}>
-            {relative ? `next ${relative}` : absolute}
+            {relative ? t("people.cadence.next", { relative }) : absolute}
           </div>
         ) : (
           <div className="flex flex-col items-end gap-1">
@@ -405,7 +406,7 @@ function RhythmCard({
                 STATUS_PILL[action.status] ?? STATUS_PILL.cancelled
               }`}
             >
-              {action.status}
+              {statusLabel(action.status)}
             </span>
             <span className="text-xs text-fg-subtle" title={absolute}>
               {relative || absolute}
@@ -433,12 +434,12 @@ function SystemPulse({ actions }: { actions: ScheduledAction[] }) {
   return (
     <section>
       <SectionHeading
-        title="System pulse"
+        title={t("people.cadence.systemTitle")}
         count={actions.length}
         icon="activity"
-        tag="Internal · continuous"
+        tag={t("people.cadence.systemTag")}
         tagTone="muted"
-        subtitle="Background scans that run every few minutes to keep the Executive aware of change. Nothing here is sent to you — findings surface later as proposals or nudges."
+        subtitle={t("people.cadence.systemSubtitle")}
       />
       <div className="divide-y divide-line">
         {shown.map((a) => (
@@ -446,7 +447,7 @@ function SystemPulse({ actions }: { actions: ScheduledAction[] }) {
         ))}
       </div>
       {hidden > 0 && (
-        <div className="text-sm text-fg-subtle mt-2">+{hidden} more not shown</div>
+        <div className="text-sm text-fg-subtle mt-2">{t("people.cadence.moreNotShown", { n: hidden })}</div>
       )}
     </section>
   );
@@ -487,12 +488,12 @@ export function FollowUpsCard() {
   }, [refresh, reloadNonce]);
 
   const handleCancel = useCallback(async (id: number) => {
-    if (!window.confirm("Cancel this follow-up? It won't fire.")) return;
+    if (!window.confirm(t("people.followUps.cancelConfirm"))) return;
     setCancellingId(id);
     try {
       await cancelScheduledAction(id);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Failed to cancel.");
+      window.alert(err instanceof Error ? err.message : t("people.followUps.cancelFailed"));
       setCancellingId(null);
       return;
     }
@@ -518,7 +519,7 @@ export function FollowUpsCard() {
   if (followups.length === 0) {
     return (
       <div className="rounded-2xl border border-line bg-surface-elevated">
-        <EmptyState message="No follow-ups scheduled. When the Executive commits to come back to you, it shows up here." />
+        <EmptyState message={t("people.followUps.empty")} />
       </div>
     );
   }
@@ -526,10 +527,10 @@ export function FollowUpsCard() {
   return (
     <div className="rounded-2xl border border-line bg-surface-elevated p-4 sm:p-5">
       <SectionHeading
-        title="Follow-ups"
+        title={t("people.pulse.followUps")}
         count={followups.length}
         icon="flag"
-        subtitle="One-off commitments the Executive scheduled for you."
+        subtitle={t("people.followUps.subtitle")}
       />
       <div className="divide-y divide-line">
         {followups.map((a) => (
@@ -561,7 +562,7 @@ function FollowUpRow({
       <div className="flex items-start justify-between gap-3 mb-1">
         <div className="flex items-center gap-2 text-sm text-fg-muted flex-wrap min-w-0 pt-2">
           <span className={`px-2 py-0.5 rounded border font-medium capitalize ${pill}`}>
-            {action.status}
+            {statusLabel(action.status)}
           </span>
           <span className="px-2 py-0.5 rounded-lg bg-surface-overlay text-fg font-medium">
             {action.channel}
@@ -570,17 +571,17 @@ function FollowUpRow({
           <span className="text-fg-muted font-mono text-xs truncate max-w-[12rem]" title={action.channel_ref}>{action.channel_ref}</span>
           <span title={absolute}>{relative || absolute}</span>
           {action.attempts > 0 && (
-            <span className="text-amber-400">{action.attempts} attempt{action.attempts === 1 ? "" : "s"}</span>
+            <span className="text-amber-400">{tp("people.followUps.attempts", action.attempts)}</span>
           )}
         </div>
         {action.status === "pending" &&
           (cancelling ? (
-            <span className="shrink-0 h-10 inline-flex items-center text-sm text-fg-muted">Cancelling…</span>
+            <span className="shrink-0 h-10 inline-flex items-center text-sm text-fg-muted">{t("people.followUps.cancelling")}</span>
           ) : (
             <OverflowMenu
               size="sm"
-              label="Follow-up actions"
-              items={[{ label: "Cancel follow-up", danger: true, onSelect: onCancel }]}
+              label={t("people.followUps.menu")}
+              items={[{ label: t("people.followUps.cancel"), danger: true, onSelect: onCancel }]}
             />
           ))}
       </div>
@@ -593,8 +594,8 @@ function FollowUpRow({
         </div>
       )}
       {action.originating_session_id && (
-        <div className="text-xs text-fg-subtle mt-2 font-mono truncate" title={`session: ${action.originating_session_id}`}>
-          session: {action.originating_session_id}
+        <div className="text-xs text-fg-subtle mt-2 font-mono truncate" title={t("people.followUps.session", { id: action.originating_session_id })}>
+          {t("people.followUps.session", { id: action.originating_session_id })}
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@
 // components/Briefing.tsx): grouping audit rows per alert, the one-line
 // summary, and the trailer links. No React here so `npm test` can exercise
 // it directly (scripts/handled.test.mjs).
+import { t, tp, type MessageKey } from "../i18n/index.ts";
 import type { HandledItem } from "./api";
 
 // Handled since your last brief — what the Executive's alert review COMPLETED
@@ -23,19 +24,22 @@ import type { HandledItem } from "./api";
 // One table per kind: reading order (what needs the principal first, then
 // what they can undo, then what went to others, then transparency) and the
 // short past-tense verb for the "also …" trailer.
-export const HANDLED_KINDS: Record<string, { order: number; verb: string }> = {
-  escalated: { order: 0, verb: "raised" },
-  closed: { order: 1, verb: "closed" },
-  merged: { order: 1, verb: "folded" },
-  routed: { order: 2, verb: "routed" },
-  nudged: { order: 2, verb: "chased" },
-  drafted: { order: 2, verb: "drafted" },
-  suggested_workflow: { order: 3, verb: "suggested a workflow" },
-  watching: { order: 3, verb: "started watching" },
-  stopped_watching: { order: 3, verb: "stopped watching" },
+export const HANDLED_KINDS: Record<string, { order: number; verb: MessageKey }> = {
+  escalated: { order: 0, verb: "lib.handled.verb.escalated" },
+  closed: { order: 1, verb: "lib.handled.verb.closed" },
+  merged: { order: 1, verb: "lib.handled.verb.merged" },
+  routed: { order: 2, verb: "lib.handled.verb.routed" },
+  nudged: { order: 2, verb: "lib.handled.verb.nudged" },
+  drafted: { order: 2, verb: "lib.handled.verb.drafted" },
+  suggested_workflow: { order: 3, verb: "lib.handled.verb.suggestedWorkflow" },
+  watching: { order: 3, verb: "lib.handled.verb.watching" },
+  stopped_watching: { order: 3, verb: "lib.handled.verb.stoppedWatching" },
 };
 export const handledOrder = (kind: string) => HANDLED_KINDS[kind]?.order ?? 4;
-export const handledVerb = (kind: string) => HANDLED_KINDS[kind]?.verb ?? kind;
+export const handledVerb = (kind: string) => {
+  const verb = HANDLED_KINDS[kind]?.verb;
+  return verb ? t(verb) : kind;
+};
 
 // Stable key for one handled row (an alert can appear twice in one pass —
 // e.g. routed then closed — so the alert id alone is not unique).
@@ -99,8 +103,8 @@ export function groupHandled(items: HandledItem[]): HandledRow[] {
 
 export function joinClauses(parts: string[]): string {
   if (parts.length <= 1) return parts.join("");
-  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
-  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
+  if (parts.length === 2) return t("lib.handled.joinTwo", { a: parts[0], b: parts[1] });
+  return t("lib.handled.joinMany", { list: parts.slice(0, -1).join(", "), last: parts[parts.length - 1] });
 }
 
 // "Since your last brief: 3 off your plate, 2 in others' hands, and 1 waiting
@@ -121,17 +125,16 @@ export function handledHeadline(rows: HandledRow[], reverted: (h: HandledItem) =
     else if (k === "watching" || k === "stopped_watching") counts.watches += 1;
     else counts.other += 1;
   }
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const parts: string[] = [];
-  if (counts.offPlate > 0) parts.push(`${counts.offPlate} off your plate`);
-  if (counts.others > 0) parts.push(`${counts.others} in others' hands`);
-  if (counts.waiting > 0) parts.push(`${counts.waiting} waiting on you`);
-  if (counts.drafted > 0) parts.push(plural(counts.drafted, "draft ready", "drafts ready"));
-  if (counts.suggested > 0) parts.push(plural(counts.suggested, "workflow suggested", "workflows suggested"));
-  if (counts.watches > 0) parts.push(plural(counts.watches, "watch change", "watch changes"));
-  if (counts.other > 0) parts.push(plural(counts.other, "other move", "other moves"));
-  if (counts.reopened > 0) parts.push(`${counts.reopened} back on your plate`);
-  return `Since your last brief: ${joinClauses(parts)}.`;
+  if (counts.offPlate > 0) parts.push(t("lib.handled.offPlate", { n: counts.offPlate }));
+  if (counts.others > 0) parts.push(t("lib.handled.others", { n: counts.others }));
+  if (counts.waiting > 0) parts.push(t("lib.handled.waiting", { n: counts.waiting }));
+  if (counts.drafted > 0) parts.push(tp("lib.handled.drafts", counts.drafted));
+  if (counts.suggested > 0) parts.push(tp("lib.handled.workflows", counts.suggested));
+  if (counts.watches > 0) parts.push(tp("lib.handled.watches", counts.watches));
+  if (counts.other > 0) parts.push(tp("lib.handled.otherMoves", counts.other));
+  if (counts.reopened > 0) parts.push(t("lib.handled.reopened", { n: counts.reopened }));
+  return t("lib.handled.headline", { parts: joinClauses(parts) });
 }
 
 // Statuses `POST /alerts/{id}/reopen` accepts, plus "" for an unknown lookup.
@@ -149,7 +152,7 @@ export function handledProofHref(h: HandledItem): string | null {
 // Muted trailer under a collapsed row: duplicates folded in, other moves.
 export function handledAlsoLine(row: HandledRow): string {
   const parts: string[] = [];
-  if (row.foldedIn > 0) parts.push(`${row.foldedIn} duplicate${row.foldedIn === 1 ? "" : "s"} folded in`);
-  if (row.also.length > 0) parts.push(`also ${row.also.map((a) => handledVerb(a.kind)).join(", ")}`);
+  if (row.foldedIn > 0) parts.push(tp("lib.handled.foldedIn", row.foldedIn));
+  if (row.also.length > 0) parts.push(t("lib.handled.also", { verbs: row.also.map((a) => handledVerb(a.kind)).join(", ") }));
   return parts.join(" · ");
 }

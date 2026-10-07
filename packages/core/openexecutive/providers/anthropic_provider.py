@@ -10,6 +10,7 @@ from openexecutive.providers.feature_gate import (
     fit_claude_generation,
     relax_forced_tool_choice,
 )
+from openexecutive.providers.output_language import apply_output_language
 
 
 def _client_kwargs(
@@ -83,10 +84,14 @@ class AnthropicProvider:
 
     def messages_create(self, **kwargs: Any) -> Awaitable[Any]:
         model = str(kwargs.get("model", ""))
-        kwargs = fit_claude_generation(model, relax_forced_tool_choice(model, kwargs))
+        kwargs = apply_output_language(
+            fit_claude_generation(model, relax_forced_tool_choice(model, kwargs))
+        )
         return self._client.messages.create(**kwargs)
 
     def messages_stream(self, **kwargs: Any) -> AbstractAsyncContextManager[Any]:
         model = str(kwargs.get("model", ""))
-        kwargs = fit_claude_generation(model, relax_forced_tool_choice(model, kwargs))
+        kwargs = apply_output_language(
+            fit_claude_generation(model, relax_forced_tool_choice(model, kwargs))
+        )
         return self._client.messages.stream(**kwargs)

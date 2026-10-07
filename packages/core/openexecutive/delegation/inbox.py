@@ -200,6 +200,32 @@ STATUS_MESSAGES: dict[str, str] = {
     "shared_mailbox": "Paused: your address is the Executive's own mailbox.",
 }
 
+_STATUS_MESSAGES_KO: dict[str, str] = {
+    "off": "꺼져 있어요.",
+    "waiting": "켜져 있어요. 몇 분마다 받은편지함을 확인해요.",
+    "ok": "켜져 있어요.",
+    "checking": "지금 받은편지함을 확인하고 있어요.",
+    "daily_limit": "켜져 있지만 오늘 쓸 수 있는 초안 수를 다 썼어요. 내일 이어서 해요.",
+    "backlog_full": "켜져 있지만 답장 25개가 이미 기다리고 있어요. 먼저 몇 개를 보내거나 닫으세요.",
+    "act_as_me_off": "일시 중지됨: 나 대신 작성이 꺼져 있어요.",
+    "client_slot": "고객사 작업 중에는 일시 중지돼요.",
+    "rate_limited": "메일 서비스가 속도를 늦춰 달라고 했어요. 곧 다시 시도해요.",
+    "error": "메일함에 연결하지 못했어요. 곧 다시 시도해요.",
+    "not_configured": "일시 중지됨: 메일함이 연결되지 않았어요.",
+    "needs_reconnect": "일시 중지됨: 메일함을 다시 연결하세요.",
+    "mismatch": "일시 중지됨: 연결된 메일함이 구성원 정보에 있는 주소와 달라요.",
+    "no_email": "일시 중지됨: 구성원 정보에 이메일 주소가 없어요.",
+    "shared_mailbox": "일시 중지됨: 내 주소가 Executive의 메일함이에요.",
+}
+
+
+def status_message(status: str) -> str:
+    """``STATUS_MESSAGES[status]`` (``ok``'s when unknown), in OE_LANGUAGE."""
+    from openexecutive.utils.i18n import is_korean
+
+    table = _STATUS_MESSAGES_KO if is_korean() else STATUS_MESSAGES
+    return table.get(status, table["ok"])
+
 
 # --------------------------------------------------------------------------- #
 # Storage

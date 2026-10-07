@@ -5,17 +5,18 @@
 // line it sits in.
 
 import type { ReactNode } from "react";
+import { t, type MessageKey } from "@/i18n/index.ts";
 
 export type Feature = "take_the_lead" | "act_as_me" | "handle_it" | "history" | "agent_council";
 
-const FEATURES: Record<Feature, { name: string; tone: string; glyph: ReactNode }> = {
+const FEATURES: Record<Feature, { name: MessageKey; tone: string; glyph: ReactNode }> = {
   take_the_lead: {
-    name: "Take the lead",
+    name: "misc.feature.takeTheLead",
     tone: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
     glyph: <path d="M3 8h9M8.5 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />,
   },
   act_as_me: {
-    name: "Act as me",
+    name: "misc.feature.actAsMe",
     tone: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
     glyph: (
       <path
@@ -29,7 +30,7 @@ const FEATURES: Record<Feature, { name: string; tone: string; glyph: ReactNode }
     ),
   },
   handle_it: {
-    name: "Handle it for me",
+    name: "misc.feature.handleIt",
     tone: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
     glyph: (
       <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -39,7 +40,7 @@ const FEATURES: Record<Feature, { name: string; tone: string; glyph: ReactNode }
     ),
   },
   history: {
-    name: "History",
+    name: "misc.feature.history",
     tone: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
     glyph: (
       <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -49,7 +50,7 @@ const FEATURES: Record<Feature, { name: string; tone: string; glyph: ReactNode }
     ),
   },
   agent_council: {
-    name: "Agent Council",
+    name: "misc.feature.agentCouncil",
     tone: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300",
     glyph: (
       <g fill="currentColor">
@@ -72,7 +73,7 @@ export default function FeatureName({ feature, className = "" }: { feature: Feat
       <svg viewBox="0 0 16 16" className="h-[1em] w-[1em] flex-none" aria-hidden>
         {f.glyph}
       </svg>
-      {f.name}
+      {t(f.name)}
     </span>
   );
 }

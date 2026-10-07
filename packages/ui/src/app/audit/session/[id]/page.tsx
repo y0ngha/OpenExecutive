@@ -29,6 +29,7 @@ import {
   type AuditGraphNode,
   type AuditSessionResponse,
 } from "@/lib/api";
+import { displayLocale, t, type MessageKey } from "@/i18n/index.ts";
 
 // ---------------------------------------------------------------------------
 // Visual tokens — color per node kind. Matches and extends the palette
@@ -37,78 +38,78 @@ import {
 // kinds (future event types still render, just with neutral styling).
 // ---------------------------------------------------------------------------
 
-const KIND_COLORS: Record<string, { ring: string; bg: string; text: string; label: string }> = {
+const KIND_COLORS: Record<string, { ring: string; bg: string; text: string; label: MessageKey }> = {
   inbound: {
     ring: "ring-emerald-500/40",
     bg: "bg-emerald-500/20",
     text: "text-emerald-200",
-    label: "Inbound",
+    label: "audit.kind.inbound",
   },
   memory: {
     ring: "ring-rose-500/40",
     bg: "bg-rose-500/15",
     text: "text-rose-200",
-    label: "Memory",
+    label: "audit.kind.memory",
   },
   knowledge: {
     ring: "ring-sky-500/40",
     bg: "bg-sky-500/15",
     text: "text-sky-200",
-    label: "Knowledge",
+    label: "audit.kind.knowledge",
   },
   specialist: {
     ring: "ring-violet-500/40",
     bg: "bg-violet-500/20",
     text: "text-violet-200",
-    label: "Specialist",
+    label: "audit.kind.specialist",
   },
   tool: {
     ring: "ring-amber-500/40",
     bg: "bg-amber-500/20",
     text: "text-amber-200",
-    label: "Tool",
+    label: "audit.kind.tool",
   },
   cache: {
     ring: "ring-slate-500/40",
     bg: "bg-slate-500/20",
     text: "text-slate-200",
-    label: "Cache",
+    label: "audit.kind.cache",
   },
   committee: {
     ring: "ring-fuchsia-500/40",
     bg: "bg-fuchsia-500/15",
     text: "text-fuchsia-200",
-    label: "Committee",
+    label: "audit.kind.committee",
   },
   response: {
     ring: "ring-indigo-500/40",
     bg: "bg-indigo-500/20",
     text: "text-indigo-200",
-    label: "Response",
+    label: "audit.kind.response",
   },
   alert: {
     ring: "ring-rose-500/40",
     bg: "bg-rose-500/20",
     text: "text-rose-300",
-    label: "Alert",
+    label: "audit.kind.alert",
   },
   scheduled: {
     ring: "ring-sky-500/40",
     bg: "bg-sky-500/15",
     text: "text-sky-200",
-    label: "Scheduled",
+    label: "audit.kind.scheduled",
   },
 };
 
 function kindStyle(kind: string) {
-  return (
-    KIND_COLORS[kind] ?? {
-      ring: "ring-line-strong/40",
-      bg: "bg-surface-input/40",
-      text: "text-fg",
-      label: kind,
-    }
-  );
+  const known = KIND_COLORS[kind];
+  if (known) return { ...known, label: t(known.label) };
+  return {
+    ring: "ring-line-strong/40",
+    bg: "bg-surface-input/40",
+    text: "text-fg",
+    label: kind,
+  };
 }
 
 // MiniMap can't read Tailwind classes — needs literal CSS colors per kind.
@@ -129,7 +130,7 @@ const MINIMAP_COLORS: Record<string, string> = {
 
 function formatTs(ts: string): string {
   try {
-    return new Date(ts).toLocaleTimeString();
+    return new Date(ts).toLocaleTimeString(displayLocale());
   } catch {
     return ts;
   }
@@ -330,7 +331,7 @@ function EventDetailPanel({
         </span>
         <span className="text-xs text-fg-muted">@ {formatTs(event.ts)}</span>
         <span className="text-xs text-fg-muted">·</span>
-        <span className="text-xs text-fg-muted">actor: {event.actor ?? "—"}</span>
+        <span className="text-xs text-fg-muted">{t("audit.session.actor", { actor: event.actor ?? "—" })}</span>
       </div>
       <div className="text-sm text-fg break-words">{event.summary}</div>
     </div>
@@ -374,7 +375,7 @@ function EventDetailPanel({
         onClick={onOpenDrawer}
         className="mt-4 w-full px-3 py-1.5 rounded-lg bg-surface-overlay hover:bg-surface-input text-xs border border-line-strong"
       >
-        View full payload →
+        {t("audit.session.viewFullPayload")}
       </button>
     </div>
   );
@@ -397,7 +398,7 @@ function deriveKind(eventType: string): string {
 function KVList({ obj }: { obj: Record<string, unknown> }) {
   // Filter out null/undefined so the panel doesn't pad with empty rows.
   const entries = Object.entries(obj).filter(([, v]) => v !== undefined && v !== null);
-  if (entries.length === 0) return <div className="text-fg-muted italic">no details</div>;
+  if (entries.length === 0) return <div className="text-fg-muted italic">{t("audit.session.noDetails")}</div>;
   return (
     <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
       {entries.map(([k, v]) => (
@@ -423,7 +424,7 @@ function MemorySnapshotBody({
 }) {
   return (
     <div className="space-y-3 text-xs">
-      <Section title="Summary">
+      <Section title={t("audit.log.col.summary")}>
         <KVList
           obj={{
             model: details.model,
@@ -435,7 +436,7 @@ function MemorySnapshotBody({
           }}
         />
       </Section>
-      <Section title="System prompt blocks (live this turn)">
+      <Section title={t("audit.session.systemBlocks")}>
         {Array.isArray(details.system_blocks) ? (
           <ul className="space-y-1">
             {(details.system_blocks as string[]).map((b, i) => (
@@ -445,18 +446,18 @@ function MemorySnapshotBody({
             ))}
           </ul>
         ) : (
-          <div className="text-fg-muted italic">none</div>
+          <div className="text-fg-muted italic">{t("audit.session.none")}</div>
         )}
       </Section>
       {full?.episodic_context ? (
-        <Section title="Episodic context (what the agent remembered)">
+        <Section title={t("audit.session.episodic")}>
           <pre className="whitespace-pre-wrap break-words bg-black/30 p-2 rounded text-[11px] max-h-48 overflow-y-auto">
             {String(full.episodic_context)}
           </pre>
         </Section>
       ) : null}
       {full?.retrieved_context ? (
-        <Section title="RAG context (chunks injected into the user turn)">
+        <Section title={t("audit.session.rag")}>
           <pre className="whitespace-pre-wrap break-words bg-black/30 p-2 rounded text-[11px] max-h-48 overflow-y-auto">
             {String(full.retrieved_context)}
           </pre>
@@ -485,14 +486,14 @@ function KnowledgeBody({
   const company = (full?.company_chunks as Chunk[] | undefined) ?? [];
   return (
     <div className="space-y-3 text-xs">
-      <Section title="Query">
+      <Section title={t("audit.session.query")}>
         <pre className="whitespace-pre-wrap break-words bg-black/30 p-2 rounded text-[11px]">
           {String(details.query ?? full?.query ?? "")}
         </pre>
       </Section>
-      <Section title={`Built-in chunks (${builtin.length})`}>
+      <Section title={t("audit.session.builtinChunks", { n: builtin.length })}>
         {builtin.length === 0 ? (
-          <div className="text-fg-muted italic">none</div>
+          <div className="text-fg-muted italic">{t("audit.session.none")}</div>
         ) : (
           <ul className="space-y-2">
             {builtin.map((c, i) => (
@@ -501,9 +502,9 @@ function KnowledgeBody({
           </ul>
         )}
       </Section>
-      <Section title={`Company chunks (${company.length})`}>
+      <Section title={t("audit.session.companyChunks", { n: company.length })}>
         {company.length === 0 ? (
-          <div className="text-fg-muted italic">none</div>
+          <div className="text-fg-muted italic">{t("audit.session.none")}</div>
         ) : (
           <ul className="space-y-2">
             {company.map((c, i) => (
@@ -542,7 +543,7 @@ function SpecialistBody({
 }) {
   return (
     <div className="space-y-3 text-xs">
-      <Section title="Routing">
+      <Section title={t("audit.session.routing")}>
         <KVList
           obj={{
             iteration: details.iteration,
@@ -552,28 +553,28 @@ function SpecialistBody({
         />
       </Section>
       {full?.query ? (
-        <Section title="Query sent to specialist">
+        <Section title={t("audit.session.querySent")}>
           <pre className="whitespace-pre-wrap break-words bg-black/30 p-2 rounded text-[11px]">
             {String(full.query)}
           </pre>
         </Section>
       ) : null}
       {full?.context ? (
-        <Section title="Routing context">
+        <Section title={t("audit.session.routingContext")}>
           <pre className="whitespace-pre-wrap break-words bg-black/30 p-2 rounded text-[11px]">
             {String(full.context)}
           </pre>
         </Section>
       ) : null}
       {full?.response ? (
-        <Section title="Specialist response">
+        <Section title={t("audit.session.specialistResponse")}>
           <pre className="whitespace-pre-wrap break-words bg-black/30 p-2 rounded text-[11px] max-h-72 overflow-y-auto">
             {String(full.response)}
           </pre>
         </Section>
       ) : null}
       {Array.isArray(full?.active_prompt_blocks) && (
-        <Section title="Active system blocks">
+        <Section title={t("audit.session.activeBlocks")}>
           <ul className="text-fg font-mono space-y-1">
             {(full.active_prompt_blocks as string[]).map((b, i) => (
               <li key={i}>· {b}</li>
@@ -594,7 +595,7 @@ function ToolBody({
 }) {
   return (
     <div className="space-y-3 text-xs">
-      <Section title="Tool">
+      <Section title={t("audit.kind.tool")}>
         <KVList
           obj={{
             tool: details.tool,
@@ -604,14 +605,14 @@ function ToolBody({
         />
       </Section>
       {full?.input !== undefined && (
-        <Section title="Input">
+        <Section title={t("audit.usage.col.input")}>
           <pre className="whitespace-pre-wrap break-words bg-black/30 p-2 rounded text-[11px] max-h-48 overflow-y-auto">
             {JSON.stringify(full.input, null, 2)}
           </pre>
         </Section>
       )}
       {full?.result !== undefined && (
-        <Section title="Result">
+        <Section title={t("audit.session.result")}>
           <pre className="whitespace-pre-wrap break-words bg-black/30 p-2 rounded text-[11px] max-h-72 overflow-y-auto">
             {typeof full.result === "string"
               ? full.result
@@ -620,7 +621,7 @@ function ToolBody({
         </Section>
       )}
       {Array.isArray(full?.active_prompt_blocks) && (
-        <Section title="Active system blocks">
+        <Section title={t("audit.session.activeBlocks")}>
           <ul className="text-fg font-mono space-y-1">
             {(full.active_prompt_blocks as string[]).map((b, i) => (
               <li key={i}>· {b}</li>
@@ -641,23 +642,23 @@ function CacheBody({ details }: { details: Record<string, unknown> }) {
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
   return (
     <div className="space-y-3 text-xs">
-      <Section title="Token usage">
+      <Section title={t("audit.log.tokenUsage")}>
         <KVList obj={{ model: details.model, iteration: details.iteration, stop_reason: details.stop_reason }} />
       </Section>
-      <Section title="Input token breakdown">
+      <Section title={t("audit.session.inputBreakdown")}>
         <div className="space-y-1">
-          <TokenBar label="cache read" value={cr} pct={pct(cr)} color="bg-emerald-500" />
-          <TokenBar label="cache create" value={cc} pct={pct(cc)} color="bg-amber-500" />
-          <TokenBar label="fresh input" value={inp} pct={pct(inp)} color="bg-sky-500" />
+          <TokenBar label={t("audit.session.bar.cacheRead")} value={cr} pct={pct(cr)} color="bg-emerald-500" />
+          <TokenBar label={t("audit.session.bar.cacheCreate")} value={cc} pct={pct(cc)} color="bg-amber-500" />
+          <TokenBar label={t("audit.session.bar.freshInput")} value={inp} pct={pct(inp)} color="bg-sky-500" />
         </div>
         <div className="text-[10px] text-fg-muted mt-2">
           {cr > 0
-            ? `Cache hit — ${cr} tokens served from cache (saved ~${Math.round((cr / Math.max(total, 1)) * 100)}% of input cost)`
-            : "Cache miss — no tokens served from cache this iteration"}
+            ? t("audit.session.cacheHit", { n: cr, pct: Math.round((cr / Math.max(total, 1)) * 100) })
+            : t("audit.session.cacheMiss")}
         </div>
       </Section>
-      <Section title="Output">
-        <div className="font-mono text-fg">{out} tokens</div>
+      <Section title={t("audit.usage.col.output")}>
+        <div className="font-mono text-fg">{t("audit.session.tokens", { n: out })}</div>
       </Section>
     </div>
   );
@@ -689,7 +690,7 @@ function CommitteeBody({ details }: { details: Record<string, unknown> }) {
   const critiques = (details.critiques as Critique[] | undefined) ?? [];
   return (
     <div className="space-y-3 text-xs">
-      <Section title="Committee">
+      <Section title={t("audit.kind.committee")}>
         <KVList
           obj={{
             consulted: details.consulted,
@@ -700,9 +701,9 @@ function CommitteeBody({ details }: { details: Record<string, unknown> }) {
           }}
         />
       </Section>
-      <Section title={`Critiques (${critiques.length})`}>
+      <Section title={t("audit.session.critiques", { n: critiques.length })}>
         {critiques.length === 0 ? (
-          <div className="text-fg-muted italic">none</div>
+          <div className="text-fg-muted italic">{t("audit.session.none")}</div>
         ) : (
           <ul className="space-y-2">
             {critiques.map((c, i) => (
@@ -777,7 +778,7 @@ export default function AuditSessionPage() {
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Failed to load session");
+        setError(e instanceof Error ? e.message : t("audit.session.loadFailed"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -846,9 +847,9 @@ export default function AuditSessionPage() {
           className="-ml-2 inline-flex min-h-touch items-center gap-1.5 rounded-lg px-2 text-[15px] text-fg-muted hover:text-fg hover:bg-surface-overlay transition-colors"
         >
           <Icon name="arrow-left" size="w-4 h-4" />
-          Audit log
+          {t("audit.log.title")}
         </Link>
-        <h1 className="min-w-0 text-xl sm:text-2xl font-bold tracking-tight text-fg">Session flow</h1>
+        <h1 className="min-w-0 text-xl sm:text-2xl font-bold tracking-tight text-fg">{t("audit.session.title")}</h1>
         {sessionId && (
           <span className="min-w-0 truncate font-mono text-xs text-fg-subtle" title={sessionId}>
             {sessionId}
@@ -858,7 +859,7 @@ export default function AuditSessionPage() {
       <main className="flex-1 min-h-0 flex">
         {loading && (
           <div className="flex-1 flex items-center justify-center text-fg-muted">
-            Loading session…
+            {t("audit.session.loading")}
           </div>
         )}
         {error && !loading && (
@@ -882,10 +883,10 @@ export default function AuditSessionPage() {
                   channel) without scanning the whole tree. */}
               <div className="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-elevated/90 backdrop-blur border border-line text-[11px] text-fg-muted font-mono">
                 <span className="text-fg">{flow.nodes.length}</span>
-                <span>events</span>
+                <span>{t("audit.session.stat.events")}</span>
                 <span className="text-fg-subtle">·</span>
                 <span className="text-fg">{flow.edges.length}</span>
-                <span>edges</span>
+                <span>{t("audit.session.stat.edges")}</span>
                 {data.channel && (
                   <>
                     <span className="text-fg-subtle">·</span>
@@ -907,23 +908,23 @@ export default function AuditSessionPage() {
                       <>
                         <span className="text-fg-subtle">·</span>
                         <span className="text-fg">{cs.calls}</span>
-                        <span>calls</span>
+                        <span>{t("audit.session.stat.calls")}</span>
                         <span className="text-fg-subtle">·</span>
-                        <span className="text-fg">{totalIn.toLocaleString()}</span>
-                        <span>in</span>
+                        <span className="text-fg">{totalIn.toLocaleString(displayLocale())}</span>
+                        <span>{t("audit.session.stat.in")}</span>
                         <span className="text-fg-subtle">·</span>
                         <span className="text-fg">
-                          {cs.output_tokens.toLocaleString()}
+                          {cs.output_tokens.toLocaleString(displayLocale())}
                         </span>
-                        <span>out</span>
+                        <span>{t("audit.session.stat.out")}</span>
                         <span className="text-fg-subtle">·</span>
                         <span
                           className="text-fg"
-                          title="Share of prompt input served from the cache (≈10x cheaper than fresh input)."
+                          title={t("audit.session.cachedTitle")}
                         >
                           {cachedPct}%
                         </span>
-                        <span>cached</span>
+                        <span>{t("audit.session.stat.cached")}</span>
                       </>
                     );
                   })()}
@@ -940,8 +941,9 @@ export default function AuditSessionPage() {
                         )
                         .join("; ")}
                     >
-                      ⚠ {data.degradations.reduce((n, d) => n + d.count, 0)}{" "}
-                      degraded
+                      {t("audit.session.degraded", {
+                        n: data.degradations.reduce((n, d) => n + d.count, 0),
+                      })}
                     </span>
                   </>
                 )}
@@ -1001,11 +1003,11 @@ export default function AuditSessionPage() {
                 />
               ) : (
                 <div className="p-4 text-fg-muted text-sm">
-                  Click a node to see what the agent saw.
+                  {t("audit.session.clickNode")}
                 </div>
               )}
               {detailLoading && (
-                <div className="px-4 pb-2 text-[10px] text-fg-muted">loading full payload…</div>
+                <div className="px-4 pb-2 text-[10px] text-fg-muted">{t("audit.session.loadingPayload")}</div>
               )}
             </div>
 
@@ -1020,7 +1022,7 @@ export default function AuditSessionPage() {
                 type="button"
                 onClick={() => setDrawerExpanded((v) => !v)}
                 className="h-10 flex items-center justify-center border-b border-line text-fg-muted hover:text-fg text-xs"
-                title={drawerExpanded ? "Collapse drawer" : "Expand drawer (full payload)"}
+                title={drawerExpanded ? t("audit.session.collapseDrawer") : t("audit.session.expandDrawer")}
               >
                 {drawerExpanded ? "→" : "←"}
               </button>
@@ -1028,7 +1030,7 @@ export default function AuditSessionPage() {
                 <div className="flex-1 min-h-0 overflow-y-auto p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-[10px] uppercase tracking-wide text-fg-muted">
-                      Full payload
+                      {t("audit.log.fullPayload")}
                     </div>
                     <button
                       type="button"
@@ -1064,10 +1066,10 @@ export default function AuditSessionPage() {
                       className="text-[10px] px-2 py-0.5 rounded bg-surface-overlay hover:bg-surface-input border border-line-strong"
                     >
                       {copyState === "ok"
-                        ? "Copied!"
+                        ? t("audit.artifact.copiedBang")
                         : copyState === "fail"
-                          ? "Copy failed"
-                          : "Copy"}
+                          ? t("audit.session.copyFailed")
+                          : t("common.copy")}
                     </button>
                   </div>
                   <pre className="text-[11px] text-fg bg-black/40 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words">
@@ -1075,7 +1077,7 @@ export default function AuditSessionPage() {
                       ? JSON.stringify(detail.full ?? detail, null, 2)
                       : selectedEvent
                         ? JSON.stringify(selectedEvent.details, null, 2)
-                        : "(select a node)"}
+                        : t("audit.session.selectNode")}
                   </pre>
                 </div>
               )}

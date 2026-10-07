@@ -16,16 +16,17 @@ import {
 import { WORKFLOW_STARTERS, takeWorkflowDescription } from "@/lib/workflowStarters";
 import Button from "@/components/ui/Button";
 import WorkflowDraftReview from "./WorkflowDraftReview";
+import { t, type MessageKey } from "@/i18n/index.ts";
 
 // Same cap chat applies to its `?draft=` prefill.
 const MAX_DESCRIBE_PARAM_CHARS = 2000;
 
 // Ideas offered when changing a saved workflow; a click fills the composer.
-const EDIT_STARTERS = [
-  "Have someone else sign off",
-  "Run it on a different day",
-  "Add a step that…",
-  "Drop a step I don’t need",
+const EDIT_STARTERS: MessageKey[] = [
+  "jobs.wizard.editStarter.signOff",
+  "jobs.wizard.editStarter.day",
+  "jobs.wizard.editStarter.addStep",
+  "jobs.wizard.editStarter.dropStep",
 ];
 
 /**
@@ -73,12 +74,12 @@ export default function WorkflowWizard({ editName }: { editName?: string } = {})
   useEffect(() => {
     if (!resumeId || resumeId === heldSessionRef.current) return;
     getWorkflowDesignerSession(resumeId)
-      .then((t) => {
+      .then((resumed) => {
         // `?edit=A&session=<a conversation about B>` would save to B under an
         // "Edit A" heading: drop the session and open A afresh instead.
-        if (editName && t.editing !== editName) throw new Error("different workflow");
-        heldSessionRef.current = t.session_id;
-        setTurn(t);
+        if (editName && resumed.editing !== editName) throw new Error("different workflow");
+        heldSessionRef.current = resumed.session_id;
+        setTurn(resumed);
       })
       .catch(() =>
         router.replace(
@@ -175,7 +176,7 @@ export default function WorkflowWizard({ editName }: { editName?: string } = {})
   // Opening an edit: wait for the saved workflow rather than flash the
   // new-workflow intro.
   if (resuming || (editName && !turn && !error)) {
-    return <div className="p-6 text-sm text-fg-muted">Loading…</div>;
+    return <div className="p-6 text-sm text-fg-muted">{t("common.loading")}</div>;
   }
 
   const started = turn !== null;
@@ -200,9 +201,7 @@ export default function WorkflowWizard({ editName }: { editName?: string } = {})
           {!started && (
             <div className="space-y-3">
               <p className="text-base text-fg">
-                Describe the job you want done — what it should produce, who it&rsquo;s
-                for, and how often. I&rsquo;ll ask about anything I need, then draft the
-                workflow for you to review.
+                {t("jobs.wizard.intro")}
               </p>
               <div className="flex flex-wrap gap-2">
                 {WORKFLOW_STARTERS.map((s) => (
@@ -226,9 +225,7 @@ export default function WorkflowWizard({ editName }: { editName?: string } = {})
             <div className="space-y-3">
               <div className="flex justify-start">
                 <div className="max-w-[85%] rounded-2xl px-4 py-3 text-[15px] bg-surface-elevated border border-line text-fg">
-                  What would you like to change about &ldquo;{original.title}&rdquo;? Say it
-                  in your own words &mdash; who signs off, when it runs, what a step should
-                  do. I&rsquo;ll show you exactly what changes before anything is saved.
+                  {t("jobs.wizard.editIntro", { title: original.title })}
                 </div>
               </div>
               <WorkflowDraftReview
@@ -237,37 +234,40 @@ export default function WorkflowWizard({ editName }: { editName?: string } = {})
                 readOnly
               />
               <div className="flex flex-wrap gap-2">
-                {EDIT_STARTERS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      setInput(s);
-                      inputRef.current?.focus();
-                    }}
-                    className="min-h-10 rounded-full border border-line bg-surface-elevated px-4 py-2 text-left text-sm text-fg-muted hover:text-fg hover:border-line-strong hover:bg-surface-overlay transition"
-                  >
-                    {s}
-                  </button>
-                ))}
+                {EDIT_STARTERS.map((key) => {
+                  const s = t(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        setInput(s);
+                        inputRef.current?.focus();
+                      }}
+                      className="min-h-10 rounded-full border border-line bg-surface-elevated px-4 py-2 text-left text-sm text-fg-muted hover:text-fg hover:border-line-strong hover:bg-surface-overlay transition"
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {thread.map((t, i) => (
+          {thread.map((msg, i) => (
             <div
               key={i}
-              className={t.role === "user" ? "flex justify-end" : "flex justify-start"}
+              className={msg.role === "user" ? "flex justify-end" : "flex justify-start"}
             >
               <div
                 className={`max-w-[85%] rounded-2xl px-4 py-3 text-[15px] whitespace-pre-wrap ${
-                  t.role === "user"
+                  msg.role === "user"
                     ? "bg-indigo-600/20 text-fg"
                     : "bg-surface-elevated border border-line text-fg"
                 }`}
               >
-                {t.text}
-                {i === lastIndex && t.role === "assistant" && turn?.hint && (
+                {msg.text}
+                {i === lastIndex && msg.role === "assistant" && turn?.hint && (
                   <p className="text-sm text-fg-muted mt-1.5">{turn.hint}</p>
                 )}
               </div>
@@ -307,7 +307,7 @@ export default function WorkflowWizard({ editName }: { editName?: string } = {})
               </div>
             </div>
           )}
-          {busy && <p className="text-sm text-fg-muted">Thinking…</p>}
+          {busy && <p className="text-sm text-fg-muted">{t("jobs.wizard.thinking")}</p>}
           <div ref={bottomRef} />
         </div>
       </div>
@@ -330,12 +330,12 @@ export default function WorkflowWizard({ editName }: { editName?: string } = {})
             autoFocus
             placeholder={
               isDraft
-                ? "Tell me what to change… (Enter to send)"
+                ? t("jobs.wizard.placeholderDraft")
                 : editOpening
-                ? "e.g. Have Mark sign off instead, and run it on Fridays."
+                ? t("jobs.wizard.placeholderEdit")
                 : started
-                ? "Your answer… (Enter to send, Shift+Enter for a new line)"
-                : "e.g. Every Monday, pull together what our top three competitors shipped and send it to me."
+                ? t("jobs.wizard.placeholderAnswer")
+                : t("jobs.wizard.placeholderStart")
             }
             className="w-full rounded-2xl border border-line bg-surface-elevated px-4 py-3 text-base text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent/40 resize-none transition-colors disabled:opacity-50"
           />
@@ -346,17 +346,17 @@ export default function WorkflowWizard({ editName }: { editName?: string } = {})
               disabled={busy || !input.trim()}
               className="px-6"
             >
-              {busy ? "Thinking…" : started ? "Send" : "Start"}
+              {busy ? t("jobs.wizard.thinking") : started ? t("jobs.wizard.send") : t("jobs.start.start")}
             </Button>
             {started && !isDraft && !editOpening && (
               <Button variant="ghost" onClick={draftNow} disabled={busy}>
-                Draft it now
+                {t("jobs.wizard.draftNow")}
               </Button>
             )}
             <span className="ml-auto flex items-center gap-3 text-sm text-fg-subtle">
               {started && !original && (
                 <span>
-                  {turn!.questions_asked} of {turn!.max_questions} questions
+                  {t("jobs.wizard.questionCount", { asked: turn!.questions_asked, max: turn!.max_questions })}
                 </span>
               )}
               <Link
@@ -367,7 +367,7 @@ export default function WorkflowWizard({ editName }: { editName?: string } = {})
                 }
                 className="hover:text-fg transition-colors"
               >
-                Use the advanced editor
+                {t("jobs.wizard.advancedEditor")}
               </Link>
             </span>
           </div>

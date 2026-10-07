@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { displayLocale, t } from "@/i18n/index.ts";
 import { getBriefDelivery, type BriefDeliveryNotice as Notice } from "@/lib/api";
 
 /**
@@ -29,7 +30,7 @@ export default function BriefDeliveryNotice({ notice }: { notice: Notice }) {
   const day = new Date(notice.at);
   const when = Number.isNaN(day.getTime())
     ? ""
-    : ` (${day.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })})`;
+    : ` (${day.toLocaleDateString(displayLocale(), { weekday: "short", day: "numeric", month: "short" })})`;
   return (
     <div
       role="status"
@@ -39,20 +40,19 @@ export default function BriefDeliveryNotice({ notice }: { notice: Notice }) {
       <span className="mt-2 inline-block h-2 w-2 flex-shrink-0 rounded-full bg-amber-400" aria-hidden="true" />
       <p className="min-w-0 flex-1 text-[15px] leading-snug text-fg-muted">
         <span className="font-semibold text-fg">
-          Your {notice.brief}
-          {when} wasn&apos;t sent:
+          {t("briefing.delivery.notSent", { brief: notice.brief, when })}
         </span>{" "}
         {notice.problem}. {notice.fix}{" "}
         {notice.readable ? (
           <>
             <Link href="/artifacts" className="font-medium text-accent hover:underline whitespace-nowrap">
-              Read it
+              {t("briefing.delivery.readIt")}
             </Link>
             <span aria-hidden="true"> · </span>
           </>
         ) : null}
         <Link href="/settings/status" className="font-medium text-accent hover:underline whitespace-nowrap">
-          Setup status
+          {t("briefing.delivery.setupStatus")}
         </Link>
       </p>
     </div>

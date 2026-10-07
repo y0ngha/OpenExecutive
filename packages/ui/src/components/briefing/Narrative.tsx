@@ -3,6 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { t } from "@/i18n/index.ts";
 import { MEMORY_ACTIONS, briefingMemoryLine } from "@/lib/briefing-memory";
 
 import { PanelIntro, buildNarrativeSeed, type ContinueHandler } from "./shared";
@@ -36,16 +37,17 @@ export default function NarrativeBody({
   if (!narrative) {
     return (
       <div aria-live="polite" className="rounded-xl bg-accent/5 px-4 py-3 text-[15px] text-fg-muted animate-pulse">
-        {stale ? "Catching up on today…" : "No brief yet today."}
+        {stale ? t("briefing.home.catchingUp") : t("briefing.narrative.noBrief")}
       </div>
     );
   }
   return (
     <>
       <PanelIntro>
-        The Executive&apos;s read on {solo ? "your work" : "the company"} right now — what came in today, what&apos;s
-        stuck, what&apos;s next on your calendar, plus proposals and at-risk goals. Rewritten as the picture changes.
-        {onContinue && " Tap a point to talk it through."}
+        {t("briefing.narrative.intro", {
+          scope: solo ? t("briefing.narrative.scopeSolo") : t("briefing.narrative.scopeCompany"),
+        })}
+        {onContinue && t("briefing.narrative.tapHint")}
       </PanelIntro>
       <div className="prose prose-invert max-w-none text-[15px] prose-p:my-2 prose-ul:my-2 prose-headings:text-fg prose-strong:text-fg">
         <ReactMarkdown
@@ -74,7 +76,7 @@ export default function NarrativeBody({
                           onClick={() =>
                             onContinue(buildNarrativeSeed(text), briefingMemoryLine(MEMORY_ACTIONS.narrative, text))
                           }
-                          aria-label={`Discuss: ${text}`}
+                          aria-label={t("briefing.narrative.discussLabel", { text })}
                           className="group -mx-2 flex w-full items-start gap-2.5 rounded-xl px-2 py-2 text-left cursor-pointer transition hover:bg-accent/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                         >
                           {/* 💬 stands in for the bullet and signals "tap to

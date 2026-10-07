@@ -27,6 +27,7 @@ from openexecutive.integrations.attachments import build_attachment_output
 from openexecutive.orchestrator.answer_sources import TurnSources
 from openexecutive.orchestrator.debug_events import DebugCollector
 from openexecutive.orchestrator.turn_inbox import TurnInbox
+from openexecutive.utils.i18n import localized
 from openexecutive.workflows import turn_files
 from openexecutive.workflows.python_job import available as python_job_available
 from openexecutive.workflows.turn_files import bind as bind_turn_files
@@ -1522,7 +1523,10 @@ async def _run_chat_turn(
             logger.exception("chat.turn_failed turn_id=%s", turn_id)
             error = json.dumps({
                 "type": "error",
-                "message": "An internal error occurred. Please try again.",
+                "message": localized(
+                    "An internal error occurred. Please try again.",
+                    "내부 오류가 발생했어요. 다시 시도하세요.",
+                ),
                 "session_id": session.session_id,
             })
             yield f"data: {error}\n\n"
@@ -1635,11 +1639,14 @@ async def chat_upload(
     blocks and passed through ``attachment_blocks``.
     """
     if not files:
-        raise HTTPException(status_code=400, detail="No files uploaded")
+        raise HTTPException(status_code=400, detail=localized("No files uploaded", "올린 파일이 없어요."))
     if len(files) > _MAX_FILES_PER_TURN:
         raise HTTPException(
             status_code=400,
-            detail=f"Too many files: limit {_MAX_FILES_PER_TURN} per turn",
+            detail=localized(
+                f"Too many files: limit {_MAX_FILES_PER_TURN} per turn",
+                f"파일이 너무 많아요. 한 번에 {_MAX_FILES_PER_TURN}개까지 올릴 수 있어요.",
+            ),
         )
 
     text_parts: list[str] = []
@@ -1654,10 +1661,12 @@ async def chat_upload(
         if len(data) > _MAX_BYTES_PER_FILE:
             raise HTTPException(
                 status_code=413,
-                detail=(
+                detail=localized(
                     f"{filename}: file too large — "
                     f"{len(data) // (1024 * 1024)} MB "
-                    f"(limit {_MAX_BYTES_PER_FILE // (1024 * 1024)} MB)"
+                    f"(limit {_MAX_BYTES_PER_FILE // (1024 * 1024)} MB)",
+                    f"{filename}: 파일이 너무 커요. {len(data) // (1024 * 1024)}MB"
+                    f"(최대 {_MAX_BYTES_PER_FILE // (1024 * 1024)}MB)",
                 ),
             )
         uploads.append((filename, data))
@@ -1715,6 +1724,30 @@ _FALLBACK_SUBTITLE: str = (
     "Pick up where we left off — decisions to revisit, drafts to push "
     "forward, people to pull in."
 )
+
+_FALLBACK_PROMPTS_KO: list[str] = [
+    "이번 분기 우선순위는 어떻게 정리됐나요?",
+    "제가 미루고 있는 결정에 팀 의견을 모아 주세요.",
+    "이사회 보고서를 보내기 전에 같이 검토해요.",
+    "지난번 이후로 무엇이 바뀌었나요?",
+]
+
+_FALLBACK_SUBTITLE_KO: str = (
+    "지난번에 하던 일을 이어서 해요. 다시 볼 결정, 마무리할 초안, 함께할 사람이 있어요."
+)
+
+
+def _fallback_payload() -> dict[str, Any]:
+    """The static empty-state, in OE_LANGUAGE."""
+    from openexecutive.utils.i18n import is_korean
+
+    korean = is_korean()
+    return {
+        "prompts": list(_FALLBACK_PROMPTS_KO if korean else _FALLBACK_PROMPTS),
+        "subtitle": _FALLBACK_SUBTITLE_KO if korean else _FALLBACK_SUBTITLE,
+        "context_quality": "empty",
+    }
+
 
 # In-memory TTL cache. Single-process FastAPI deployments; bumped on every
 # profile/session change via the cache key.
@@ -2006,11 +2039,7 @@ async def get_suggested_prompts(request: Request) -> dict[str, Any]:
 
     if quality == "empty":
         # Deterministic fallback for a fresh install — safe to cache.
-        payload = {
-            "prompts": list(_FALLBACK_PROMPTS),
-            "subtitle": _FALLBACK_SUBTITLE,
-            "context_quality": "empty",
-        }
+        payload = _fallback_payload()
         _suggested_prompts_cache[key] = (now, payload)
         return payload
 
@@ -2019,11 +2048,7 @@ async def get_suggested_prompts(request: Request) -> dict[str, Any]:
         # LLM failure (timeout, malformed JSON, transient API error). Return
         # the static set but DO NOT cache — a 10-minute stale fallback after
         # a one-off blip would mask recovery on the next request.
-        return {
-            "prompts": list(_FALLBACK_PROMPTS),
-            "subtitle": _FALLBACK_SUBTITLE,
-            "context_quality": "empty",
-        }
+        return _fallback_payload()
 
     prompts, subtitle = generated
     payload = {

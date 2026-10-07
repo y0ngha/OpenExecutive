@@ -5,14 +5,17 @@ import { signOut, useSession } from "next-auth/react";
 import { GUIDE_NAV_ITEM } from "@/components/shell/navConfig";
 import OverflowMenu, { type OverflowItem } from "@/components/ui/OverflowMenu";
 import { initials } from "@/lib/initials";
+import { t } from "@/i18n/index.ts";
 
 // The account menu at the foot of the sidebar: help, the Executive's
 // pause switch (on Settings → Your Executive) and signing out, kept off
 // the main menu.
-const ACCOUNT_ITEMS: OverflowItem[] = [
-  { label: GUIDE_NAV_ITEM.label, href: GUIDE_NAV_ITEM.href },
-  { label: "Pause or resume the Executive", href: "/settings/executive" },
-];
+function accountItems(): OverflowItem[] {
+  return [
+    { label: GUIDE_NAV_ITEM.label, href: GUIDE_NAV_ITEM.href },
+    { label: t("misc.userBadge.pauseResume"), href: "/settings/executive" },
+  ];
+}
 
 interface UserBadgeProps {
   /** "sidebar" (name, email and the account menu) or "compact" (single row, name only). */
@@ -35,7 +38,7 @@ export default function UserBadge({ variant = "compact" }: UserBadgeProps) {
     return (
       <div className="flex items-center gap-2 text-xs text-fg-subtle">
         <div className="w-6 h-6 rounded-full bg-surface-overlay animate-pulse" />
-        <span className="hidden sm:inline">Loading…</span>
+        <span className="hidden sm:inline">{t("common.loading")}</span>
       </div>
     );
   }
@@ -50,17 +53,17 @@ export default function UserBadge({ variant = "compact" }: UserBadgeProps) {
             ? "px-3 py-3 border-t border-line flex items-center gap-2.5 flex-shrink-0"
             : "flex items-center gap-2 text-xs text-fg-muted"
         }
-        title="Local login: only this computer can reach Open Executive"
+        title={t("misc.userBadge.localLoginTitle")}
       >
         <Avatar name="ME" size={variant === "sidebar" ? "w-8 h-8" : "w-6 h-6"} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-fg truncate">You (owner)</p>
+          <p className="text-sm font-medium text-fg truncate">{t("misc.userBadge.youOwner")}</p>
           {variant === "sidebar" && (
-            <p className="text-xs text-fg-muted truncate">On this computer</p>
+            <p className="text-xs text-fg-muted truncate">{t("misc.userBadge.onThisComputer")}</p>
           )}
         </div>
         {variant === "sidebar" && (
-          <OverflowMenu items={ACCOUNT_ITEMS} label="Account menu" size="sm" placement="up" />
+          <OverflowMenu items={accountItems()} label={t("misc.userBadge.accountMenu")} size="sm" placement="up" />
         )}
       </div>
     );
@@ -84,10 +87,10 @@ export default function UserBadge({ variant = "compact" }: UserBadgeProps) {
         </div>
         <OverflowMenu
           items={[
-            ...ACCOUNT_ITEMS,
-            { label: "Sign out", onSelect: () => void signOut({ callbackUrl: "/signin" }) },
+            ...accountItems(),
+            { label: t("misc.userBadge.signOut"), onSelect: () => void signOut({ callbackUrl: "/signin" }) },
           ]}
-          label="Account menu"
+          label={t("misc.userBadge.accountMenu")}
           size="sm"
           placement="up"
         />
@@ -104,9 +107,9 @@ export default function UserBadge({ variant = "compact" }: UserBadgeProps) {
         type="button"
         onClick={() => signOut({ callbackUrl: "/signin" })}
         className="text-[10px] text-fg-muted hover:text-fg transition-colors cursor-pointer whitespace-nowrap"
-        title={`Sign out ${user.email}`}
+        title={t("misc.userBadge.signOutEmail", { email: user.email })}
       >
-        Sign out
+        {t("misc.userBadge.signOut")}
       </button>
     </div>
   );

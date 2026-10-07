@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import LeadRulesEditor from "@/components/settings/LeadRulesEditor";
 import SettingsCard from "@/components/settings/SettingsCard";
 import Switch from "@/components/Switch";
+import { t } from "@/i18n/index.ts";
 import {
   addCompanyLeadRule,
   deleteCompanyLeadRule,
@@ -38,21 +39,18 @@ export default function TakeTheLeadCard() {
     return () => controller.abort();
   }, []);
 
-  if (state === "loading") return <p className="text-[15px] text-fg-muted">Loading…</p>;
+  if (state === "loading") return <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>;
   if (state === "hidden") {
     return (
-      <SettingsCard title="Take the lead">
-        <p className="text-sm text-fg-muted">
-          Only the account owner can turn this on. When it&apos;s on, the Executive acts on what it finds without
-          asking first.
-        </p>
+      <SettingsCard title={t("settings.lead.title")}>
+        <p className="text-sm text-fg-muted">{t("settings.lead.ownerOnly")}</p>
       </SettingsCard>
     );
   }
   if (state === "error" || !lead) {
     return (
       <SettingsCard>
-        <p className="text-sm text-fg-muted">Couldn&apos;t load Take the lead.</p>
+        <p className="text-sm text-fg-muted">{t("settings.lead.loadFailed")}</p>
       </SettingsCard>
     );
   }
@@ -63,7 +61,7 @@ export default function TakeTheLeadCard() {
     try {
       setLead(await setTakeTheLead(update));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the setting.");
+      setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -71,14 +69,14 @@ export default function TakeTheLeadCard() {
 
   return (
     <SettingsCard
-      title="Take the lead"
+      title={t("settings.lead.title")}
       titleId="take-the-lead-label"
       description={
         !lead.available
-          ? "Needs signed sign-ins on this server before it can be turned on."
+          ? t("settings.lead.needsSignedSignIns")
           : lead.enabled
-            ? "It acts on what it finds while it looks over your day: it messages people, books meetings and starts workflows. Anything below waits for a yes first."
-            : "Off: when it looks over your day it tells you what it would do, and you do it."
+            ? t("settings.lead.onDescription")
+            : t("settings.lead.offDescription")
       }
       action={
         <Switch
@@ -93,13 +91,12 @@ export default function TakeTheLeadCard() {
         {lead.enabled && (
           <>
             <p className="rounded-xl bg-surface-overlay/60 px-4 py-3 text-sm leading-relaxed text-fg-muted">
-              Department approval levels still apply. A department on Proposes still sends its meetings to its head for
-              a yes. Set a department to Acts on its own to let it book without asking.
+              {t("settings.lead.departmentNote")}
             </p>
             <div>
-              <h3 className="text-[15px] font-semibold text-fg">Always asks first</h3>
+              <h3 className="text-[15px] font-semibold text-fg">{t("settings.lead.askFirstTitle")}</h3>
               <p className="mt-1 text-sm text-fg-muted">
-                These wait for you, or for whoever approves that area (like spending or hiring), with a card on Today.
+                {t("settings.lead.askFirstDescription")}
               </p>
               <ul className="mt-3 flex flex-col divide-y divide-line rounded-xl border border-line">
                 {lead.ask_first.map((item) => {
@@ -126,14 +123,13 @@ export default function TakeTheLeadCard() {
           </>
         )}
         <div>
-          <h3 className="text-[15px] font-semibold text-fg">Company rules</h3>
+          <h3 className="text-[15px] font-semibold text-fg">{t("settings.lead.companyRulesTitle")}</h3>
           <p className="mt-1 mb-3 text-sm text-fg-muted">
-            Anything matching one of these always waits for a yes, for the Executive and for everyone&apos;s Take the
-            lead as you.
+            {t("settings.lead.companyRulesDescription")}
           </p>
           <LeadRulesEditor
             rules={lead.rules}
-            emptyText="No company rules yet."
+            emptyText={t("settings.lead.noCompanyRules")}
             disabled={busy}
             onAdd={async (kind, value) => setLead(await addCompanyLeadRule(kind, value))}
             onDelete={async (id) => setLead(await deleteCompanyLeadRule(id))}

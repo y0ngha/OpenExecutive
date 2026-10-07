@@ -24,6 +24,9 @@ import {
   type SkillMeta,
   updateCustomWorkflow,
 } from "@/lib/api";
+import { sectionLabel } from "@/components/jobs/sectionLabel";
+import { t, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 
 const SECTIONS: WorkflowSection[] = [
   "Board",
@@ -63,7 +66,19 @@ const labelCls = "block text-sm font-medium text-fg-muted mb-1.5";
 // The editor's sections, shown one at a time. A new workflow walks them in
 // order with Next/Back; an existing one (or a wizard draft) can jump between
 // them and save from any of them.
-const STAGES = ["Details", "Inputs", "Steps", "Schedule"] as const;
+const STAGES: MessageKey[] = [
+  "jobs.builder.stageDetails",
+  "jobs.builder.stageInputs",
+  "jobs.builder.stageSteps",
+  "jobs.builder.stageSchedule",
+];
+
+const STEP_KIND_LABEL: Record<StepKind, MessageKey> = {
+  specialist: "jobs.builder.kindSpecialist",
+  action: "jobs.builder.kindAction",
+  approval_gate: "jobs.builder.kindApprovalGate",
+  synthesis: "jobs.builder.kindSynthesis",
+};
 
 // ---- Ask OE form descriptor helpers ---------------------------------------
 
@@ -190,11 +205,11 @@ function BuilderInner() {
 
   useEffect(() => {
     const load: Promise<DynamicWorkflowDef> | null = designerId
-      ? getWorkflowDesignerSession(designerId).then((t) => {
-          if (!t.draft) throw new Error("That conversation has no draft yet.");
-          if ((t.editing ?? null) !== editName)
-            throw new Error("That conversation is about a different workflow.");
-          const draft = t.draft.definition;
+      ? getWorkflowDesignerSession(designerId).then((turn) => {
+          if (!turn.draft) throw new Error(t("jobs.builder.noDraft"));
+          if ((turn.editing ?? null) !== editName)
+            throw new Error(t("jobs.builder.differentWorkflow"));
+          const draft = turn.draft.definition;
           // Keep the workflow's on/off state as it is now, not as it was
           // when the conversation opened.
           return editName
@@ -234,13 +249,13 @@ function BuilderInner() {
   // on every render.
   const { suggestedCls, clearSuggested } = useAskOEFormContext({
     formId: "workflow_builder",
-    title: editName ? "Edit workflow" : "New workflow",
+    title: editName ? t("jobs.builder.editTitle") : t("jobs.start.newWorkflow"),
     description:
       "Builds a reusable workflow from specialist steps, optional approval gates, and a final synthesis step.",
     getFields: (): PageFormField[] => [
       {
         name: "name",
-        label: "Name (snake_case, unique)",
+        label: t("jobs.builder.name"),
         type: "text",
         value: name,
         required: true,
@@ -248,32 +263,32 @@ function BuilderInner() {
           ? "Immutable — this workflow already exists."
           : "snake_case unique identifier, e.g. weekly_competitor_watch.",
       },
-      { name: "title", label: "Title", type: "text", value: title, required: true },
-      { name: "description", label: "Description", type: "text", value: description },
+      { name: "title", label: t("jobs.builder.title"), type: "text", value: title, required: true },
+      { name: "description", label: t("jobs.builder.description"), type: "text", value: description },
       {
         name: "section",
-        label: "Section",
+        label: t("jobs.builder.section"),
         type: "select",
         options: [...SECTIONS],
         value: section,
       },
       {
         name: "estimated_minutes",
-        label: "Estimated minutes",
+        label: t("jobs.builder.estimatedMinutes"),
         type: "number",
         value: estimatedMinutes,
         description: "1-120.",
       },
       {
         name: "input_fields",
-        label: "Input fields",
+        label: t("jobs.builder.inputFields"),
         type: "json",
         value: fields,
         description: INPUT_FIELDS_SCHEMA,
       },
       {
         name: "steps",
-        label: "Steps",
+        label: t("jobs.builder.steps"),
         type: "json",
         value: steps,
         required: true,
@@ -281,20 +296,20 @@ function BuilderInner() {
       },
       {
         name: "cadence_enabled",
-        label: "Run on a schedule",
+        label: t("jobs.builder.runOnSchedule"),
         type: "boolean",
         value: cadenceEnabled,
       },
       {
         name: "cadence",
-        label: "Cadence",
+        label: t("jobs.builder.cadence"),
         type: "text",
         value: cadence,
         description: "daily@HH:MM / weekly@DOW@HH:MM / quarterly@DD-HH:MM, UTC.",
       },
       {
         name: "cadence_person_id",
-        label: "Deliver document to (person id)",
+        label: t("jobs.builder.deliverToId"),
         type: "number",
         value: cadencePersonId,
         description:
@@ -437,20 +452,24 @@ function BuilderInner() {
   }
 
   if (loading) {
-    return <div className="text-[15px] text-fg-muted">Loading…</div>;
+    return <div className="text-[15px] text-fg-muted">{t("common.loading")}</div>;
   }
 
   // Editing or refining a draft: every section is already filled in.
   const prefilled = !!editName || !!designerId;
   const last = STAGES.length - 1;
-  const saveLabel = saving ? "Saving…" : editName ? "Save changes" : "Create workflow";
+  const saveLabel = saving
+    ? t("common.saving")
+    : editName
+      ? t("jobs.builder.saveChanges")
+      : t("jobs.review.create");
   const cancelHref = designerId
     ? `/jobs/new?${editName ? `edit=${encodeURIComponent(editName)}&` : ""}session=${encodeURIComponent(designerId)}`
     : "/jobs";
 
   return (
     <div className="space-y-6">
-      <nav aria-label="Sections" className="flex gap-1 overflow-x-auto">
+      <nav aria-label={t("jobs.builder.sectionsAria")} className="flex gap-1 overflow-x-auto">
         {STAGES.map((label, i) => (
           <button
             key={label}
@@ -473,7 +492,7 @@ function BuilderInner() {
                 {i + 1}
               </span>
             )}
-            {label}
+            {t(label)}
           </button>
         ))}
       </nav>
@@ -482,10 +501,10 @@ function BuilderInner() {
       {/* Metadata */}
       {stage === 0 && (
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-fg">Details</h2>
+        <h2 className="text-lg font-semibold text-fg">{t("jobs.builder.stageDetails")}</h2>
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Name (snake_case, unique)</label>
+            <label className={labelCls}>{t("jobs.builder.name")}</label>
             <input
               className={`${inputCls} ${suggestedCls("name")}`}
               value={name}
@@ -495,27 +514,27 @@ function BuilderInner() {
             />
           </div>
           <div>
-            <label className={labelCls}>Title</label>
+            <label className={labelCls}>{t("jobs.builder.title")}</label>
             <input
               className={`${inputCls} ${suggestedCls("title")}`}
               value={title}
               onChange={(e) => { setTitle(e.target.value); clearSuggested("title"); }}
-              placeholder="Weekly Competitor Watch"
+              placeholder={t("jobs.builder.titlePlaceholder")}
             />
           </div>
         </div>
         <div>
-          <label className={labelCls}>Description</label>
+          <label className={labelCls}>{t("jobs.builder.description")}</label>
           <input
             className={`${inputCls} ${suggestedCls("description")}`}
             value={description}
             onChange={(e) => { setDescription(e.target.value); clearSuggested("description"); }}
-            placeholder="What this workflow produces"
+            placeholder={t("jobs.builder.descriptionPlaceholder")}
           />
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Section</label>
+            <label className={labelCls}>{t("jobs.builder.section")}</label>
             <select
               className={`${inputCls} ${suggestedCls("section")}`}
               value={section}
@@ -523,13 +542,13 @@ function BuilderInner() {
             >
               {SECTIONS.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {sectionLabel(s)}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label className={labelCls}>Estimated minutes</label>
+            <label className={labelCls}>{t("jobs.builder.estimatedMinutes")}</label>
             <input
               type="number"
               min={1}
@@ -550,7 +569,7 @@ function BuilderInner() {
         onInput={() => clearSuggested("input_fields")}
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-fg">Input fields</h2>
+          <h2 className="text-lg font-semibold text-fg">{t("jobs.builder.inputFields")}</h2>
           <Button
             onClick={() =>
               setFields((fs) => [
@@ -559,15 +578,14 @@ function BuilderInner() {
               ])
             }
           >
-            + Add field
+            {t("jobs.builder.addField")}
           </Button>
         </div>
         <p className="text-sm text-fg-muted">
-          Free-text fields the user fills when running. Reference them in step
-          goals with <code>{"{field_name}"}</code>.
+          {tRich("jobs.builder.inputFieldsHint", { code: <code>{"{field_name}"}</code> })}
         </p>
         {fields.length === 0 && (
-          <p className="text-sm text-fg-subtle">No input fields.</p>
+          <p className="text-sm text-fg-subtle">{t("jobs.builder.noInputFields")}</p>
         )}
         {fields.map((f, i) => (
           <div
@@ -575,7 +593,7 @@ function BuilderInner() {
             className="rounded-xl border border-line bg-surface p-4 grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end"
           >
             <div>
-              <label className={labelCls}>Field name</label>
+              <label className={labelCls}>{t("jobs.builder.fieldName")}</label>
               <input
                 className={inputCls}
                 value={f.name}
@@ -584,12 +602,12 @@ function BuilderInner() {
               />
             </div>
             <div>
-              <label className={labelCls}>Label</label>
+              <label className={labelCls}>{t("jobs.builder.label")}</label>
               <input
                 className={inputCls}
                 value={f.label}
                 onChange={(e) => updateField(i, { label: e.target.value })}
-                placeholder="Topic"
+                placeholder={t("jobs.builder.labelPlaceholder")}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -600,13 +618,13 @@ function BuilderInner() {
                   checked={f.required}
                   onChange={(e) => updateField(i, { required: e.target.checked })}
                 />
-                Required
+                {t("jobs.builder.required")}
               </label>
               <OverflowMenu
-                label={`More for field ${f.label || i + 1}`}
+                label={t("jobs.builder.moreForField", { field: f.label || i + 1 })}
                 items={[
                   {
-                    label: "Remove field",
+                    label: t("jobs.builder.removeField"),
                     danger: true,
                     onSelect: () => setFields((fs) => fs.filter((_, idx) => idx !== i)),
                   },
@@ -625,34 +643,35 @@ function BuilderInner() {
         onInput={() => clearSuggested("steps")}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-fg">Steps</h2>
+          <h2 className="text-lg font-semibold text-fg">{t("jobs.builder.steps")}</h2>
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() =>
                 setSteps((ss) => [...ss, newStep("specialist", ss.length)])
               }
             >
-              + Specialist
+              {t("jobs.builder.addSpecialist")}
             </Button>
             <Button
               onClick={() => setSteps((ss) => [...ss, newStep("action", ss.length)])}
             >
-              + Action
+              {t("jobs.builder.addAction")}
             </Button>
             <Button
               onClick={() =>
                 setSteps((ss) => [...ss, newStep("approval_gate", ss.length)])
               }
             >
-              + Approval gate
+              {t("jobs.builder.addApprovalGate")}
             </Button>
           </div>
         </div>
         <p className="text-sm text-fg-muted">
-          Steps run in order. <b>Specialist</b> steps analyze and write;{" "}
-          <b>action</b> steps get things done with the tools you choose. The last
-          step must be a <b>synthesis</b> step that assembles the result. Place any
-          approval gate just before it.
+          {tRich("jobs.builder.stepsHint", {
+            specialist: <b>{t("jobs.builder.stepsHintSpecialist")}</b>,
+            action: <b>{t("jobs.builder.stepsHintAction")}</b>,
+            synthesis: <b>{t("jobs.builder.stepsHintSynthesis")}</b>,
+          })}
         </p>
         {steps.map((s, i) => (
           <StepEditor
@@ -673,7 +692,7 @@ function BuilderInner() {
       {/* Cadence */}
       {stage === 3 && (
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-fg">Schedule</h2>
+        <h2 className="text-lg font-semibold text-fg">{t("jobs.builder.stageSchedule")}</h2>
         <label className="flex min-h-10 items-center gap-2.5 text-[15px] font-medium text-fg">
           <input
             type="checkbox"
@@ -681,13 +700,13 @@ function BuilderInner() {
             checked={cadenceEnabled}
             onChange={(e) => setCadenceEnabled(e.target.checked)}
           />
-          Run on a schedule
+          {t("jobs.builder.runOnSchedule")}
         </label>
         {cadenceEnabled && (
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>
-                Cadence (daily@HH:MM / weekly@DOW@HH:MM / quarterly@DD-HH:MM, UTC)
+                {t("jobs.builder.cadenceLabel")}
               </label>
               <input
                 className={`${inputCls} ${suggestedCls("cadence")}`}
@@ -697,13 +716,13 @@ function BuilderInner() {
               />
             </div>
             <div>
-              <label className={labelCls}>Deliver document to</label>
+              <label className={labelCls}>{t("jobs.builder.deliverTo")}</label>
               <select
                 className={`${inputCls} ${suggestedCls("cadence_person_id")}`}
                 value={cadencePersonId}
                 onChange={(e) => { setCadencePersonId(Number(e.target.value)); clearSuggested("cadence_person_id"); }}
               >
-                <option value={0}>Select a person…</option>
+                <option value={0}>{t("jobs.builder.selectPerson")}</option>
                 {people.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.full_name} — {p.role}
@@ -712,14 +731,15 @@ function BuilderInner() {
               </select>
             </div>
             <p className="sm:col-span-2 text-sm text-fg-subtle">
-              Scheduled runs supply no inputs, so a scheduled workflow must have
-              no <b>required</b> input fields.
+              {tRich("jobs.builder.scheduledHint", {
+                required: <b>{t("jobs.builder.scheduledHintRequired")}</b>,
+              })}
             </p>
           </div>
         )}
         {!cadenceEnabled && (
           <p className="text-sm text-fg-subtle">
-            Off: the workflow runs when someone starts it.
+            {t("jobs.builder.scheduleOff")}
           </p>
         )}
       </section>
@@ -734,14 +754,14 @@ function BuilderInner() {
 
       <div className="flex flex-wrap items-center gap-2">
         {stage > 0 && (
-          <Button onClick={() => setStage((s) => s - 1)}>Back</Button>
+          <Button onClick={() => setStage((s) => s - 1)}>{t("common.back")}</Button>
         )}
         {stage < last && (
           <Button
             variant={prefilled ? "secondary" : "primary"}
             onClick={() => setStage((s) => s + 1)}
           >
-            Next: {STAGES[stage + 1]}
+            {t("jobs.builder.nextStage", { stage: t(STAGES[stage + 1]) })}
           </Button>
         )}
         {(stage === last || prefilled) && (
@@ -750,7 +770,7 @@ function BuilderInner() {
           </Button>
         )}
         <Link href={cancelHref} className={buttonClass("ghost", "md", "ml-auto")}>
-          {designerId ? "Back to conversation" : "Cancel"}
+          {designerId ? t("jobs.builder.backToConversation") : t("common.cancel")}
         </Link>
       </div>
     </div>
@@ -780,21 +800,21 @@ function StepEditor({
     <div className="rounded-xl border border-line bg-surface p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold uppercase tracking-wide text-fg-muted">
-          {index + 1}. {step.kind.replace("_", " ")}
+          {index + 1}. {t(STEP_KIND_LABEL[step.kind])}
         </span>
         <OverflowMenu
-          label={`More for step ${index + 1}`}
+          label={t("jobs.builder.moreForStep", { n: index + 1 })}
           items={[
-            { label: "Move up", disabled: index === 0, onSelect: () => onMove(-1) },
-            { label: "Move down", disabled: index === total - 1, onSelect: () => onMove(1) },
-            { label: "Remove step", danger: true, onSelect: onRemove },
+            { label: t("jobs.builder.moveUp"), disabled: index === 0, onSelect: () => onMove(-1) },
+            { label: t("jobs.builder.moveDown"), disabled: index === total - 1, onSelect: () => onMove(1) },
+            { label: t("jobs.builder.removeStep"), danger: true, onSelect: onRemove },
           ]}
         />
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
-          <label className={labelCls}>Step id</label>
+          <label className={labelCls}>{t("jobs.builder.stepId")}</label>
           <input
             className={inputCls}
             value={step.id}
@@ -802,7 +822,7 @@ function StepEditor({
           />
         </div>
         <div>
-          <label className={labelCls}>Title</label>
+          <label className={labelCls}>{t("jobs.builder.title")}</label>
           <input
             className={inputCls}
             value={step.title}
@@ -814,7 +834,7 @@ function StepEditor({
       {step.kind === "specialist" && (
         <>
           <div>
-            <label className={labelCls}>Specialist</label>
+            <label className={labelCls}>{t("jobs.builder.specialist")}</label>
             <select
               className={inputCls}
               value={step.specialist}
@@ -828,7 +848,7 @@ function StepEditor({
             </select>
           </div>
           <div>
-            <label className={labelCls}>Goal (use {"{field}"} placeholders)</label>
+            <label className={labelCls}>{t("jobs.builder.goal")}</label>
             <textarea
               className={`${inputCls} min-h-[80px]`}
               value={step.goal}
@@ -836,7 +856,7 @@ function StepEditor({
             />
           </div>
           <div>
-            <label className={labelCls}>Knowledge base query (optional)</label>
+            <label className={labelCls}>{t("jobs.builder.ragQuery")}</label>
             <input
               className={inputCls}
               value={step.rag_query ?? ""}
@@ -844,16 +864,16 @@ function StepEditor({
             />
           </div>
           <div>
-            <label className={labelCls}>Follow a playbook (optional)</label>
+            <label className={labelCls}>{t("jobs.builder.followPlaybook")}</label>
             <select
               className={inputCls}
               value={step.playbook ?? ""}
               onChange={(e) => onChange({ playbook: e.target.value })}
             >
-              <option value="">None</option>
+              <option value="">{t("common.none")}</option>
               {/* Keep a saved choice visible even if that playbook is gone. */}
               {step.playbook && !playbooks.some((p) => p.name === step.playbook) && (
-                <option value={step.playbook}>{step.playbook} (not found)</option>
+                <option value={step.playbook}>{t("jobs.builder.playbookNotFound", { name: step.playbook })}</option>
               )}
               {playbooks.map((p) => (
                 <option key={p.name} value={p.name}>
@@ -869,18 +889,18 @@ function StepEditor({
         <>
           <div>
             <label className={labelCls}>
-              Goal — what to get done, and where (use {"{field}"} placeholders)
+              {t("jobs.builder.actionGoal")}
             </label>
             <textarea
               className={`${inputCls} min-h-[80px]`}
               value={step.goal}
-              placeholder="e.g. Find today's emailed bills, read each PDF, and add a row per bill (vendor, amount, due date) to the Bill tracker sheet. Skip bills already listed."
+              placeholder={t("jobs.builder.actionGoalPlaceholder")}
               onChange={(e) => onChange({ goal: e.target.value })}
             />
           </div>
           <div>
             <label className={labelCls}>
-              Tools this step may use — saving the workflow approves them
+              {t("jobs.builder.toolsLabel")}
             </label>
             <ToolPicker
               value={step.tools}
@@ -889,13 +909,13 @@ function StepEditor({
             />
           </div>
           <div className="sm:w-48">
-            <label className={labelCls}>Max tool calls per run</label>
+            <label className={labelCls}>{t("jobs.builder.maxToolCalls")}</label>
             <input
               type="number"
               min={1}
               max={50}
               className={inputCls}
-              placeholder="20 (default)"
+              placeholder={t("jobs.builder.maxToolCallsPlaceholder")}
               value={step.max_tool_calls ?? ""}
               onChange={(e) =>
                 // Empty means "use the server default" — undefined is dropped
@@ -912,13 +932,13 @@ function StepEditor({
       {step.kind === "approval_gate" && (
         <>
           <div>
-            <label className={labelCls}>Ask which person</label>
+            <label className={labelCls}>{t("jobs.builder.askWhichPerson")}</label>
             <select
               className={inputCls}
               value={step.person_id}
               onChange={(e) => onChange({ person_id: Number(e.target.value) })}
             >
-              <option value={0}>Select a person…</option>
+              <option value={0}>{t("jobs.builder.selectPerson")}</option>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.full_name} — {p.role}
@@ -927,7 +947,7 @@ function StepEditor({
             </select>
           </div>
           <div>
-            <label className={labelCls}>Question</label>
+            <label className={labelCls}>{t("jobs.builder.question")}</label>
             <textarea
               className={`${inputCls} min-h-[60px]`}
               value={step.question}
@@ -936,7 +956,7 @@ function StepEditor({
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Timeout (hours)</label>
+              <label className={labelCls}>{t("jobs.builder.timeoutHours")}</label>
               <input
                 type="number"
                 min={1}
@@ -947,7 +967,7 @@ function StepEditor({
               />
             </div>
             <div>
-              <label className={labelCls}>On timeout</label>
+              <label className={labelCls}>{t("jobs.builder.onTimeout")}</label>
               <select
                 className={inputCls}
                 value={step.on_timeout ?? "escalate"}
@@ -957,9 +977,9 @@ function StepEditor({
                   })
                 }
               >
-                <option value="escalate">escalate</option>
-                <option value="auto_proceed">auto_proceed</option>
-                <option value="fail">fail</option>
+                <option value="escalate">{t("jobs.builder.timeoutEscalate")}</option>
+                <option value="auto_proceed">{t("jobs.builder.timeoutAutoProceed")}</option>
+                <option value="fail">{t("jobs.builder.timeoutFail")}</option>
               </select>
             </div>
           </div>
@@ -969,7 +989,7 @@ function StepEditor({
       {step.kind === "synthesis" && (
         <>
           <div>
-            <label className={labelCls}>Synthesis specialist</label>
+            <label className={labelCls}>{t("jobs.builder.synthesisSpecialist")}</label>
             <select
               className={inputCls}
               value={step.specialist ?? "cso"}
@@ -984,7 +1004,7 @@ function StepEditor({
           </div>
           <div>
             <label className={labelCls}>
-              Instructions (optional — leave blank to just concatenate sections)
+              {t("jobs.builder.instructions")}
             </label>
             <textarea
               className={`${inputCls} min-h-[60px]`}
@@ -1008,32 +1028,37 @@ function AdvancedBuilderPage() {
         <div className="max-w-3xl mx-auto">
           <div className="mb-6">
             <Link href="/jobs" className="text-sm text-fg-muted hover:text-fg">
-              ← Back to workflows
+              {t("jobs.common.backToWorkflows")}
             </Link>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg mt-2 mb-2">
-              {editing ? "Edit workflow" : "New workflow"}
+              {editing ? t("jobs.builder.editTitle") : t("jobs.start.newWorkflow")}
             </h1>
             <p className="text-[15px] text-fg-muted">
-              Build a reusable workflow from specialist steps, optional
-              approval gates, and a final synthesis step.
+              {t("jobs.builder.intro")}
               {editName ? (
                 <>
                   {" "}
-                  <Link
-                    href={`/jobs/new?edit=${encodeURIComponent(editName)}`}
-                    className="text-accent hover:underline"
-                  >
-                    Describe the change instead
-                  </Link>{" "}
-                  and let the assistant make it.
+                  {tRich("jobs.builder.describeChange", {
+                    link: (
+                      <Link
+                        href={`/jobs/new?edit=${encodeURIComponent(editName)}`}
+                        className="text-accent hover:underline"
+                      >
+                        {t("jobs.builder.describeChangeLink")}
+                      </Link>
+                    ),
+                  })}
                 </>
               ) : (
                 <>
                   {" "}
-                  <Link href="/jobs/new" className="text-accent hover:underline">
-                    Describe it instead
-                  </Link>{" "}
-                  and let the assistant draft it.
+                  {tRich("jobs.builder.describeInstead", {
+                    link: (
+                      <Link href="/jobs/new" className="text-accent hover:underline">
+                        {t("jobs.builder.describeInsteadLink")}
+                      </Link>
+                    ),
+                  })}
                 </>
               )}
             </p>
@@ -1052,10 +1077,10 @@ function WizardPage() {
       <div className="border-b border-line px-4 sm:px-6 py-4">
         <div className="max-w-3xl mx-auto">
           <Link href="/jobs" className="text-sm text-fg-muted hover:text-fg">
-            ← Back to workflows
+            {t("jobs.common.backToWorkflows")}
           </Link>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg mt-1">
-            {editName ? "Edit workflow" : "New workflow"}
+            {editName ? t("jobs.builder.editTitle") : t("jobs.start.newWorkflow")}
           </h1>
         </div>
       </div>

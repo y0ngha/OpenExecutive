@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
 import { DebugEvent, DebugEventKind } from "@/lib/api";
+import { t, tp, type MessageKey } from "@/i18n/index.ts";
 
 interface DebugPanelProps {
   events: DebugEvent[];
@@ -24,85 +25,85 @@ const SPECIALIST_LABELS: Record<string, string> = {
 
 const KIND_CONFIG: Record<
   DebugEventKind,
-  { border: string; text: string; label: string; icon: string }
+  { border: string; text: string; labelKey: MessageKey; icon: string }
 > = {
   knowledge_retrieved: {
     border: "border-l-emerald-500",
     text: "text-emerald-400",
-    label: "Knowledge",
+    labelKey: "misc.debug.kind.knowledge",
     icon: "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4",
   },
   routing_decision: {
     border: "border-l-violet-500",
     text: "text-violet-400",
-    label: "Routing",
+    labelKey: "misc.debug.kind.routing",
     icon: "M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5",
   },
   specialist_start: {
     border: "border-l-indigo-500",
     text: "text-indigo-400",
-    label: "Agent start",
+    labelKey: "misc.debug.kind.agentStart",
     icon: "M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z",
   },
   specialist_done: {
     border: "border-l-indigo-300",
     text: "text-indigo-300",
-    label: "Agent done",
+    labelKey: "misc.debug.kind.agentDone",
     icon: "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
   },
   synthesis_start: {
     border: "border-l-amber-500",
     text: "text-amber-400",
-    label: "Synthesizing",
+    labelKey: "misc.debug.kind.synthesizing",
     icon: "M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z",
   },
   skill_invocation: {
     border: "border-l-sky-500",
     text: "text-sky-400",
-    label: "Skill",
+    labelKey: "misc.debug.kind.skill",
     icon: "M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25",
   },
   // run_script: a tool the Executive built for the job, as one card.
   script_run: {
     border: "border-l-teal-500",
     text: "text-teal-400",
-    label: "Built tool",
+    labelKey: "misc.debug.kind.builtTool",
     icon: "M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z",
   },
   synthesis_done: {
     border: "border-l-emerald-400",
     text: "text-emerald-400",
-    label: "Complete",
+    labelKey: "misc.debug.kind.complete",
     icon: "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z",
   },
   turn_complete: {
     border: "border-l-emerald-500",
     text: "text-emerald-400",
-    label: "Turn complete",
+    labelKey: "misc.debug.kind.turnComplete",
     icon: "M5 13l4 4L19 7",
   },
   turn_error: {
     border: "border-l-rose-500",
     text: "text-rose-400",
-    label: "Turn error",
+    labelKey: "misc.debug.kind.turnError",
     icon: "M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z",
   },
   committee_review_start: {
     border: "border-l-fuchsia-500",
     text: "text-fuchsia-400",
-    label: "Committee review",
+    labelKey: "misc.debug.kind.committeeReview",
     icon: "M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z",
   },
   committee_review_done: {
     border: "border-l-fuchsia-400",
     text: "text-fuchsia-300",
-    label: "Committee verdict",
+    labelKey: "misc.debug.kind.committeeVerdict",
     icon: "M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125",
   },
   committee_revision_start: {
     border: "border-l-fuchsia-500",
     text: "text-fuchsia-400",
-    label: "Revising",
+    labelKey: "misc.debug.kind.revising",
     icon: "M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.994 15.994 0 0 1 1.622-3.395m3.42 3.42a15.995 15.995 0 0 0 4.764-4.648l3.876-5.814a1.151 1.151 0 0 0-1.597-1.597L14.146 6.32a15.996 15.996 0 0 0-4.649 4.763m3.42 3.42a6.776 6.776 0 0 0-3.42-3.42",
   },
 };
@@ -112,25 +113,25 @@ function summarize(event: DebugEvent): string {
   switch (event.kind) {
     case "knowledge_retrieved": {
       const sources = (d.sources as string[]) ?? [];
-      return `Retrieved ${d.chunk_count ?? sources.length} chunks from ${sources.length} source${sources.length !== 1 ? "s" : ""}`;
+      return tp("misc.debug.retrieved", sources.length, { chunks: String(d.chunk_count ?? sources.length) });
     }
     case "routing_decision": {
       const specialists = (d.specialists as { specialist: string }[]) ?? [];
       const names = specialists.map((s) => SPECIALIST_LABELS[s.specialist] ?? s.specialist).join(", ");
-      return `Routing to ${names}`;
+      return t("misc.debug.routingTo", { names });
     }
     case "specialist_start": {
       const label = SPECIALIST_LABELS[d.specialist as string] ?? (d.specialist as string);
-      return `${label} analyzing…`;
+      return t("misc.debug.analyzing", { label });
     }
     case "specialist_done": {
       const label = SPECIALIST_LABELS[d.specialist as string] ?? (d.specialist as string);
-      return `${label} done · ${d.duration_ms}ms · ${d.response_length} chars`;
+      return t("misc.debug.agentDone", { label, ms: String(d.duration_ms), chars: String(d.response_length) });
     }
     case "skill_invocation": {
       const calls = (d.calls as { tool: string }[]) ?? [];
       const tools = calls.map((c) => c.tool).join(", ");
-      return `Invoking ${calls.length} skill tool${calls.length !== 1 ? "s" : ""}${tools ? ` · ${tools}` : ""}`;
+      return tp("misc.debug.invoking", calls.length) + (tools ? ` · ${tools}` : "");
     }
     case "script_run": {
       const calls = (d.calls as { tool: string }[]) ?? [];
@@ -141,19 +142,19 @@ function summarize(event: DebugEvent): string {
       return `${d.ok ? "Did" : "Tried"} ${made} action${made !== 1 ? "s" : ""} in one go${tools ? ` · ${tools}` : ""}${n ? ` · ${n}` : ""}${kept}`;
     }
     case "synthesis_start":
-      return `Synthesizing ${d.specialist_count} specialist response${(d.specialist_count as number) !== 1 ? "s" : ""}`;
+      return tp("misc.debug.synthesizing", d.specialist_count as number);
     case "synthesis_done":
-      return `Complete · ${d.total_duration_ms}ms total`;
+      return t("misc.debug.complete", { ms: String(d.total_duration_ms) });
     case "turn_complete":
-      return `Turn finished · ${d.chunks ?? 0} chunks · ${d.duration_s ?? 0}s`;
+      return t("misc.debug.turnFinished", { chunks: String(d.chunks ?? 0), s: String(d.duration_s ?? 0) });
     case "turn_error":
-      return `Turn errored: ${d.reason ?? "unknown"}`;
+      return t("misc.debug.turnErrored", { reason: String(d.reason ?? t("misc.debug.unknownReason")) });
     case "committee_review_start": {
       const reviewers = (d.reviewers as string[]) ?? [];
       const friendly = reviewers
         .map((r) => r.replace(/_domain$/, "").replace(/_judge$/, ""))
         .map((r) => SPECIALIST_LABELS[r] ?? r);
-      return `Committee reviewing · ${reviewers.length} reviewer${reviewers.length !== 1 ? "s" : ""}${friendly.length ? ` (${friendly.join(", ")})` : ""}`;
+      return tp("misc.debug.committeeReviewing", reviewers.length) + (friendly.length ? ` (${friendly.join(", ")})` : "");
     }
     case "committee_review_done": {
       const critiques =
@@ -162,12 +163,12 @@ function summarize(event: DebugEvent): string {
       for (const c of critiques) counts[c.severity] = (counts[c.severity] ?? 0) + 1;
       const parts = (["high", "medium", "low"] as const)
         .filter((sev) => counts[sev] > 0)
-        .map((sev) => `${counts[sev]} ${sev}`);
-      const summary = parts.length ? parts.join(", ") : "no critiques";
-      return `Committee verdict · ${summary} · ${d.review_ms ?? 0}ms`;
+        .map((sev) => t(`misc.debug.severity.${sev}`, { n: counts[sev] }));
+      const summary = parts.length ? parts.join(", ") : t("misc.debug.noCritiques");
+      return t("misc.debug.committeeVerdict", { summary, ms: String(d.review_ms ?? 0) });
     }
     case "committee_revision_start":
-      return "Revising draft from committee feedback…";
+      return t("misc.debug.revisingDraft");
     default:
       return event.kind;
   }
@@ -178,7 +179,7 @@ function EventCard({ event }: { event: DebugEvent; index: number }) {
   const cfg = KIND_CONFIG[event.kind] ?? {
     border: "border-l-fg-subtle",
     text: "text-fg-muted",
-    label: event.kind,
+    labelKey: null,
     icon: "M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z",
   };
 
@@ -201,7 +202,7 @@ function EventCard({ event }: { event: DebugEvent; index: number }) {
         >
           <path strokeLinecap="round" strokeLinejoin="round" d={cfg.icon} />
         </svg>
-        <span className={`text-[11px] font-medium ${cfg.text}`}>{cfg.label}</span>
+        <span className={`text-[11px] font-medium ${cfg.text}`}>{cfg.labelKey ? t(cfg.labelKey) : event.kind}</span>
         <span className="text-[10px] text-fg-muted font-mono ml-auto tabular-nums">
           +{event.ts.toFixed(2)}s
         </span>
@@ -237,15 +238,15 @@ export default function DebugPanel({ events, onClose, isLive = false }: DebugPan
         md:relative md:max-w-none md:w-72
         flex-shrink-0 border-l border-line bg-surface-elevated flex flex-col h-full
       "
-      aria-label="Agent activity panel"
+      aria-label={t("misc.debug.panelLabel")}
     >
       <div className="h-14 border-b border-line flex items-center justify-between px-4 flex-shrink-0">
         <span className="text-[11px] font-semibold text-fg-muted tracking-wider uppercase flex items-center gap-2">
-          Agent Activity
+          {t("misc.debug.title")}
           {isLive && (
             <span className="flex items-center gap-1 text-emerald-400 normal-case tracking-normal font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none" />
-              live
+              {t("misc.debug.live")}
             </span>
           )}
         </span>
@@ -253,7 +254,7 @@ export default function DebugPanel({ events, onClose, isLive = false }: DebugPan
           type="button"
           onClick={onClose}
           className="min-h-touch min-w-touch flex items-center justify-center text-fg-muted hover:text-fg hover:bg-surface-overlay transition-colors rounded cursor-pointer"
-          aria-label="Close panel"
+          aria-label={t("misc.debug.closePanel")}
         >
           <Icon name="close" size="w-4 h-4" />
         </button>
@@ -263,7 +264,7 @@ export default function DebugPanel({ events, onClose, isLive = false }: DebugPan
         {events.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-fg-muted text-xs text-center px-4">
             <Icon name="activity" size="w-6 h-6" className="mb-2 opacity-40" />
-            {isLive ? "Connecting to backend…" : "Send a message to see agent activity."}
+            {isLive ? t("misc.debug.connecting") : t("misc.debug.empty")}
           </div>
         ) : (
           events.map((event, i) => <EventCard key={i} event={event} index={i} />)

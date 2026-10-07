@@ -3,8 +3,28 @@
 import { useMemo, useState } from "react";
 import type { BuiltinFileMeta } from "@/lib/api";
 import Icon from "@/components/Icon";
+import { t, type MessageKey } from "@/i18n/index.ts";
 
 export type FileKind = "builtin" | "failures";
+
+// Display names for the knowledge domains; the keys are the API's domain ids.
+const DOMAIN_KEYS: Record<string, MessageKey> = {
+  board: "audit.domain.board",
+  finance: "audit.domain.finance",
+  hr: "audit.domain.hr",
+  legal: "audit.domain.legal",
+  marketing: "audit.domain.marketing",
+  operations: "audit.domain.operations",
+  product: "audit.domain.product",
+  sales: "audit.domain.sales",
+  strategy: "audit.domain.strategy",
+  general: "audit.domain.general",
+};
+
+export function domainLabel(domain: string): string {
+  const key = DOMAIN_KEYS[domain];
+  return key ? t(key) : domain;
+}
 
 export type Selection =
   | { kind: "file"; fileKind: FileKind; domain: string; filename: string }
@@ -70,7 +90,7 @@ export default function SourceTree({
   }
 
   return (
-    <nav aria-label="Built-in playbooks" className="space-y-4">
+    <nav aria-label={t("audit.knowledge.builtinPlaybooks")} className="space-y-4">
       <div className="grid grid-cols-2 gap-2">
         <button
           data-closes-nav
@@ -78,7 +98,7 @@ export default function SourceTree({
           className="inline-flex h-10 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-line bg-surface-elevated px-2 text-sm font-medium text-fg hover:bg-surface-hover transition-colors"
         >
           <Icon name="plus" size="w-4 h-4" />
-          Playbook
+          {t("audit.knowledge.playbook")}
         </button>
         <button
           data-closes-nav
@@ -86,14 +106,14 @@ export default function SourceTree({
           className="inline-flex h-10 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-line bg-surface-elevated px-2 text-sm font-medium text-fg hover:bg-surface-hover transition-colors"
         >
           <Icon name="plus" size="w-4 h-4" />
-          Failure case
+          {t("audit.knowledge.failureCase")}
         </button>
       </div>
       <input
         value={filter}
         onChange={(e) => onFilterChange(e.target.value)}
-        placeholder="Filter files…"
-        aria-label="Filter files"
+        placeholder={t("audit.knowledge.filterFilesPlaceholder")}
+        aria-label={t("audit.knowledge.filterFiles")}
         className="w-full h-10 rounded-xl border border-line bg-surface-elevated px-3 text-sm text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent/40"
       />
       {domains.map((domain) => {
@@ -115,7 +135,7 @@ export default function SourceTree({
                 size="w-4 h-4"
                 className={`text-fg-subtle transition-transform ${isCollapsed ? "" : "rotate-90"}`}
               />
-              {domain}
+              {domainLabel(domain)}
               <span className="ml-auto text-xs font-normal text-fg-subtle tabular-nums">
                 {playbooks.length + failures.length}
               </span>
@@ -123,7 +143,7 @@ export default function SourceTree({
             {!isCollapsed && (
               <div className="ml-3 mt-1 space-y-2 border-l border-line pl-2">
                 <FileGroup
-                  label="Playbooks"
+                  label={t("audit.knowledge.playbooks")}
                   files={playbooks}
                   tone="default"
                   onClickFile={(f) =>
@@ -132,7 +152,7 @@ export default function SourceTree({
                   isActive={(f) => isActiveFile("builtin", domain, f.filename)}
                 />
                 <FileGroup
-                  label="Failures"
+                  label={t("audit.knowledge.failures")}
                   files={failures}
                   tone="rose"
                   onClickFile={(f) =>
@@ -174,7 +194,7 @@ function FileGroup({
     <div>
       <div className={`px-2 text-xs font-medium ${labelClass}`}>{label}</div>
       {files.length === 0 ? (
-        <p className="text-xs text-fg-subtle px-2 mt-0.5">None</p>
+        <p className="text-xs text-fg-subtle px-2 mt-0.5">{t("common.none")}</p>
       ) : (
         <div className="mt-0.5">
           {files.map((f) => {

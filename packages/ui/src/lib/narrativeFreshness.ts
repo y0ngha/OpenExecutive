@@ -9,6 +9,8 @@
 // No imports, so `npm test` can exercise this under
 // `node --experimental-strip-types` (see scripts/narrativeFreshness.test.mjs).
 
+import { t } from "../i18n/index.ts";
+
 /** Delays before each re-poll while the header is being rewritten. The model
  * call takes a few seconds; after the last one the page waits for the next
  * focus or periodic refresh rather than polling forever. */
@@ -39,11 +41,11 @@ export function narrativeUpdatedLabel(generatedAt: string | null | undefined, no
   const written = new Date(generatedAt);
   const ms = now.getTime() - written.getTime();
   if (Number.isNaN(ms)) return null;
-  if (ms < 60_000) return "Updated just now";
+  if (ms < 60_000) return t("lib.narrative.justNow");
   const minutes = Math.floor(ms / 60_000);
-  if (minutes < 60) return `Updated ${minutes} min ago`;
+  if (minutes < 60) return t("lib.narrative.minutesAgo", { n: minutes });
   const hours = written.getHours();
   const h12 = hours % 12 === 0 ? 12 : hours % 12;
   const mm = String(written.getMinutes()).padStart(2, "0");
-  return `Updated ${h12}:${mm} ${hours < 12 ? "AM" : "PM"}`;
+  return t("lib.narrative.at", { h: h12, mm, ampm: t(hours < 12 ? "lib.time.am" : "lib.time.pm") });
 }

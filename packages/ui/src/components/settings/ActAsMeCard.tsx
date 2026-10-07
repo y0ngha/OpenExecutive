@@ -7,6 +7,7 @@ import AdvancedFold from "@/components/settings/AdvancedFold";
 import SettingsCard from "@/components/settings/SettingsCard";
 import Switch from "@/components/Switch";
 import Button from "@/components/ui/Button";
+import { t, tp, type MessageKey } from "@/i18n/index.ts";
 import {
   checkInboxNow,
   describeVoiceProfile,
@@ -40,18 +41,27 @@ import { addPhrase, markNew, STYLE_PHRASES, styleSentences } from "@/lib/voiceSt
 // The page body: the mailbox, Write drafts as me and Draft replies to my
 // inbox up front; How I write and Let team members use it under Advanced.
 
-export const ACT_AS_ME_INTRO =
-  "Let the Executive write email as you, in your own voice. When you ask it to reply to or write an email as you, it saves a draft in your own mailbox (Gmail or Outlook) for you to review and send. Nothing goes out as you unless you send it, from your mailbox or with Send on a reply waiting on Today. Everything else it writes stays in its own name.";
+export function ACT_AS_ME_INTRO(): string {
+  return t("settings.actAsMe.intro");
+}
 
 const LENGTHS = ["short", "medium", "long"] as const;
 const FORMALITIES = ["casual", "neutral", "formal"] as const;
 // The audiences a greeting is learned for (delegation/voice.py AUDIENCES) and
 // its per-line limit (GREETING_MAX_CHARS).
 const AUDIENCES = ["team", "contact", "other"] as const;
-const AUDIENCE_LABEL: Record<string, string> = {
-  team: "To your team",
-  contact: "To your contacts",
-  other: "To anyone else",
+const AUDIENCE_LABEL: Record<string, MessageKey> = {
+  team: "settings.voiceStyle.audience.team",
+  contact: "settings.voiceStyle.audience.contact",
+  other: "settings.voiceStyle.audience.other",
+};
+const OPTION_LABEL: Record<(typeof LENGTHS)[number] | (typeof FORMALITIES)[number], MessageKey> = {
+  short: "settings.voiceStyle.length.short",
+  medium: "settings.voiceStyle.length.medium",
+  long: "settings.voiceStyle.length.long",
+  casual: "settings.voiceStyle.formality.casual",
+  neutral: "settings.voiceStyle.formality.neutral",
+  formal: "settings.voiceStyle.formality.formal",
 };
 const GREETING_MAX_CHARS = 60;
 // The longest description POST /delegation/voice/describe takes
@@ -128,13 +138,12 @@ export default function ActAsMeCard() {
     return () => clearTimeout(timer);
   }, [checking, pollTick]);
 
-  if (state === "loading") return <p className="text-[15px] text-fg-muted">Loading…</p>;
+  if (state === "loading") return <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>;
   if (state === "hidden") {
     return (
       <SettingsCard>
         <p className="text-[15px] text-fg-muted leading-relaxed">
-          Act as me isn&apos;t available to you here. The owner of this Open Executive can turn it
-          on for team members.
+          {t("settings.actAsMe.notAvailable")}
         </p>
       </SettingsCard>
     );
@@ -142,7 +151,7 @@ export default function ActAsMeCard() {
   if (state === "error" || !settings) {
     return (
       <SettingsCard>
-        <p className="text-[15px] text-fg-muted">Couldn&apos;t load this setting.</p>
+        <p className="text-[15px] text-fg-muted">{t("settings.history.loadFailed")}</p>
       </SettingsCard>
     );
   }
@@ -158,7 +167,7 @@ export default function ActAsMeCard() {
     try {
       setSettings(await setDelegationEnabled(!on));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the setting.");
+      setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -176,13 +185,13 @@ export default function ActAsMeCard() {
   return (
     <>
       <SettingsCard
-        title={connected ? `Your ${mailbox}` : "Your mailbox"}
-        description={connected ? `Connected to ${settings.gmail.email}.` : settings.gmail.message}
+        title={connected ? t("settings.actAsMe.yourMailboxNamed", { mailbox }) : t("settings.actAsMe.yourMailbox")}
+        description={connected ? t("settings.actAsMe.connectedTo", { email: String(settings.gmail.email) }) : settings.gmail.message}
         action={
           connected ? (
             <span className="inline-flex items-center gap-2 text-sm font-medium text-fg">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
-              Connected
+              {t("settings.actAsMe.connected")}
             </span>
           ) : undefined
         }
@@ -192,16 +201,13 @@ export default function ActAsMeCard() {
             {settings.gmail.status === "not_configured" && (
               <div>
                 <p className="text-sm text-fg-muted leading-relaxed">
-                  For Gmail, on a computer with a browser, with the Executive&apos;s Google OAuth
-                  client exported, run this and sign in as yourself, then put the file it writes
-                  where the API reads it (see the Act as me section of .env.example):
+                  {t("settings.actAsMe.gmailConnectHelp")}
                 </p>
                 <pre className={pre}>{settings.gmail.connect_command}</pre>
                 {settings.gmail.outlook_connect_command && (
                   <>
                     <p className="mt-3 text-sm text-fg-muted leading-relaxed">
-                      For Outlook, with the Executive&apos;s Microsoft 365 app exported, run this
-                      instead and sign in as yourself with the code it prints:
+                      {t("settings.actAsMe.outlookConnectHelp")}
                     </p>
                     <pre className={pre}>{settings.gmail.outlook_connect_command}</pre>
                   </>
@@ -209,21 +215,21 @@ export default function ActAsMeCard() {
               </div>
             )}
             <Button variant="primary" onClick={() => void recheck()} disabled={busy}>
-              {busy ? "Checking…" : "Check again"}
+              {busy ? t("settings.status.checking") : t("settings.status.checkAgain")}
             </Button>
           </div>
         )}
       </SettingsCard>
 
       <SettingsCard
-        title="Write drafts as me"
+        title={t("settings.actAsMe.writeDraftsTitle")}
         titleId="act-as-me-label"
         description={
           on
-            ? `On: ask it in chat — “reply to Dana as me: yes to the 5th” — and the draft waits in your ${mailbox} Drafts.`
+            ? t("settings.actAsMe.writeDraftsOn", { mailbox })
             : connected
-              ? "Off: the Executive only ever writes as itself."
-              : "Connect your mailbox first."
+              ? t("settings.actAsMe.writeDraftsOff")
+              : t("settings.actAsMe.connectFirst")
         }
         action={
           <Switch
@@ -253,7 +259,7 @@ export default function ActAsMeCard() {
 
       <AdvancedFold
         id="act-as-me-advanced"
-        summary={settings.team ? "How I write · Let team members use it" : "How I write"}
+        summary={settings.team ? t("settings.actAsMe.advancedSummaryTeam") : t("settings.voiceStyle.title")}
       >
         <VoiceSection connected={connected} outlook={outlook} />
         {settings.team && <TeamSection team={settings.team} onSettings={setSettings} />}
@@ -282,7 +288,7 @@ function TeamSection({
     try {
       onSettings(await setDelegationTeam(!team.enabled));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the setting.");
+      setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -290,13 +296,9 @@ function TeamSection({
 
   return (
     <SettingsCard
-      title="Let team members use it"
+      title={t("settings.actAsMe.teamTitle")}
       titleId="act-as-me-team-label"
-      description={
-        team.enabled
-          ? "On: each team member can connect their own Gmail or Outlook and turn it on for themselves. Their mail, drafts and replies stay theirs alone. You see only who uses it and how much."
-          : "Off: only you can use Act as me."
-      }
+      description={team.enabled ? t("settings.actAsMe.teamOn") : t("settings.actAsMe.teamOff")}
       action={
         <Switch
           checked={team.enabled}
@@ -311,8 +313,8 @@ function TeamSection({
           {team.members.map((m) => (
             <li key={m.person_id} className="py-2 text-sm text-fg-muted">
               <span className="font-medium text-fg">{m.name}</span>
-              {`: ${m.drafts_30d} ${m.drafts_30d === 1 ? "draft" : "drafts"}, ${m.sent_30d} sent in the last 30 days`}
-              {m.inbox ? ". Drafts replies to their inbox." : "."}
+              {tp("settings.actAsMe.teamUsage", m.drafts_30d, { sent: m.sent_30d })}
+              {m.inbox ? t("settings.actAsMe.teamInbox") : "."}
             </li>
           ))}
         </ul>
@@ -347,7 +349,7 @@ function InboxSection({
     try {
       onSettings(await setInboxWatch(!on));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the setting.");
+      setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -359,25 +361,25 @@ function InboxSection({
     try {
       onInbox(await checkInboxNow());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't check your inbox.");
+      setError(err instanceof Error ? err.message : t("settings.actAsMe.checkInboxFailed"));
     } finally {
       setBusy(false);
     }
   };
 
-  const last = inbox.last_poll_at && !inbox.checking ? ` Last checked ${formatAgo(inbox.last_poll_at)}.` : "";
+  const last = inbox.last_poll_at && !inbox.checking ? t("settings.actAsMe.lastChecked", { ago: formatAgo(inbox.last_poll_at) }) : "";
   return (
     <SettingsCard
-      title="Draft replies to my inbox"
+      title={t("settings.actAsMe.inboxTitle")}
       titleId="act-as-me-inbox-label"
       description={
         on
           ? handleItOn
-            ? "When mail comes in that needs you, it writes a first reply in your Drafts. Handle it for me, below, sends the simple ones; the rest wait on Today, where you send, edit or dismiss them."
-            : "When mail comes in that needs you, it writes a first reply in your Drafts and puts it on Today, where you send it, edit it in your mailbox or dismiss it. Nothing is sent until you tap Send."
+            ? t("settings.actAsMe.inboxOnHandleIt")
+            : t("settings.actAsMe.inboxOn")
           : actAsMeOn
-            ? "Off: it only drafts when you ask it to in chat."
-            : "Turn on Write drafts as me first."
+            ? t("settings.actAsMe.inboxOff")
+            : t("settings.actAsMe.inboxNeedsDrafts")
       }
       action={
         <Switch
@@ -395,7 +397,7 @@ function InboxSection({
             {last}
           </span>
           <Button size="sm" onClick={() => void checkNow()} disabled={busy || inbox.checking}>
-            {inbox.checking ? "Checking…" : "Check now"}
+            {inbox.checking ? t("settings.status.checking") : t("settings.actAsMe.checkNow")}
           </Button>
         </div>
       )}
@@ -449,8 +451,8 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
 
   if (loadFailed) {
     return (
-      <SettingsCard title="How I write">
-        <p className="text-sm text-fg-muted">Couldn&apos;t load how you write.</p>
+      <SettingsCard title={t("settings.voiceStyle.title")}>
+        <p className="text-sm text-fg-muted">{t("settings.voiceStyle.loadFailed")}</p>
       </SettingsCard>
     );
   }
@@ -482,7 +484,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
         Object.fromEntries(AUDIENCES.map((a) => [a, keep(was[a], now[a])(typed[a] ?? "")])),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save.");
+      setError(err instanceof Error ? err.message : t("settings.voiceStyle.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -496,7 +498,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
       setProposed(await describeVoiceProfile(description));
       setMode("review");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't write your style. Try again.");
+      setError(err instanceof Error ? err.message : t("settings.voiceStyle.writeFailed"));
     } finally {
       setBusy(false);
     }
@@ -517,7 +519,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
     setMode("view");
     setProposed(null);
     setDescription("");
-    setNotice("Saved. Drafts written as you now follow this.");
+    setNotice(t("settings.voiceStyle.savedNotice"));
   };
 
   const takeGmailSignature = () =>
@@ -526,8 +528,8 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
       if (!next.signature) {
         setNotice(
           profile.signature
-            ? "Your Gmail settings have no signature now, so none is added."
-            : "Your Gmail settings have no signature to add.",
+            ? t("settings.voiceStyle.noSignatureNow")
+            : t("settings.voiceStyle.noSignature"),
         );
       }
       return next;
@@ -551,10 +553,10 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
   const showForm = editing || dirty;
   const source =
     profile.updated_by === "learn"
-      ? `Learned from ${profile.sample_count} of your sent emails`
+      ? t("settings.voiceStyle.sourceLearned", { n: profile.sample_count })
       : learned
-        ? "Learned from your sent mail, then changed by you"
-        : "Set by you";
+        ? t("settings.voiceStyle.sourceLearnedChanged")
+        : t("settings.voiceStyle.sourceYou");
   const feedback = (
     <>
       {notice && <p className="mt-2 text-sm text-fg-muted">{notice}</p>}
@@ -565,15 +567,11 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
   if (mode === "describe") {
     return (
       <SettingsCard
-        title="Describe how you write"
-        description={
-          hasStyle
-            ? "Write it the way you'd tell a new assistant. It changes your current style rather than starting over."
-            : "Write it the way you'd tell a new assistant."
-        }
+        title={t("settings.voiceStyle.describeTitle")}
+        description={hasStyle ? t("settings.voiceStyle.describeChange") : t("settings.voiceStyle.describeNew")}
       >
         <label htmlFor="voice-description" className="text-sm font-medium text-fg">
-          In your own words
+          {t("settings.voiceStyle.ownWords")}
         </label>
         <GrowingTextarea
           id="voice-description"
@@ -581,9 +579,9 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
           onChange={setDescription}
           minRows={5}
           maxLength={DESCRIPTION_MAX_CHARS}
-          placeholder={`For example: I keep emails short, usually three or four lines. First names only. I sign off "Thanks, Sam".`}
+          placeholder={t("settings.voiceStyle.describePlaceholder")}
         />
-        <div className="mt-3 flex flex-wrap gap-2" aria-label="Add a phrase">
+        <div className="mt-3 flex flex-wrap gap-2" aria-label={t("settings.voiceStyle.addPhrase")}>
           {STYLE_PHRASES.map((phrase) => (
             <button
               key={phrase}
@@ -597,13 +595,13 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button variant="primary" disabled={busy || !description.trim()} onClick={() => void writeStyle()}>
-            {busy ? "Writing your style…" : "Write my style"}
+            {busy ? t("settings.voiceStyle.writing") : t("settings.voiceStyle.write")}
           </Button>
           <Button variant="ghost" disabled={busy} onClick={() => setMode("view")}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
-        <p className="mt-2 text-[13px] text-fg-subtle">Nothing changes until you save.</p>
+        <p className="mt-2 text-[13px] text-fg-subtle">{t("settings.voiceStyle.nothingUntilSave")}</p>
         {feedback}
       </SettingsCard>
     );
@@ -611,7 +609,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
 
   if (mode === "review" && proposed) {
     return (
-      <SettingsCard title="Here's your new style" description="Check it, then save. New lines are marked.">
+      <SettingsCard title={t("settings.voiceStyle.reviewTitle")} description={t("settings.voiceStyle.reviewDescription")}>
         <ul className="space-y-2">
           {markNew(profile, proposed).map(({ text, isNew }) => (
             <StyleLine key={text} text={text} isNew={isNew} />
@@ -619,7 +617,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
         </ul>
         {proposed.sample_reply && (
           <div className="mt-5 text-sm">
-            <div className="font-medium text-fg">A reply would read like</div>
+            <div className="font-medium text-fg">{t("settings.voiceStyle.sampleReply")}</div>
             <div className="mt-2 whitespace-pre-wrap break-words border-l-2 border-accent pl-3 leading-relaxed text-fg">
               {proposed.sample_reply}
             </div>
@@ -627,10 +625,10 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
         )}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4">
           <Button variant="primary" disabled={busy} onClick={() => void saveProposed()}>
-            {busy ? "Saving…" : "Save"}
+            {busy ? t("common.saving") : t("common.save")}
           </Button>
           <Button disabled={busy} onClick={() => setMode("describe")}>
-            Change it
+            {t("settings.voiceStyle.changeIt")}
           </Button>
         </div>
         {feedback}
@@ -640,12 +638,8 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
 
   return (
     <SettingsCard
-      title="How I write"
-      description={
-        hasStyle
-          ? "Drafts written as you follow this."
-          : "Tell the Executive how you write, or let it learn from your sent mail. Drafts written as you follow it."
-      }
+      title={t("settings.voiceStyle.title")}
+      description={hasStyle ? t("settings.voiceStyle.followsThis") : t("settings.voiceStyle.empty")}
     >
       {hasStyle && (
         <div className="mb-4 rounded-2xl border border-line bg-surface px-4 py-3">
@@ -656,7 +650,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
           </ul>
           <p className="mt-2 text-[13px] text-fg-subtle">
             {source}
-            {profile.locked ? " · locked, so it won't be relearned" : ""}
+            {profile.locked ? t("settings.voiceStyle.lockedNote") : ""}
           </p>
         </div>
       )}
@@ -670,11 +664,11 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
             setMode("describe");
           }}
         >
-          Describe it in your own words
+          {t("settings.voiceStyle.describeButton")}
         </Button>
         {!profile.locked && (
           <Button disabled={busy || !connected} onClick={() => void run(learnVoiceProfile)}>
-            {busy ? "Working…" : learned ? "Learn again from my sent mail" : "Learn from my sent mail"}
+            {busy ? t("settings.voiceStyle.working") : learned ? t("settings.voiceStyle.learnAgain") : t("settings.voiceStyle.learn")}
           </Button>
         )}
       </div>
@@ -686,9 +680,9 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
           aria-controls="voice-editor"
           className="mt-4 flex w-full min-h-touch items-center justify-between gap-3 border-t border-line pt-3 text-left text-sm"
         >
-          <span className="font-medium text-accent">{showForm ? "Done fine-tuning" : "Fine-tune details"}</span>
+          <span className="font-medium text-accent">{showForm ? t("settings.voiceStyle.doneFineTuning") : t("settings.voiceStyle.fineTune")}</span>
           <span className="flex items-center gap-1 text-fg-subtle">
-            <span className="hidden sm:inline">Greetings, sign-off, signature</span>
+            <span className="hidden sm:inline">{t("settings.voiceStyle.fineTuneHint")}</span>
             <Icon
               name="chevron-right"
               size="w-4 h-4"
@@ -702,18 +696,18 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
         <div id="voice-editor" className="mt-5 space-y-5">
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm text-fg-muted">
-              Length
+              {t("settings.voiceStyle.length")}
               <select value={length} onChange={(e) => setLength(e.target.value)} className={`${field} h-10`}>
                 <option value="">—</option>
                 {LENGTHS.map((l) => (
                   <option key={l} value={l}>
-                    {l}
+                    {t(OPTION_LABEL[l])}
                   </option>
                 ))}
               </select>
             </label>
             <label className="flex items-center gap-2 text-sm text-fg-muted">
-              Tone
+              {t("settings.voiceStyle.tone")}
               <select
                 value={formality}
                 onChange={(e) => setFormality(e.target.value)}
@@ -722,7 +716,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
                 <option value="">—</option>
                 {FORMALITIES.map((f) => (
                   <option key={f} value={f}>
-                    {f}
+                    {t(OPTION_LABEL[f])}
                   </option>
                 ))}
               </select>
@@ -730,9 +724,9 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
           </div>
 
           <fieldset>
-            <legend className="text-sm font-medium text-fg">Greeting</legend>
+            <legend className="text-sm font-medium text-fg">{t("settings.voiceStyle.greeting")}</legend>
             <p className="text-[13px] text-fg-subtle leading-relaxed">
-              {"{first}"} becomes their first name. Leave one empty to let each draft choose.
+              {t("settings.voiceStyle.greetingHelp")}
             </p>
             <div className="mt-2 space-y-2">
               {AUDIENCES.map((audience) => (
@@ -740,12 +734,12 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
                   key={audience}
                   className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3 text-sm text-fg-muted"
                 >
-                  <span className="sm:w-36 flex-shrink-0">{AUDIENCE_LABEL[audience]}</span>
+                  <span className="sm:w-36 flex-shrink-0">{t(AUDIENCE_LABEL[audience])}</span>
                   <input
                     type="text"
                     value={greetings[audience] ?? ""}
                     onChange={(e) => setGreetings((g) => ({ ...g, [audience]: e.target.value }))}
-                    placeholder="Not set"
+                    placeholder={t("settings.voiceStyle.notSet")}
                     maxLength={GREETING_MAX_CHARS}
                     className={`${field} h-10 min-w-0 flex-1`}
                   />
@@ -755,26 +749,26 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
           </fieldset>
 
           <label className="block text-sm font-medium text-fg">
-            Sign-off
+            {t("settings.voiceStyle.signOff")}
             <GrowingTextarea value={signOff} onChange={setSignOff} minRows={2} />
           </label>
           <label className="block text-sm font-medium text-fg">
-            Habits (one per line)
+            {t("settings.voiceStyle.habits")}
             <GrowingTextarea value={habits} onChange={setHabits} minRows={3} />
           </label>
           <label className="block text-sm font-medium text-fg">
-            Never (one per line)
+            {t("settings.voiceStyle.never")}
             <GrowingTextarea value={avoid} onChange={setAvoid} minRows={2} />
           </label>
 
           <div className="text-sm text-fg-muted">
-            <div className="font-medium text-fg">Signature</div>
+            <div className="font-medium text-fg">{t("settings.voiceStyle.signature")}</div>
             {profile.signature ? (
               <>
                 <p className="mt-0.5 leading-relaxed">
                   {outlook
-                    ? "Added to the end of every draft. Outlook doesn't share your signature with apps, so it can't be refreshed from there."
-                    : "Added to the end of every draft, from your Gmail settings."}
+                    ? t("settings.voiceStyle.signatureOutlook")
+                    : t("settings.voiceStyle.signatureGmail")}
                 </p>
                 <div className="mt-2 whitespace-pre-wrap break-words border-l-2 border-line pl-3 leading-relaxed text-fg">
                   {profile.signature}
@@ -787,7 +781,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
                       onClick={takeGmailSignature}
                       className={linkButton}
                     >
-                      Refresh from Gmail
+                      {t("settings.voiceStyle.refreshGmail")}
                     </button>
                   )}
                   <button
@@ -796,7 +790,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
                     onClick={() => void run(() => updateVoiceProfile({ clear_signature: true }), true)}
                     className={linkButton}
                   >
-                    Don&apos;t add my signature
+                    {t("settings.voiceStyle.dontAddSignature")}
                   </button>
                 </div>
               </>
@@ -804,8 +798,8 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
               <>
                 <p className="mt-0.5 leading-relaxed">
                   {outlook
-                    ? "No signature is added to drafts: Outlook doesn't share your signature with apps, so drafts end with your sign-off."
-                    : "No signature is added to drafts."}
+                    ? t("settings.voiceStyle.noSignatureOutlook")
+                    : t("settings.voiceStyle.noSignatureAdded")}
                 </p>
                 {!outlook && (
                   <button
@@ -814,7 +808,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
                     onClick={takeGmailSignature}
                     className={linkButton}
                   >
-                    Add my Gmail signature
+                    {t("settings.voiceStyle.addGmailSignature")}
                   </button>
                 )}
               </>
@@ -823,9 +817,9 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
 
           {profile.exemplars.length > 0 && (
             <div className="text-sm text-fg-muted">
-              <div className="font-medium text-fg">Examples of your writing</div>
+              <div className="font-medium text-fg">{t("settings.voiceStyle.examples")}</div>
               <p className="mt-0.5 leading-relaxed">
-                Short passages from your sent mail that set the tone. Drafts never reuse what they say.
+                {t("settings.voiceStyle.examplesHelp")}
               </p>
               <ul className="mt-2 space-y-2">
                 {profile.exemplars.map((example, i) => (
@@ -843,7 +837,7 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
                 onClick={() => void run(() => updateVoiceProfile({ clear_exemplars: true }), true)}
                 className={linkButton}
               >
-                Remove examples
+                {t("settings.voiceStyle.removeExamples")}
               </button>
             </div>
           )}
@@ -867,16 +861,16 @@ function VoiceSection({ connected, outlook = false }: { connected: boolean; outl
                 )
               }
             >
-              Save changes
+              {t("settings.voiceStyle.saveChanges")}
             </Button>
             <Button
               disabled={busy}
               onClick={() => void run(() => updateVoiceProfile({ locked: !profile.locked }), true)}
             >
-              {profile.locked ? "Unlock" : "Lock"}
+              {profile.locked ? t("settings.voiceStyle.unlock") : t("settings.voiceStyle.lock")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => void run(resetVoiceProfile)}>
-              Reset
+              {t("settings.voiceStyle.reset")}
             </Button>
           </div>
         </div>
@@ -894,7 +888,7 @@ function StyleLine({ text, isNew = false }: { text: string; isNew?: boolean }) {
       <span className="min-w-0 flex-1">{text}</span>
       {isNew && (
         <span className="flex-shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent">
-          New
+          {t("settings.voiceStyle.new")}
         </span>
       )}
     </li>

@@ -30,6 +30,9 @@ import SidePanel from "@/components/ui/SidePanel";
 import SectionTabs from "@/components/ui/SectionTabs";
 import Icon from "@/components/Icon";
 import { domainBulkActions, type BulkAction } from "@/lib/reviewBulk";
+import { displayLocale, t, tp, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
+import { domainLabel } from "@/components/knowledge/SourceTree";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,16 +48,28 @@ function PriorityPill({ priority }: { priority: ReviewPriority }) {
   if (priority === "normal") return null;
   return (
     <span className={`text-xs font-medium ${PRIORITY_CLASSES[priority]}`}>
-      {priority === "high" ? "↑ High priority" : "↓ Low priority"}
+      {priority === "high" ? t("audit.review.highPriority") : t("audit.review.lowPriority")}
     </span>
   );
 }
 
-const PRIORITY_LABELS: Record<ReviewPriority, string> = {
-  high: "↑ High",
-  normal: "Normal",
-  low: "↓ Low",
+const PRIORITY_LABELS: Record<ReviewPriority, MessageKey> = {
+  high: "audit.review.priority.high",
+  normal: "audit.review.priority.normal",
+  low: "audit.review.priority.low",
 };
+
+// Display names for a review item's content_type; unknown types show as-is.
+const CONTENT_TYPE_KEYS: Record<string, MessageKey> = {
+  builtin: "audit.review.type.builtin",
+  failure: "audit.review.type.failure",
+  external: "audit.review.type.external",
+};
+
+function contentTypeLabel(type: string): string {
+  const key = CONTENT_TYPE_KEYS[type];
+  return key ? t(key) : type;
+}
 
 /** The status actions an item offers besides Approve, plus its priority
  * choices; shared by a row's ⋯ menu and the item panel's. */
@@ -68,16 +83,19 @@ function itemMenu(
   },
 ): OverflowItem[] {
   const menu: OverflowItem[] = [];
-  if (actions.onView) menu.push({ label: "View details", onSelect: actions.onView });
-  if (item.status !== "needs_revision") menu.push({ label: "Flag for revision", onSelect: actions.onFlag });
+  if (actions.onView) menu.push({ label: t("audit.review.viewDetails"), onSelect: actions.onView });
+  if (item.status !== "needs_revision") menu.push({ label: t("audit.knowledge.flagForRevision"), onSelect: actions.onFlag });
   for (const p of ["high", "normal", "low"] as ReviewPriority[]) {
     menu.push({
-      label: `Priority: ${PRIORITY_LABELS[p]}${item.priority === p ? " ✓" : ""}`,
+      label: t("audit.review.priorityItem", {
+        priority: t(PRIORITY_LABELS[p]),
+        check: item.priority === p ? " ✓" : "",
+      }),
       disabled: item.priority === p,
       onSelect: () => actions.onPriorityChange(p),
     });
   }
-  if (item.status !== "rejected") menu.push({ label: "Reject…", danger: true, onSelect: actions.onReject });
+  if (item.status !== "rejected") menu.push({ label: t("audit.review.rejectEllipsis"), danger: true, onSelect: actions.onReject });
   return menu;
 }
 
@@ -85,7 +103,7 @@ const SELECT_CLASS =
   "h-10 rounded-xl border border-line-strong bg-surface-elevated px-3 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent/50";
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return new Date(iso).toLocaleDateString(displayLocale(), { month: "short", day: "numeric", year: "numeric" });
 }
 
 // ---------------------------------------------------------------------------
@@ -237,13 +255,13 @@ function ItemSlideOver({
       open
       onClose={onClose}
       width="lg"
-      title={<span className="block break-words">{item ? item.filename : "Loading…"}</span>}
+      title={<span className="block break-words">{item ? item.filename : t("common.loading")}</span>}
       subtitle={
         item && (
           <span className="flex items-center gap-2 flex-wrap">
-            <span className="capitalize">{item.domain}</span>
+            <span className="capitalize">{domainLabel(item.domain)}</span>
             <span aria-hidden>·</span>
-            <span>{item.content_type}</span>
+            <span>{contentTypeLabel(item.content_type)}</span>
             <StatusPill
               status={item.status}
               reviewedAt={item.reviewed_at}
@@ -264,13 +282,13 @@ function ItemSlideOver({
                   onClose();
                 }}
               >
-                Approve
+                {t("common.approve")}
               </Button>
             )}
             <OverflowMenu
               placement="up"
               align="left"
-              label="More review actions"
+              label={t("audit.review.moreReviewActions")}
               items={itemMenu(item, {
                 onFlag: async () => {
                   const updated = await onFlag(item);
@@ -291,20 +309,20 @@ function ItemSlideOver({
       }
     >
       {!item ? (
-        <p className="text-[15px] text-fg-muted">Loading…</p>
+        <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>
       ) : (
         <div className="space-y-7">
           {/* Builtin file content */}
           {isBuiltin && (
             <section>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-base font-semibold text-fg">Document content</p>
+                <p className="text-base font-semibold text-fg">{t("audit.review.documentContent")}</p>
                 {!editing && content != null && (
                   <button
                     onClick={() => { setEditDraft(content); setEditing(true); }}
                     className="h-9 px-2 text-sm font-medium text-accent hover:underline"
                   >
-                    Edit
+                    {t("common.edit")}
                   </button>
                 )}
               </div>
@@ -317,17 +335,17 @@ function ItemSlideOver({
                   />
                   <div className="flex gap-2">
                     <Button variant="primary" size="sm" className="!h-10" onClick={handleSaveEdit} disabled={saving}>
-                      {saving ? "Saving…" : "Save"}
+                      {saving ? t("common.saving") : t("common.save")}
                     </Button>
                     <Button variant="ghost" size="sm" className="!h-10" onClick={() => setEditing(false)}>
-                      Cancel
+                      {t("common.cancel")}
                     </Button>
                   </div>
                 </div>
               ) : contentLoading ? (
-                <p className="text-sm text-fg-subtle">Loading…</p>
+                <p className="text-sm text-fg-subtle">{t("common.loading")}</p>
               ) : contentError ? (
-                <p className="text-sm text-red-500">Could not load file content.</p>
+                <p className="text-sm text-red-500">{t("audit.review.contentLoadFailed")}</p>
               ) : content != null ? (
                 <pre className="text-sm text-fg bg-surface-overlay/50 border border-line rounded-xl p-3.5 overflow-x-auto whitespace-pre-wrap font-mono max-h-96">{content}</pre>
               ) : null}
@@ -339,18 +357,22 @@ function ItemSlideOver({
             <section>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-base font-semibold text-fg">
-                  Source content
+                  {t("audit.review.sourceContent")}
                 </p>
-                {loadingChunks && <span className="text-sm text-fg-subtle">Loading…</span>}
+                {loadingChunks && <span className="text-sm text-fg-subtle">{t("common.loading")}</span>}
               </div>
               <p className="text-sm text-fg-subtle mb-3">
-                Indexed chunks from <span className="text-fg-muted">{item.filename}</span> — this is the text the AI retrieves from this source.
+                {tRich("audit.review.indexedChunksFrom", {
+                  file: <span className="text-fg-muted">{item.filename}</span>,
+                })}
               </p>
               {!loadingChunks && externalChunks.length === 0 && (
                 <div className="bg-surface-overlay/50 border border-line rounded-xl p-4 text-center">
-                  <p className="text-sm text-fg-muted mb-1">No indexed chunks found.</p>
+                  <p className="text-sm text-fg-muted mb-1">{t("audit.review.noChunks")}</p>
                   <p className="text-sm text-fg-subtle">
-                    Run <code className="bg-surface-overlay px-1 rounded font-mono">openexecutive ingest-oer</code> to index this source.
+                    {tRich("audit.review.runIngest", {
+                      command: <code className="bg-surface-overlay px-1 rounded font-mono">openexecutive ingest-oer</code>,
+                    })}
                   </p>
                 </div>
               )}
@@ -358,8 +380,10 @@ function ItemSlideOver({
                 {externalChunks.map((chunk) => (
                   <div key={`${chunk.filename}:${chunk.chunk_index}`} className="bg-surface-overlay/50 border border-line rounded-xl p-3.5">
                     <div className="flex items-center gap-2 mb-1.5">
-                      <span className="text-xs text-fg-muted capitalize">{chunk.domain}</span>
-                      <span className="text-xs text-fg-subtle font-mono">{chunk.filename} · chunk {chunk.chunk_index}</span>
+                      <span className="text-xs text-fg-muted capitalize">{domainLabel(chunk.domain)}</span>
+                      <span className="text-xs text-fg-subtle font-mono">
+                        {t("audit.review.chunkMeta", { filename: chunk.filename, index: chunk.chunk_index })}
+                      </span>
                     </div>
                     <p className="text-sm text-fg leading-relaxed">{chunk.text}</p>
                   </div>
@@ -371,7 +395,7 @@ function ItemSlideOver({
                   disabled={loadingChunks}
                   className="mt-3 h-10 text-sm font-medium text-accent hover:underline disabled:opacity-40"
                 >
-                  Load 10 more chunks…
+                  {t("audit.review.loadMoreChunks")}
                 </button>
               )}
             </section>
@@ -379,20 +403,20 @@ function ItemSlideOver({
 
           {/* Notes */}
           <section>
-            <p className="text-base font-semibold text-fg mb-2">Reviewer notes</p>
+            <p className="text-base font-semibold text-fg mb-2">{t("audit.review.reviewerNotes")}</p>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               onBlur={handleSaveNotes}
-              placeholder="Add your review notes here…"
+              placeholder={t("audit.review.notesPlaceholder")}
               className="w-full h-24 bg-surface-elevated border border-line-strong rounded-xl px-3 py-2 text-[15px] text-fg resize-none focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-fg-subtle"
             />
           </section>
 
           {/* Annotations */}
           <section>
-            <p className="text-base font-semibold text-fg">SME corrections</p>
-            <p className="text-sm text-fg-subtle mb-2">Injected into AI retrieval context.</p>
+            <p className="text-base font-semibold text-fg">{t("audit.review.smeCorrections")}</p>
+            <p className="text-sm text-fg-subtle mb-2">{t("audit.review.smeHint")}</p>
             <div className="space-y-2">
               {annotations.map((ann) => (
                 <div
@@ -406,19 +430,19 @@ function ItemSlideOver({
                         aria-hidden
                         className={`h-2 w-2 rounded-full ${ann.is_active ? "bg-emerald-500" : "bg-fg-subtle"}`}
                       />
-                      {ann.is_active ? "Active" : "Inactive"}
+                      {ann.is_active ? t("audit.review.active") : t("audit.review.inactive")}
                     </p>
                   </div>
                   <OverflowMenu
                     size="sm"
-                    label="Correction actions"
+                    label={t("audit.review.correctionActions")}
                     items={[
                       {
-                        label: ann.is_active ? "Turn off" : "Turn on",
+                        label: ann.is_active ? t("audit.review.turnOff") : t("audit.review.turnOn"),
                         onSelect: () => void handleToggleAnnotation(ann),
                       },
                       {
-                        label: "Delete",
+                        label: t("common.delete"),
                         danger: true,
                         onSelect: () => void handleDeleteAnnotation(ann.annotation_id),
                       },
@@ -431,15 +455,15 @@ function ItemSlideOver({
                   value={newCorrection}
                   onChange={(e) => setNewCorrection(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleAddAnnotation(); } }}
-                  placeholder="Add a correction or clarification…"
-                  aria-label="New correction"
+                  placeholder={t("audit.review.correctionPlaceholder")}
+                  aria-label={t("audit.review.newCorrection")}
                   className="flex-1 min-w-0 h-11 bg-surface-elevated border border-line-strong rounded-xl px-3 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-fg-subtle"
                 />
                 <Button
                   onClick={handleAddAnnotation}
                   disabled={addingAnnotation || !newCorrection.trim()}
                 >
-                  Add
+                  {t("common.add")}
                 </Button>
               </div>
             </div>
@@ -572,9 +596,7 @@ export default function ReviewQueue() {
     if (action === "start") {
       const n = trustedDefaults[domain] ?? 0;
       const ok = window.confirm(
-        `Queue ${n} item${n === 1 ? "" : "s"} in "${domain}" for review?\n\n` +
-          `They will be withheld from the Executive until you approve them. ` +
-          `You can undo this with "Stop curating".`,
+        tp("audit.review.curateConfirm", n, { domain: domainLabel(domain) }),
       );
       if (!ok) return;
     }
@@ -631,19 +653,18 @@ export default function ReviewQueue() {
     <div className="max-w-4xl">
       <div className="mb-5 max-w-2xl">
         <p className="text-[15px] text-fg-muted">
-          Approve, reject, or correct knowledge before the Executive relies on it.
-          Pending and rejected items are withheld from retrieval.
+          {t("audit.review.intro")}
         </p>
       </div>
       <SectionTabs
-        label="Review"
+        label={t("audit.review.tabsLabel")}
         className="mb-6"
         active={tab}
         onChange={setTab}
         tabs={[
-          { id: "queue", label: "To review" },
-          { id: "all", label: "All items" },
-          { id: "annotations", label: "Annotations" },
+          { id: "queue", label: t("audit.review.tab.queue") },
+          { id: "all", label: t("audit.review.tab.all") },
+          { id: "annotations", label: t("audit.review.tab.annotations") },
         ]}
       />
 
@@ -652,40 +673,36 @@ export default function ReviewQueue() {
         <div>
           <div className="flex items-center justify-between gap-3 mb-4">
             <p className="text-[15px] text-fg-muted">
-              {loading ? "Loading…" : `${items.length} item${items.length !== 1 ? "s" : ""} need review`}
+              {loading ? t("common.loading") : tp("audit.review.needReview", items.length)}
             </p>
             {items.length > 0 && (
-              <Button onClick={() => handleBulkApprove()}>Approve all pending</Button>
+              <Button onClick={() => handleBulkApprove()}>{t("audit.review.approveAllPending")}</Button>
             )}
           </div>
           {!loading && items.length === 0 && (
             <div className="rounded-2xl border border-line bg-surface-elevated px-5 py-10 sm:px-8">
               <div className="max-w-xl mx-auto text-center">
-                <p className="text-lg font-semibold text-fg">Nothing waiting on you.</p>
+                <p className="text-lg font-semibold text-fg">{t("audit.review.emptyTitle")}</p>
                 <p className="text-[15px] text-fg-muted mt-2 leading-relaxed">
-                  The knowledge that ships with Open Executive is trusted by default — the
-                  Executive can use it right away, and it does not sit here waiting for
-                  sign-off. Items appear in this queue when you upload something new, edit an
-                  existing file, or deliberately send a domain for review.
+                  {t("audit.review.emptyBody")}
                 </p>
               </div>
               {curatable.length > 0 && (
                 <div className="mt-8 max-w-xl mx-auto border-t border-line pt-6">
-                  <p className="text-base font-semibold text-fg">Review a domain yourself</p>
+                  <p className="text-base font-semibold text-fg">{t("audit.review.curateTitle")}</p>
                   <p className="text-sm text-fg-muted mt-1 mb-3 leading-relaxed">
-                    Sending a domain for review withholds it from the Executive until you
-                    work through it.
+                    {t("audit.review.curateBody")}
                   </p>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <select
                       value={curateDomainPick}
                       onChange={(e) => setBulkDomain(e.target.value)}
-                      aria-label="Domain to review"
+                      aria-label={t("audit.review.domainToReview")}
                       className={`${SELECT_CLASS} !h-11 flex-1 capitalize`}
                     >
                       {curatable.map((domain) => (
                         <option key={domain} value={domain}>
-                          {domain} ({trustedDefaults[domain]})
+                          {domainLabel(domain)} ({trustedDefaults[domain]})
                         </option>
                       ))}
                     </select>
@@ -693,7 +710,7 @@ export default function ReviewQueue() {
                       onClick={() => curateDomainPick && handleCurate(curateDomainPick, "start")}
                       disabled={!curateDomainPick}
                     >
-                      Curate {curateDomainPick}
+                      {t("audit.review.curate", { domain: domainLabel(curateDomainPick) })}
                     </Button>
                   </div>
                 </div>
@@ -716,34 +733,34 @@ export default function ReviewQueue() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as ReviewStatus | "")}
-              aria-label="Status"
+              aria-label={t("audit.review.status")}
               className={SELECT_CLASS}
             >
-              <option value="">All statuses</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="needs_revision">Needs revision</option>
+              <option value="">{t("audit.review.allStatuses")}</option>
+              <option value="pending">{t("audit.review.status.pending")}</option>
+              <option value="approved">{t("audit.review.status.approved")}</option>
+              <option value="rejected">{t("audit.review.status.rejected")}</option>
+              <option value="needs_revision">{t("audit.review.status.needsRevision")}</option>
             </select>
             <select
               value={filterDomain}
               onChange={(e) => setFilterDomain(e.target.value)}
-              aria-label="Domain"
+              aria-label={t("audit.knowledge.domain")}
               className={SELECT_CLASS}
             >
-              <option value="">All domains</option>
-              {domains.map((d) => <option key={d} value={d}>{d}</option>)}
+              <option value="">{t("audit.review.allDomains")}</option>
+              {domains.map((d) => <option key={d} value={d}>{domainLabel(d)}</option>)}
             </select>
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value as "builtin" | "external" | "")}
-              aria-label="Type"
+              aria-label={t("audit.review.typeLabel")}
               className={SELECT_CLASS}
             >
-              <option value="">All types</option>
-              <option value="builtin">Built-in</option>
-              <option value="failure">Failure case studies</option>
-              <option value="external">Reference library</option>
+              <option value="">{t("audit.review.allTypes")}</option>
+              <option value="builtin">{t("audit.review.filter.builtin")}</option>
+              <option value="failure">{t("audit.review.filter.failure")}</option>
+              <option value="external">{t("audit.review.filter.external")}</option>
             </select>
           </div>
 
@@ -751,18 +768,20 @@ export default function ReviewQueue() {
               start / stop curating it. */}
           {domains.length > 0 && (
             <div className="mb-5 flex flex-col sm:flex-row sm:items-center gap-2 rounded-2xl border border-line bg-surface-overlay/50 px-4 py-3">
-              <span className="text-sm font-semibold text-fg">Bulk actions</span>
+              <span className="text-sm font-semibold text-fg">{t("audit.review.bulkActions")}</span>
               <select
                 value={activeBulkDomain}
                 onChange={(e) => setBulkDomain(e.target.value)}
-                aria-label="Domain for bulk actions"
+                aria-label={t("audit.review.bulkDomain")}
                 className={`${SELECT_CLASS} capitalize`}
               >
-                {domains.map((d) => <option key={d} value={d}>{d}</option>)}
+                {domains.map((d) => <option key={d} value={d}>{domainLabel(d)}</option>)}
               </select>
               <div className="flex items-center gap-2 flex-wrap sm:ml-auto">
                 {bulkActions.length === 0 ? (
-                  <span className="text-sm text-fg-subtle">Nothing to do in {activeBulkDomain}.</span>
+                  <span className="text-sm text-fg-subtle">
+                    {t("audit.review.nothingToDo", { domain: domainLabel(activeBulkDomain) })}
+                  </span>
                 ) : (
                   bulkActions.map((a) => (
                     <Button key={a.kind} size="sm" className="!h-10" title={a.detail} onClick={() => runBulk(a)}>
@@ -774,13 +793,13 @@ export default function ReviewQueue() {
             </div>
           )}
 
-          {loading && <p className="text-[15px] text-fg-subtle">Loading…</p>}
+          {loading && <p className="text-[15px] text-fg-subtle">{t("common.loading")}</p>}
           <div className="space-y-2">
             {allItems.map((item) => (
               <ItemRow key={item.item_id} {...rowProps(item)} />
             ))}
             {!loading && allItems.length === 0 && (
-              <p className="text-[15px] text-fg-subtle py-8 text-center">No items match the filters.</p>
+              <p className="text-[15px] text-fg-subtle py-8 text-center">{t("audit.review.noItemsMatch")}</p>
             )}
           </div>
         </div>
@@ -790,31 +809,31 @@ export default function ReviewQueue() {
       {tab === "annotations" && (
         <div>
           <p className="text-[15px] text-fg-muted mb-4">
-            {loading ? "Loading…" : `${annotations.length} active SME correction${annotations.length !== 1 ? "s" : ""}`}
+            {loading ? t("common.loading") : tp("audit.review.activeCorrections", annotations.length)}
           </p>
           <div className="space-y-2">
             {annotations.map((ann) => (
               <div key={ann.annotation_id} className="bg-surface-elevated border border-line rounded-2xl px-4 py-3.5 flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap text-xs text-fg-muted">
-                    <span className="capitalize font-medium">{ann.domain}</span>
+                    <span className="capitalize font-medium">{domainLabel(ann.domain)}</span>
                     <span className="text-fg-subtle break-all">{ann.item_id}</span>
                   </div>
                   <p className="text-[15px] text-fg">{ann.correction}</p>
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-fg-muted">
                     <span aria-hidden className="h-2 w-2 rounded-full bg-emerald-500" />
-                    Active
+                    {t("audit.review.active")}
                   </p>
                 </div>
                 <OverflowMenu
-                  label="Correction actions"
+                  label={t("audit.review.correctionActions")}
                   items={[
                     {
-                      label: "Turn off",
+                      label: t("audit.review.turnOff"),
                       onSelect: () => void patchAnnotation(ann.annotation_id, { is_active: false }).then(loadAnnotations),
                     },
                     {
-                      label: "Delete",
+                      label: t("common.delete"),
                       danger: true,
                       onSelect: () => void deleteAnnotation(ann.annotation_id).then(loadAnnotations),
                     },
@@ -823,7 +842,7 @@ export default function ReviewQueue() {
               </div>
             ))}
             {!loading && annotations.length === 0 && (
-              <p className="text-[15px] text-fg-subtle py-8 text-center">No active corrections. Open a review item to add one.</p>
+              <p className="text-[15px] text-fg-subtle py-8 text-center">{t("audit.review.noCorrections")}</p>
             )}
           </div>
         </div>
@@ -836,24 +855,24 @@ export default function ReviewQueue() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Reject item"
+            aria-label={t("audit.review.rejectItem")}
             className="relative bg-surface-elevated border border-line rounded-2xl p-5 w-full max-w-md shadow-2xl"
           >
-            <p className="text-lg font-semibold text-fg mb-3">Reject item</p>
+            <p className="text-lg font-semibold text-fg mb-3">{t("audit.review.rejectItem")}</p>
             <textarea
               value={rejectModal.notes}
               onChange={(e) => setRejectModal({ ...rejectModal, notes: e.target.value })}
-              placeholder="Optional notes about why this is rejected…"
-              aria-label="Why it is rejected"
+              placeholder={t("audit.review.rejectPlaceholder")}
+              aria-label={t("audit.review.rejectReason")}
               autoFocus
               className="w-full h-28 bg-surface-elevated border border-line-strong rounded-xl px-3 py-2 text-[15px] text-fg resize-none focus:outline-none focus:ring-2 focus:ring-red-500/40 placeholder:text-fg-subtle mb-4"
             />
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" onClick={() => setRejectModal(null)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button variant="danger" onClick={handleRejectConfirm}>
-                Reject
+                {t("common.reject")}
               </Button>
             </div>
           </div>
@@ -910,29 +929,29 @@ function ItemRow({
           {item.filename}
         </button>
         <div className="mt-1 flex items-center gap-2 flex-wrap text-sm text-fg-muted">
-          <span className="capitalize">{item.domain}</span>
+          <span className="capitalize">{domainLabel(item.domain)}</span>
           <StatusPill
             status={item.status}
             reviewedAt={item.reviewed_at}
             trustedDefault={item.trusted_default}
           />
           <PriorityPill priority={item.priority} />
-          <span className="text-fg-subtle">Added {formatDate(item.registered_at)}</span>
+          <span className="text-fg-subtle">{t("audit.company.added", { date: formatDate(item.registered_at) })}</span>
         </div>
       </div>
 
       <div className="flex items-center gap-1 flex-shrink-0">
         {item.status !== "approved" ? (
           <Button variant="primary" size="sm" className="!h-10" onClick={onApprove}>
-            Approve
+            {t("common.approve")}
           </Button>
         ) : (
           <Button size="sm" className="!h-10" onClick={onView}>
-            View
+            {t("audit.company.view")}
           </Button>
         )}
         <OverflowMenu
-          label={`More actions for ${item.filename}`}
+          label={t("audit.company.moreActionsFor", { name: item.filename })}
           items={itemMenu(item, {
             onView: item.status !== "approved" ? onView : undefined,
             onFlag,

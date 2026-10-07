@@ -18,9 +18,17 @@ import {
 import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import SectionTabs from "@/components/ui/SectionTabs";
+import { t, type MessageKey } from "@/i18n/index.ts";
 import CorrectionsTab from "./CorrectionsTab";
 import HistoryTab from "./HistoryTab";
-import { DOMAINS, STATUSES, EmptyState, formatDate } from "./shared";
+import {
+  DOMAINS,
+  STATUSES,
+  EmptyState,
+  domainLabel,
+  formatDate,
+  initiativeStatusLabel,
+} from "./shared";
 
 type MemoryTab = "decisions" | "initiatives" | "advice" | "corrections" | "history";
 
@@ -32,7 +40,13 @@ export const MEMORY_TABS: readonly MemoryTab[] = [
   "history",
 ];
 
-const MEMORY_EMPTY = "No memories yet — they're extracted automatically after chats.";
+const TAB_LABEL: Record<MemoryTab, MessageKey> = {
+  decisions: "people.memory.tab.decisions",
+  initiatives: "people.memory.tab.initiatives",
+  advice: "people.memory.tab.advice",
+  corrections: "people.memory.tab.corrections",
+  history: "people.memory.tab.history",
+};
 
 // ---------------------------------------------------------------------------
 // Section shell — the "what it knows" half of the Pulse page.
@@ -84,19 +98,19 @@ export default function MemorySection() {
     if (wanted && (MEMORY_TABS as readonly string[]).includes(wanted)) setTab(wanted as MemoryTab);
   }, []);
 
-  const tabs: MemoryTab[] = MEMORY_TABS.filter((t) => !(t === "history" && historyEnabled === false));
+  const tabs: MemoryTab[] = MEMORY_TABS.filter((id) => !(id === "history" && historyEnabled === false));
 
   return (
     <div>
       <SectionTabs
-        label="Memory"
+        label={t("people.pulse.memory")}
         className="mb-4"
         active={tab}
         onChange={setTab}
-        tabs={tabs.map((t) => ({
-          id: t,
-          label: t.charAt(0).toUpperCase() + t.slice(1),
-          badge: counts[t],
+        tabs={tabs.map((id) => ({
+          id,
+          label: t(TAB_LABEL[id]),
+          badge: counts[id],
         }))}
       />
 
@@ -147,18 +161,18 @@ function DecisionsTab({ onCount }: { onCount: (n: number) => void }) {
   }, [refresh]);
 
   const handleDelete = useCallback(async (id: number) => {
-    if (!window.confirm("Delete this memory? This cannot be undone.")) return;
+    if (!window.confirm(t("people.memory.deleteConfirm"))) return;
     try {
       await deleteDecision(id);
     } catch {
-      window.alert("Failed to delete.");
+      window.alert(t("people.memory.deleteFailed"));
       return;
     }
     void refresh();
   }, [refresh]);
 
-  if (loading) return <div className="text-fg-muted text-[15px] py-4">Loading…</div>;
-  if (items.length === 0) return <EmptyState message={MEMORY_EMPTY} />;
+  if (loading) return <div className="text-fg-muted text-[15px] py-4">{t("common.loading")}</div>;
+  if (items.length === 0) return <EmptyState message={t("people.memory.empty")} />;
 
   return (
     <div className="divide-y divide-line">
@@ -173,7 +187,7 @@ function DecisionsTab({ onCount }: { onCount: (n: number) => void }) {
             try {
               await updateDecision(d.id, patch);
             } catch {
-              window.alert("Failed to save.");
+              window.alert(t("people.memory.saveFailed"));
               return;
             }
             setEditingId(null);
@@ -221,16 +235,16 @@ function DecisionRow({
     <div className="py-3.5">
       <div className="flex items-center justify-between gap-3 mb-1">
         <div className="flex items-center gap-2 text-sm text-fg-muted">
-          <span className="px-2 py-0.5 rounded-lg bg-surface-overlay text-fg font-medium capitalize">{editing ? domain : decision.domain}</span>
+          <span className="px-2 py-0.5 rounded-lg bg-surface-overlay text-fg font-medium capitalize">{domainLabel(editing ? domain : decision.domain)}</span>
           <span>{formatDate(decision.timestamp)}</span>
         </div>
         {!editing && (
           <OverflowMenu
             size="sm"
-            label="Memory actions"
+            label={t("people.memory.actions")}
             items={[
-              { label: "Edit", onSelect: onEdit },
-              { label: "Delete", danger: true, onSelect: onDelete },
+              { label: t("common.edit"), onSelect: onEdit },
+              { label: t("common.delete"), danger: true, onSelect: onDelete },
             ]}
           />
         )}
@@ -242,19 +256,19 @@ function DecisionRow({
             onChange={(e) => setDomain(e.target.value)}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           >
-            {DOMAINS.map((d) => <option key={d} value={d}>{d}</option>)}
+            {DOMAINS.map((d) => <option key={d} value={d}>{domainLabel(d)}</option>)}
           </select>
           <input
             type="text"
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
-            placeholder="Summary"
+            placeholder={t("people.memory.summary")}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           <textarea
             value={rationale}
             onChange={(e) => setRationale(e.target.value)}
-            placeholder="Rationale"
+            placeholder={t("people.memory.rationale")}
             rows={2}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
@@ -262,29 +276,29 @@ function DecisionRow({
             type="text"
             value={outcome}
             onChange={(e) => setOutcome(e.target.value)}
-            placeholder="Outcome"
+            placeholder={t("people.memory.outcome")}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           <input
             type="text"
             value={tags}
             onChange={(e) => setTags(e.target.value)}
-            placeholder="Tags"
+            placeholder={t("people.memory.tags")}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" size="sm" className="!h-10" onClick={onCancel}>Cancel</Button>
+            <Button variant="ghost" size="sm" className="!h-10" onClick={onCancel}>{t("common.cancel")}</Button>
             <Button variant="primary" size="sm" className="!h-10" onClick={() => onSave({ domain, summary, rationale, outcome, tags })}>
-              Save
+              {t("common.save")}
             </Button>
           </div>
         </div>
       ) : (
         <div className="space-y-1">
           <div className="text-[15px] font-medium text-fg line-clamp-2" title={decision.summary}>{decision.summary}</div>
-          {decision.rationale && <div className="text-sm text-fg-muted line-clamp-2" title={`Rationale: ${decision.rationale}`}><span className="text-fg-muted">Rationale: </span>{decision.rationale}</div>}
-          {decision.outcome && <div className="text-sm text-fg-muted line-clamp-2" title={`Outcome: ${decision.outcome}`}><span className="text-fg-muted">Outcome: </span>{decision.outcome}</div>}
-          {decision.tags && <div className="text-sm text-fg-subtle truncate" title={`Tags: ${decision.tags}`}>Tags: {decision.tags}</div>}
+          {decision.rationale && <div className="text-sm text-fg-muted line-clamp-2" title={t("people.memory.rationaleLine", { text: decision.rationale })}><span className="text-fg-muted">{t("people.memory.rationalePrefix")}</span>{decision.rationale}</div>}
+          {decision.outcome && <div className="text-sm text-fg-muted line-clamp-2" title={t("people.memory.outcomeLine", { text: decision.outcome })}><span className="text-fg-muted">{t("people.memory.outcomePrefix")}</span>{decision.outcome}</div>}
+          {decision.tags && <div className="text-sm text-fg-subtle truncate" title={t("people.memory.tagsLine", { text: decision.tags })}>{t("people.memory.tagsLine", { text: decision.tags })}</div>}
         </div>
       )}
     </div>
@@ -316,18 +330,18 @@ function InitiativesTab({ onCount }: { onCount: (n: number) => void }) {
   }, [refresh]);
 
   const handleDelete = useCallback(async (id: number) => {
-    if (!window.confirm("Delete this memory? This cannot be undone.")) return;
+    if (!window.confirm(t("people.memory.deleteConfirm"))) return;
     try {
       await deleteInitiative(id);
     } catch {
-      window.alert("Failed to delete.");
+      window.alert(t("people.memory.deleteFailed"));
       return;
     }
     void refresh();
   }, [refresh]);
 
-  if (loading) return <div className="text-fg-muted text-[15px] py-4">Loading…</div>;
-  if (items.length === 0) return <EmptyState message={MEMORY_EMPTY} />;
+  if (loading) return <div className="text-fg-muted text-[15px] py-4">{t("common.loading")}</div>;
+  if (items.length === 0) return <EmptyState message={t("people.memory.empty")} />;
 
   return (
     <div className="divide-y divide-line">
@@ -342,7 +356,7 @@ function InitiativesTab({ onCount }: { onCount: (n: number) => void }) {
             try {
               await updateInitiative(it.id, patch);
             } catch {
-              window.alert("Failed to save.");
+              window.alert(t("people.memory.saveFailed"));
               return;
             }
             setEditingId(null);
@@ -386,16 +400,16 @@ function InitiativeRow({
     <div className="py-3.5">
       <div className="flex items-center justify-between gap-3 mb-1">
         <div className="flex items-center gap-2 text-sm text-fg-muted">
-          <span className="px-2 py-0.5 rounded-lg bg-surface-overlay text-fg font-medium capitalize">{editing ? status : initiative.status}</span>
-          <span>updated {formatDate(initiative.updated_at)}</span>
+          <span className="px-2 py-0.5 rounded-lg bg-surface-overlay text-fg font-medium capitalize">{initiativeStatusLabel(editing ? status : initiative.status)}</span>
+          <span>{t("people.memory.updated", { date: formatDate(initiative.updated_at) })}</span>
         </div>
         {!editing && (
           <OverflowMenu
             size="sm"
-            label="Memory actions"
+            label={t("people.memory.actions")}
             items={[
-              { label: "Edit", onSelect: onEdit },
-              { label: "Delete", danger: true, onSelect: onDelete },
+              { label: t("common.edit"), onSelect: onEdit },
+              { label: t("common.delete"), danger: true, onSelect: onDelete },
             ]}
           />
         )}
@@ -406,7 +420,7 @@ function InitiativeRow({
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title"
+            placeholder={t("people.memory.title")}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           <select
@@ -414,19 +428,19 @@ function InitiativeRow({
             onChange={(e) => setStatus(e.target.value)}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           >
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {STATUSES.map((s) => <option key={s} value={s}>{initiativeStatusLabel(s)}</option>)}
           </select>
           <textarea
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
-            placeholder="Summary"
+            placeholder={t("people.memory.summary")}
             rows={2}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" size="sm" className="!h-10" onClick={onCancel}>Cancel</Button>
+            <Button variant="ghost" size="sm" className="!h-10" onClick={onCancel}>{t("common.cancel")}</Button>
             <Button variant="primary" size="sm" className="!h-10" onClick={() => onSave({ title, status, summary })}>
-              Save
+              {t("common.save")}
             </Button>
           </div>
         </div>
@@ -465,18 +479,18 @@ function AdviceTab({ onCount }: { onCount: (n: number) => void }) {
   }, [refresh]);
 
   const handleDelete = useCallback(async (id: number) => {
-    if (!window.confirm("Delete this memory? This cannot be undone.")) return;
+    if (!window.confirm(t("people.memory.deleteConfirm"))) return;
     try {
       await deleteAdvice(id);
     } catch {
-      window.alert("Failed to delete.");
+      window.alert(t("people.memory.deleteFailed"));
       return;
     }
     void refresh();
   }, [refresh]);
 
-  if (loading) return <div className="text-fg-muted text-[15px] py-4">Loading…</div>;
-  if (items.length === 0) return <EmptyState message={MEMORY_EMPTY} />;
+  if (loading) return <div className="text-fg-muted text-[15px] py-4">{t("common.loading")}</div>;
+  if (items.length === 0) return <EmptyState message={t("people.memory.empty")} />;
 
   return (
     <div className="divide-y divide-line">
@@ -491,7 +505,7 @@ function AdviceTab({ onCount }: { onCount: (n: number) => void }) {
             try {
               await updateAdvice(a.id, patch);
             } catch {
-              window.alert("Failed to save.");
+              window.alert(t("people.memory.saveFailed"));
               return;
             }
             setEditingId(null);
@@ -535,16 +549,16 @@ function AdviceRow({
     <div className="py-3.5">
       <div className="flex items-center justify-between gap-3 mb-1">
         <div className="flex items-center gap-2 text-sm text-fg-muted">
-          <span className="px-2 py-0.5 rounded-lg bg-surface-overlay text-fg font-medium capitalize">{editing ? domain : advice.domain}</span>
+          <span className="px-2 py-0.5 rounded-lg bg-surface-overlay text-fg font-medium capitalize">{domainLabel(editing ? domain : advice.domain)}</span>
           <span>{formatDate(advice.timestamp)}</span>
         </div>
         {!editing && (
           <OverflowMenu
             size="sm"
-            label="Memory actions"
+            label={t("people.memory.actions")}
             items={[
-              { label: "Edit", onSelect: onEdit },
-              { label: "Delete", danger: true, onSelect: onDelete },
+              { label: t("common.edit"), onSelect: onEdit },
+              { label: t("common.delete"), danger: true, onSelect: onDelete },
             ]}
           />
         )}
@@ -556,32 +570,32 @@ function AdviceRow({
             onChange={(e) => setDomain(e.target.value)}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           >
-            {DOMAINS.map((d) => <option key={d} value={d}>{d}</option>)}
+            {DOMAINS.map((d) => <option key={d} value={d}>{domainLabel(d)}</option>)}
           </select>
           <input
             type="text"
             value={querySummary}
             onChange={(e) => setQuerySummary(e.target.value)}
-            placeholder="What the user asked"
+            placeholder={t("people.memory.whatAsked")}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           <textarea
             value={adviceSummary}
             onChange={(e) => setAdviceSummary(e.target.value)}
-            placeholder="Advice given"
+            placeholder={t("people.memory.adviceGiven")}
             rows={3}
             className="w-full bg-surface border border-line rounded-xl px-3 py-2.5 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" size="sm" className="!h-10" onClick={onCancel}>Cancel</Button>
+            <Button variant="ghost" size="sm" className="!h-10" onClick={onCancel}>{t("common.cancel")}</Button>
             <Button variant="primary" size="sm" className="!h-10" onClick={() => onSave({ domain, query_summary: querySummary, advice_summary: adviceSummary })}>
-              Save
+              {t("common.save")}
             </Button>
           </div>
         </div>
       ) : (
         <div className="space-y-1">
-          <div className="text-sm text-fg-muted line-clamp-2" title={`Q: ${advice.query_summary}`}>Q: {advice.query_summary}</div>
+          <div className="text-sm text-fg-muted line-clamp-2" title={t("people.memory.question", { text: advice.query_summary })}>{t("people.memory.question", { text: advice.query_summary })}</div>
           <div className="text-[15px] text-fg line-clamp-2" title={advice.advice_summary}>{advice.advice_summary}</div>
         </div>
       )}

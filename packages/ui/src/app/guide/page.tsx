@@ -4,33 +4,44 @@ import { useEffect, useRef, useState } from 'react';
 
 import DynamicSection from '@/components/architecture/DynamicSection';
 import PageSideNav from '@/components/shell/PageSideNav';
+import { t } from '@/i18n/index.ts';
 
 // The section nav is hardcoded so the sidebar renders instantly without
 // waiting for the backend. IDs must match the GUIDE_SECTIONS registry in
 // packages/core/openexecutive/guide/sections.py.
-const SECTIONS = [
-  { id: 'chat', label: 'Chat & Briefing', sub: "The main surface — talk to the Executive, and land on a briefing of what's happened." },
-  { id: 'ask_oe', label: 'Ask OE', sub: 'The page-aware assistant panel — explains any screen and fills forms for you to review.' },
-  { id: 'today', label: 'Today / Morning Brief', sub: 'What needs you right now: proposals, department health, and people with open items.' },
-  { id: 'pulse', label: 'Pulse (Memory)', sub: "The Executive's running memory — decisions made, initiatives in flight, advice gathered, corrections kept." },
-  { id: 'review', label: 'Review Queue', sub: 'On Knowledge, under Advanced. Built-in knowledge is trusted by default. Review what you upload or edit, or send a domain for review yourself.' },
-  { id: 'jobs', label: 'Workflows', sub: 'Multi-step workflows that produce a deliverable — board prep, GTM plan, perf review.' },
-  { id: 'artifacts', label: 'Documents', sub: 'Your library of finished documents — drafts and workflow outputs in one place.' },
-  { id: 'watchlist', label: 'Watch List', sub: 'External monitors — stock tickers, RSS feeds, status pages, web queries — that raise alerts.' },
-  { id: 'departments', label: 'Departments', sub: 'Org units, each with goals, an authority level, and a specialist behind it.' },
-  { id: 'people', label: 'People', sub: 'Your roster — who the Executive coordinates with, their SLAs, channels, and approval scopes.' },
-  { id: 'company_profile', label: 'Company Profile & Onboarding', sub: "Your company's identity and strategy — set up once, edited any time." },
-  { id: 'knowledge', label: 'Knowledge base', sub: 'Upload company documents so the Executive can ground its answers in your context.' },
-  { id: 'skills', label: 'Playbooks', sub: 'How the Executive does a piece of work — methods, templates, checklists. A tab on Workflows.' },
-  { id: 'custom_tools', label: 'Custom Tools', sub: "When the Executive lacks a tool, it builds one — and keeps the ones it will need again." },
-  { id: 'council', label: 'Agent Council', sub: "Configure the specialists — models, prompts, reasoning depth, and the Executive's voice." },
-  { id: 'audit', label: 'Audit Log', sub: 'A searchable record of every turn, consult, tool call, alert, and scheduled action.' },
-  { id: 'token_usage', label: 'Token Usage', sub: 'Where your spend goes — tokens and cost by day, model, and session.' },
-  { id: 'simulator', label: 'Company Simulator', sub: 'Load a realistic test company to try the Executive before trusting it with real data.' },
-  { id: 'clients', label: 'Client Companies', sub: 'Multi-client mode for fractional work — switch the live company between named client slots.' },
-  { id: 'integrations', label: 'Integrations', sub: 'Reach the Executive where you already work — Slack, Discord, Telegram, email, Google Chat, MCP.' },
-  { id: 'settings', label: 'Settings & Advanced', sub: 'Your Executive, workspace, Act as me, and the Advanced tools outside the day-to-day nav — including this guide.' },
-];
+const SECTION_IDS = [
+  'chat',
+  'ask_oe',
+  'today',
+  'pulse',
+  'review',
+  'jobs',
+  'artifacts',
+  'watchlist',
+  'departments',
+  'people',
+  'company_profile',
+  'knowledge',
+  'skills',
+  'custom_tools',
+  'council',
+  'audit',
+  'token_usage',
+  'simulator',
+  'clients',
+  'integrations',
+  'settings',
+] as const;
+
+const SECTIONS = SECTION_IDS.map((id) => ({
+  id,
+  get label() {
+    return t(`misc.guide.section.${id}.title`);
+  },
+  get sub() {
+    return t(`misc.guide.section.${id}.sub`);
+  },
+}));
 
 interface SectionMeta {
   id: string;
@@ -76,14 +87,14 @@ export default function GuidePage() {
   return (
     <div className="flex flex-col md:flex-row flex-1 min-h-0 bg-surface text-fg overflow-hidden">
       <PageSideNav
-        label="Section"
+        label={t('misc.architecture.section')}
         current={SECTIONS.find((s) => s.id === activeSection)?.label}
         closeKey={activeSection}
         className="md:w-52 bg-surface-elevated"
       >
         <div className="px-3 py-4">
           <p className="px-2 text-[10px] font-semibold uppercase tracking-widest text-fg-subtle mb-2">
-            User Guide
+            {t('misc.guide.navTitle')}
           </p>
           <nav className="space-y-0.5">
             {SECTIONS.map(({ id, label }) => {
@@ -114,15 +125,14 @@ export default function GuidePage() {
 
         <div className="mt-auto px-4 py-4 border-t border-line space-y-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle mb-2">
-            Reference
+            {t('misc.architecture.reference')}
           </p>
           <div className="flex justify-between text-xs">
-            <span className="text-fg-subtle">Features</span>
+            <span className="text-fg-subtle">{t('misc.guide.features')}</span>
             <span className="text-fg-muted font-mono">{freshCount} / {totalCount}</span>
           </div>
           <p className="text-[10px] text-fg-subtle leading-relaxed">
-            Plain-language overviews of what each feature is and what it does. For how the system is
-            built, see the Architecture reference.
+            {t('misc.guide.navBlurb')}
           </p>
         </div>
       </PageSideNav>
@@ -130,11 +140,9 @@ export default function GuidePage() {
       <main className="flex-1 min-h-0 min-w-0 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 py-6 sm:px-8 sm:py-10 space-y-12 sm:space-y-20">
           <div>
-            <h1 className="text-2xl font-bold text-fg">Open Executive — User Guide</h1>
+            <h1 className="text-2xl font-bold text-fg">{t('misc.guide.title')}</h1>
             <p className="mt-2 text-sm text-fg-muted">
-              A quick tour of every feature: what it is, and what it does for you. Not a manual —
-              just enough to know where to go and why. For the technical internals, see the
-              Architecture reference.
+              {t('misc.guide.intro')}
             </p>
           </div>
 

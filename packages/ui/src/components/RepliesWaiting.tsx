@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import Button, { buttonClass } from "@/components/ui/Button";
+import { t } from "@/i18n/index.ts";
 import {
   dismissReplyCard,
   getReplyCards,
@@ -78,11 +79,9 @@ export function useReplyCards() {
 }
 
 // What the Replies-waiting cards are, for the Needs you header's tip.
-export const REPLIES_WAITING_TIP =
-  "Mail that needs you, with a first reply the Executive wrote in your voice. Each " +
-  "draft is in your own Drafts, and nothing is sent until you tap Send: it sends that " +
-  "draft exactly as it is in your mailbox, so edit it there first if you want to change it. " +
-  "Dismiss deletes the draft, unless you've edited it there. Only you see these.";
+export function repliesWaitingTip(): string {
+  return t("briefing.replies.tip");
+}
 
 // What the row is doing: idle, asking before sending (first or second
 // time), or waiting on the backend.
@@ -118,24 +117,27 @@ export function ReplyCardItem({
   const followUp = card.source === "follow_up";
 
   const dismiss = async () => {
-    setStep({ kind: "busy", label: "Dismissing…" });
+    setStep({ kind: "busy", label: t("briefing.replies.dismissing") });
     setError(null);
     try {
       await dismissReplyCard(card.decision_id);
       onGone(card.decision_id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't dismiss that reply.");
+      setError(err instanceof Error ? err.message : t("briefing.replies.dismissFailed"));
       setStep({ kind: "idle" });
     }
   };
 
   const send = async (confirm: { recipients: string[]; thread_moved_on?: boolean }) => {
-    setStep({ kind: "busy", label: "Sending…" });
+    setStep({ kind: "busy", label: t("briefing.replies.sending") });
     setError(null);
     try {
       const result = await sendReplyCard(card.decision_id, confirm);
       if (result.status === "sent") {
-        onGone(card.decision_id, followUp ? `Sent your follow-up to ${who}.` : `Sent your reply to ${who}.`);
+        onGone(
+          card.decision_id,
+          followUp ? t("briefing.replies.sentFollowUp", { who }) : t("briefing.replies.sentReply", { who }),
+        );
         return;
       }
       setStep({
@@ -146,7 +148,7 @@ export function ReplyCardItem({
       });
     } catch (err) {
       const code = err instanceof ReplySendError ? err.code : "error";
-      const message = err instanceof Error ? err.message : "Couldn't send that reply.";
+      const message = err instanceof Error ? err.message : t("briefing.replies.sendFailed");
       if (sendLeftNothing(code)) {
         onGone(card.decision_id, message);
         return;
@@ -171,17 +173,17 @@ export function ReplyCardItem({
     >
       <div className="mb-2 flex items-center gap-2">
         <span className="inline-flex items-center rounded-lg bg-surface-overlay px-2 py-0.5 text-[13px] font-medium text-fg-muted">
-          {followUp ? "Follow-up waiting" : "Reply waiting"}
+          {followUp ? t("briefing.replies.followUpWaiting") : t("briefing.replies.replyWaiting")}
         </span>
         <FeatureName feature="act_as_me" className="text-[12px]" />
         {received && <span className="text-sm text-fg-subtle tabular-nums">{received}</span>}
       </div>
       <div className="text-base sm:text-[17px] font-semibold leading-snug text-fg break-words">
-        {card.subject || "(no subject)"}
+        {card.subject || t("briefing.replies.noSubject")}
       </div>
       <div className="mt-1 text-sm text-fg-muted break-words">
-        {followUp ? `Nobody answered your email to ${who}` : senderShort(card)}
-        {[relation, card.sender_verified ? "" : "Address not verified"]
+        {followUp ? t("briefing.replies.nobodyAnswered", { who }) : senderShort(card)}
+        {[relation, card.sender_verified ? "" : t("briefing.replies.notVerified")]
           .filter(Boolean)
           .map((part) => ` · ${part}`)
           .join("")}
@@ -191,10 +193,10 @@ export function ReplyCardItem({
         <details className="mt-3 group">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium text-fg-muted hover:bg-surface-overlay/60">
             <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">▸</span>
-            {followUp ? "What you wrote" : "What they wrote"}
+            {followUp ? t("briefing.replies.youWrote") : t("briefing.replies.theyWrote")}
           </summary>
           {!followUp && (
-            <p className="mt-1.5 px-1 text-xs text-fg-subtle break-words">From: {senderLine(card)}</p>
+            <p className="mt-1.5 px-1 text-xs text-fg-subtle break-words">{t("briefing.replies.from", { sender: senderLine(card) })}</p>
           )}
           {/* Plain text: what a stranger wrote is never rendered as markup. */}
           <p className="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-xl border border-line bg-surface px-3 py-2 text-sm text-fg-muted">
@@ -204,9 +206,9 @@ export function ReplyCardItem({
       )}
 
       <div className="mt-3">
-        <div className={label}>Your draft</div>
+        <div className={label}>{t("briefing.replies.yourDraft")}</div>
         <div className="mt-1.5 rounded-xl border border-line bg-surface px-3 py-2">
-          <div className="text-xs text-fg-subtle break-words">To: {card.draft_to.join(", ")}</div>
+          <div className="text-xs text-fg-subtle break-words">{t("briefing.replies.to", { recipients: card.draft_to.join(", ") })}</div>
           <p
             className={`mt-1 whitespace-pre-wrap break-words text-sm text-fg ${
               clampDraft ? "line-clamp-4" : ""
@@ -221,19 +223,19 @@ export function ReplyCardItem({
               aria-expanded={fullDraft}
               className="mt-1 min-h-10 text-sm font-medium text-accent cursor-pointer"
             >
-              {fullDraft ? "Show less" : "Show full draft"}
+              {fullDraft ? t("briefing.replies.showLess") : t("briefing.replies.showFull")}
             </button>
           )}
         </div>
       </div>
 
       {card.waited_because && (
-        <p className="mt-3 text-xs text-fg-subtle break-words">Why it waited for you: {card.waited_because}</p>
+        <p className="mt-3 text-xs text-fg-subtle break-words">{t("briefing.replies.whyWaited", { reason: card.waited_because })}</p>
       )}
 
       {card.open_questions.length > 0 && (
         <div className="mt-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-accent">Decide before sending</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-accent">{t("briefing.replies.decideBefore")}</div>
           <ul className="mt-1 list-disc pl-5 space-y-0.5 text-sm text-fg">
             {card.open_questions.map((q, i) => (
               <li key={i} className="break-words">{q}</li>
@@ -252,8 +254,7 @@ export function ReplyCardItem({
 
       {unconfirmed ? (
         <p className="mt-3 text-sm text-fg-muted">
-          {mailbox} hasn&apos;t confirmed this was sent. Check your Sent folder in {mailbox}; this card
-          updates on its own within a few minutes.
+          {t("briefing.replies.unconfirmed", { mailbox })}
         </p>
       ) : step.kind === "ask" || step.kind === "confirm" ? (
         <div className="mt-4 rounded-xl border border-accent/30 bg-accent/5 px-3.5 py-3">
@@ -272,10 +273,10 @@ export function ReplyCardItem({
                 )
               }
             >
-              {step.kind === "confirm" ? "Send anyway" : "Send now"}
+              {step.kind === "confirm" ? t("briefing.replies.sendAnyway") : t("briefing.replies.sendNow")}
             </Button>
             <Button variant="ghost" onClick={() => setStep({ kind: "idle" })}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </div>
@@ -286,7 +287,7 @@ export function ReplyCardItem({
             onClick={() => setStep({ kind: "ask", recipients: card.draft_to })}
             disabled={busy}
           >
-            {busy ? step.label : "Send"}
+            {busy ? step.label : t("briefing.replies.send")}
           </Button>
           {gmailLink && (
             <a
@@ -295,13 +296,13 @@ export function ReplyCardItem({
               rel="noopener noreferrer"
               className={buttonClass("secondary")}
             >
-              Edit in {mailbox}
+              {t("briefing.replies.editIn", { mailbox })}
             </a>
           )}
           {/* Dismiss is its own button, set apart on the right, so it's never
               hunted for in a menu next to Send. */}
           <Button variant="ghost" className="ml-auto" onClick={() => void dismiss()} disabled={busy}>
-            Dismiss
+            {t("briefing.card.dismiss")}
           </Button>
         </div>
       )}

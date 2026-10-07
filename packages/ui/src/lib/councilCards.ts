@@ -3,28 +3,30 @@
 // model name and one status line. Kept pure so `npm test` can check it
 // (scripts/councilCards.test.mjs).
 
+import { t, type MessageKey } from "../i18n/index.ts";
+
 // Plain-word areas for the built-in agents. An agent missing here (a new
 // specialist) falls back to its role's grouping or its knowledge domains.
-const AREAS: Record<string, string> = {
-  executive: "Leads every answer",
-  cso: "Strategy",
-  cfo: "Finance",
-  chro: "People",
-  gc: "Legal",
-  coo: "Operations",
-  cmo: "Marketing",
-  cpo: "Product",
-  sales: "Sales",
-  board_comms: "Board and investors",
-  triage: "Sorts incoming messages",
-  quality_judge: "Reviews committee answers",
-  utility_fast: "Quick checks, titles and replies",
-  research: "Background research scans",
-  fixture_generator: "Builds sample companies",
-  engagement_intake: "Drafts client companies",
-  onboarding_interviewer: "Company setup interview",
-  workflow_designer: "Designs new workflows",
-  workflow_actor: "Runs workflow steps",
+const AREAS: Record<string, MessageKey> = {
+  executive: "lib.council.area.executive",
+  cso: "lib.council.area.cso",
+  cfo: "lib.council.area.cfo",
+  chro: "lib.council.area.chro",
+  gc: "lib.council.area.gc",
+  coo: "lib.council.area.coo",
+  cmo: "lib.council.area.cmo",
+  cpo: "lib.council.area.cpo",
+  sales: "lib.council.area.sales",
+  board_comms: "lib.council.area.boardComms",
+  triage: "lib.council.area.triage",
+  quality_judge: "lib.council.area.qualityJudge",
+  utility_fast: "lib.council.area.utilityFast",
+  research: "lib.council.area.research",
+  fixture_generator: "lib.council.area.fixtureGenerator",
+  engagement_intake: "lib.council.area.engagementIntake",
+  onboarding_interviewer: "lib.council.area.onboardingInterviewer",
+  workflow_designer: "lib.council.area.workflowDesigner",
+  workflow_actor: "lib.council.area.workflowActor",
 };
 
 const DOMAIN_WORDS: Record<string, string> = { hr: "people" };
@@ -58,13 +60,13 @@ export function agentDisplayName(role: string): string {
 /** What the agent covers, in a few plain words. */
 export function agentArea(agent: { name: string; role: string; domains: string[] }): string {
   const known = AREAS[agent.name];
-  if (known) return known;
+  if (known) return t(known);
   const { group, note } = splitRole(agent.role);
   if (note) return capitalize(note);
   if (agent.domains.length > 0) {
     return capitalize(agent.domains.map((d) => DOMAIN_WORDS[d] ?? d.replace(/_/g, " ")).join(" and "));
   }
-  return group ?? "Specialist";
+  return group ?? t("lib.council.specialist");
 }
 
 const SMALL_WORDS = new Set(["of", "the", "and", "&", "for", "a", "an"]);

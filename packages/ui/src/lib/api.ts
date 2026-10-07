@@ -1,6 +1,7 @@
 import type { AnswerSources } from "@/lib/answerSources";
 import type { HistoryNote, HistoryState } from "@/lib/history";
 import type { SetupStatus } from "@/lib/setupStatus";
+import { t } from "../i18n/index.ts";
 
 const API_BASE = "/api/backend";
 
@@ -34,7 +35,9 @@ export interface ActionTaken {
 // `FALLBACK_LABEL` in orchestrator/activity_labels.py: both mean "something is
 // running that we can't name". Nothing enforces that across the language
 // boundary, so change the two together.
-export const FALLBACK_ACTIVITY_LABEL = "Working…";
+export function fallbackActivityLabel(): string {
+  return t("lib.api.fallbackActivity");
+}
 
 export interface Activity {
   type: "activity";
@@ -222,11 +225,11 @@ export async function* streamChat(
     } catch {
       // body wasn't JSON — fall through with statusText
     }
-    throw new Error(`Chat request failed: ${detail}`);
+    throw new Error(t("lib.api.chatRequestFailed", { detail }));
   }
 
   const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body");
+  if (!reader) throw new Error(t("lib.api.noResponseBody"));
 
   const decoder = new TextDecoder();
   let buffer = "";
@@ -317,7 +320,7 @@ export interface OnboardStatus {
 
 export async function startOnboarding(): Promise<OnboardStatus> {
   const res = await fetch(`${API_BASE}/onboard/start`);
-  if (!res.ok) throw new Error("Failed to start onboarding");
+  if (!res.ok) throw new Error(t("lib.api.startOnboardingFailed"));
   return res.json();
 }
 
@@ -330,7 +333,7 @@ export async function submitOnboardAnswer(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, answer }),
   });
-  if (!res.ok) throw new Error("Failed to submit answer");
+  if (!res.ok) throw new Error(t("lib.api.submitAnswerFailed"));
   return res.json();
 }
 
@@ -392,7 +395,7 @@ export async function startOnboardInterview(
     method: "POST",
     body: form,
   });
-  if (!res.ok) throw await onboardError(res, "Could not start setup");
+  if (!res.ok) throw await onboardError(res, t("lib.api.startSetupFailed"));
   return res.json();
 }
 
@@ -418,7 +421,7 @@ export async function understandOnboarding(
     method: "POST",
     body: form,
   });
-  if (!res.ok) throw await onboardError(res, "Could not read that");
+  if (!res.ok) throw await onboardError(res, t("lib.api.readThatFailed"));
   return res.json();
 }
 
@@ -431,7 +434,7 @@ export async function sendOnboardMessage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, message }),
   });
-  if (!res.ok) throw await onboardError(res, "Could not send that message");
+  if (!res.ok) throw await onboardError(res, t("lib.api.sendMessageFailed"));
   return res.json();
 }
 
@@ -441,7 +444,7 @@ export async function forceOnboardDraft(sessionId: string): Promise<OnboardTurn>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId }),
   });
-  if (!res.ok) throw await onboardError(res, "Could not draft your profile");
+  if (!res.ok) throw await onboardError(res, t("lib.api.draftProfileFailed"));
   return res.json();
 }
 
@@ -470,7 +473,7 @@ export async function commitOnboardDraft(
       owner_email: ownerEmail.trim() || null,
     }),
   });
-  if (!res.ok) throw await onboardError(res, "Could not save your profile");
+  if (!res.ok) throw await onboardError(res, t("lib.api.saveProfileFailed"));
   return res.json();
 }
 
@@ -506,7 +509,7 @@ export async function updateCompanyProfile(patch: Partial<CompanyProfile>): Prom
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error("Failed to update profile");
+  if (!res.ok) throw new Error(t("lib.api.updateProfileFailed"));
   return res.json();
 }
 
@@ -530,7 +533,7 @@ export async function uploadDocument(
     } catch {
       // not JSON
     }
-    throw new Error(detail || `Failed to upload ${file.name}`);
+    throw new Error(detail || t("lib.api.uploadFailed", { name: file.name }));
   }
   return res.json();
 }
@@ -546,7 +549,7 @@ export interface CompanyDoc {
 
 export async function listDocuments(): Promise<CompanyDoc[]> {
   const res = await fetch(`${API_BASE}/documents`);
-  if (!res.ok) throw new Error("Failed to list documents");
+  if (!res.ok) throw new Error(t("lib.api.listDocumentsFailed"));
   const data = await res.json();
   return data.documents;
 }
@@ -555,7 +558,7 @@ export async function deleteDocument(filename: string): Promise<void> {
   const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(filename)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete document");
+  if (!res.ok) throw new Error(t("lib.api.deleteDocumentFailed"));
 }
 
 export interface CompanyDocContent {
@@ -565,7 +568,7 @@ export interface CompanyDocContent {
 
 export async function getDocument(filename: string): Promise<CompanyDocContent> {
   const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(filename)}`);
-  if (!res.ok) throw new Error("Failed to fetch document content");
+  if (!res.ok) throw new Error(t("lib.api.fetchDocumentContentFailed"));
   return res.json();
 }
 
@@ -609,14 +612,14 @@ export interface SyncSourceStatus {
 
 export async function listSyncSources(): Promise<SyncSourceStatus[]> {
   const res = await fetch(`${API_BASE}/documents/sources`);
-  if (!res.ok) throw new Error("Failed to load connected sources");
+  if (!res.ok) throw new Error(t("lib.api.loadConnectedSourcesFailed"));
   const data = await res.json();
   return data.sources;
 }
 
 export async function listSyncedDocuments(source: SyncedSourceId): Promise<SyncedDocList> {
   const res = await fetch(`${API_BASE}/documents/${source}`);
-  if (!res.ok) throw new Error("Failed to list synced documents");
+  if (!res.ok) throw new Error(t("lib.api.listSyncedDocumentsFailed"));
   return res.json();
 }
 
@@ -625,7 +628,7 @@ export async function getSyncedDocument(
   id: string
 ): Promise<SyncedDocContent> {
   const res = await fetch(`${API_BASE}/documents/${source}/${encodeURIComponent(id)}`);
-  if (!res.ok) throw new Error("Failed to fetch document content");
+  if (!res.ok) throw new Error(t("lib.api.fetchDocumentContentFailed"));
   return res.json();
 }
 
@@ -639,7 +642,7 @@ export async function syncSourceNow(source: SyncedSourceId): Promise<string | nu
   } catch {
     // fall through
   }
-  return "Could not start a sync";
+  return t("lib.api.startSyncFailed");
 }
 
 export interface BuiltinFileMeta {
@@ -656,7 +659,7 @@ export interface BuiltinFileContent {
 
 export async function listBuiltinFiles(): Promise<BuiltinFileMeta[]> {
   const res = await fetch(`${API_BASE}/knowledge/builtin`);
-  if (!res.ok) throw new Error("Failed to fetch built-in files");
+  if (!res.ok) throw new Error(t("lib.api.fetchBuiltInFilesFailed"));
   const data = await res.json();
   return data.files;
 }
@@ -666,7 +669,7 @@ export async function getBuiltinFile(
   filename: string
 ): Promise<BuiltinFileContent> {
   const res = await fetch(`${API_BASE}/knowledge/builtin/${domain}/${filename}`);
-  if (!res.ok) throw new Error("Failed to fetch file content");
+  if (!res.ok) throw new Error(t("lib.api.fetchFileContentFailed"));
   return res.json();
 }
 
@@ -682,7 +685,7 @@ export async function createBuiltinFile(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Failed to create file");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.createFileFailed"));
   }
   return res.json();
 }
@@ -697,7 +700,7 @@ export async function updateBuiltinFile(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ domain, filename, content }),
   });
-  if (!res.ok) throw new Error("Failed to save file");
+  if (!res.ok) throw new Error(t("lib.api.saveFileFailed"));
   return res.json();
 }
 
@@ -705,7 +708,7 @@ export async function deleteBuiltinFile(domain: string, filename: string): Promi
   const res = await fetch(`${API_BASE}/knowledge/builtin/${domain}/${filename}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete file");
+  if (!res.ok) throw new Error(t("lib.api.deleteFileFailed"));
 }
 
 // ---------------------------------------------------------------------------
@@ -714,7 +717,7 @@ export async function deleteBuiltinFile(domain: string, filename: string): Promi
 
 export async function listFailureFiles(): Promise<BuiltinFileMeta[]> {
   const res = await fetch(`${API_BASE}/knowledge/failures`);
-  if (!res.ok) throw new Error("Failed to fetch failure files");
+  if (!res.ok) throw new Error(t("lib.api.fetchFailureFilesFailed"));
   const data = await res.json();
   return data.files;
 }
@@ -724,7 +727,7 @@ export async function getFailureFile(
   filename: string
 ): Promise<BuiltinFileContent> {
   const res = await fetch(`${API_BASE}/knowledge/failures/${domain}/${filename}`);
-  if (!res.ok) throw new Error("Failed to fetch failure content");
+  if (!res.ok) throw new Error(t("lib.api.fetchFailureContentFailed"));
   return res.json();
 }
 
@@ -740,7 +743,7 @@ export async function createFailureFile(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Failed to create failure file");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.createFailureFileFailed"));
   }
   return res.json();
 }
@@ -755,7 +758,7 @@ export async function updateFailureFile(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ domain, filename, content }),
   });
-  if (!res.ok) throw new Error("Failed to save failure file");
+  if (!res.ok) throw new Error(t("lib.api.saveFailureFileFailed"));
   return res.json();
 }
 
@@ -763,7 +766,7 @@ export async function deleteFailureFile(domain: string, filename: string): Promi
   const res = await fetch(`${API_BASE}/knowledge/failures/${domain}/${filename}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete failure file");
+  if (!res.ok) throw new Error(t("lib.api.deleteFailureFileFailed"));
 }
 
 // ---------------------------------------------------------------------------
@@ -816,7 +819,7 @@ export async function searchKnowledge(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Knowledge search failed");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.knowledgeSearchFailed"));
   }
   return res.json();
 }
@@ -860,7 +863,7 @@ export interface ExternalPeekResponse {
 
 export async function listExternalSources(): Promise<ExternalSourcesResponse> {
   const res = await fetch(`${API_BASE}/knowledge/external`);
-  if (!res.ok) throw new Error("Failed to list reference sources");
+  if (!res.ok) throw new Error(t("lib.api.listReferenceSourcesFailed"));
   return res.json();
 }
 
@@ -871,7 +874,7 @@ export async function peekExternalSource(
   const res = await fetch(
     `${API_BASE}/knowledge/external/${encodeURIComponent(sourceId)}/peek?limit=${limit}`
   );
-  if (!res.ok) throw new Error("Failed to peek source");
+  if (!res.ok) throw new Error(t("lib.api.peekSourceFailed"));
   return res.json();
 }
 
@@ -937,14 +940,14 @@ async function skillError(res: Response, fallback: string): Promise<Error> {
 export async function listSkills(includeHidden = false): Promise<SkillMeta[]> {
   const qs = includeHidden ? "?include_hidden=true" : "";
   const res = await fetch(`${API_BASE}/skills${qs}`);
-  if (!res.ok) throw new Error("Failed to list playbooks");
+  if (!res.ok) throw new Error(t("lib.api.listPlaybooksFailed"));
   const data = await res.json();
   return data.skills;
 }
 
 export async function getSkill(name: string): Promise<SkillDetail> {
   const res = await fetch(`${API_BASE}/skills/${encodeURIComponent(name)}`);
-  if (!res.ok) throw await skillError(res, "Failed to load playbook");
+  if (!res.ok) throw await skillError(res, t("lib.api.loadPlaybookFailed"));
   return res.json();
 }
 
@@ -954,7 +957,7 @@ export async function searchSkills(
 ): Promise<SkillSearchHit[]> {
   const params = new URLSearchParams({ q, n: String(n) });
   const res = await fetch(`${API_BASE}/skills/search?${params.toString()}`);
-  if (!res.ok) throw new Error("Failed to search playbooks");
+  if (!res.ok) throw new Error(t("lib.api.searchPlaybooksFailed"));
   const data = await res.json();
   return data.results;
 }
@@ -965,7 +968,7 @@ export async function createSkill(input: SkillInput): Promise<SkillDetail> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  if (!res.ok) throw await skillError(res, "Failed to create playbook");
+  if (!res.ok) throw await skillError(res, t("lib.api.createPlaybookFailed"));
   return res.json();
 }
 
@@ -976,7 +979,7 @@ export async function updateSkill(input: SkillInput): Promise<SkillDetail> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  if (!res.ok) throw await skillError(res, "Failed to save playbook");
+  if (!res.ok) throw await skillError(res, t("lib.api.savePlaybookFailed"));
   return res.json();
 }
 
@@ -984,7 +987,7 @@ export async function deleteSkill(name: string): Promise<SkillDeleteOutcome> {
   const res = await fetch(`${API_BASE}/skills/${encodeURIComponent(name)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw await skillError(res, "Failed to delete playbook");
+  if (!res.ok) throw await skillError(res, t("lib.api.deletePlaybookFailed"));
   const data = (await res.json()) as { outcome: SkillDeleteOutcome };
   return data.outcome;
 }
@@ -994,7 +997,7 @@ export async function restoreSkill(name: string): Promise<SkillDetail> {
     `${API_BASE}/skills/${encodeURIComponent(name)}/restore`,
     { method: "POST" }
   );
-  if (!res.ok) throw await skillError(res, "Failed to restore playbook");
+  if (!res.ok) throw await skillError(res, t("lib.api.restorePlaybookFailed"));
   return res.json();
 }
 
@@ -1017,14 +1020,14 @@ export interface SkillDraft {
 
 export async function listSkillDrafts(): Promise<SkillDraft[]> {
   const res = await fetch(`${API_BASE}/skill-drafts`);
-  if (!res.ok) throw new Error("Failed to list playbook drafts");
+  if (!res.ok) throw new Error(t("lib.api.listPlaybookDraftsFailed"));
   const data = await res.json();
   return data.drafts;
 }
 
 export async function getSkillDraft(name: string): Promise<SkillDraft> {
   const res = await fetch(`${API_BASE}/skill-drafts/${encodeURIComponent(name)}`);
-  if (!res.ok) throw await skillError(res, "Failed to load draft");
+  if (!res.ok) throw await skillError(res, t("lib.api.loadDraftFailed"));
   return res.json();
 }
 
@@ -1041,7 +1044,7 @@ export async function approveSkillDraft(
       body: JSON.stringify({ id }),
     }
   );
-  if (!res.ok) throw await skillError(res, "Failed to approve draft");
+  if (!res.ok) throw await skillError(res, t("lib.api.approveDraftFailed"));
   return res.json();
 }
 
@@ -1051,7 +1054,7 @@ export async function discardSkillDraft(name: string, id: string): Promise<void>
   const res = await fetch(`${API_BASE}/skill-drafts/${encodeURIComponent(name)}?${qs}`, {
     method: "DELETE",
   });
-  if (!res.ok && res.status !== 404) throw await skillError(res, "Failed to discard draft");
+  if (!res.ok && res.status !== 404) throw await skillError(res, t("lib.api.discardDraftFailed"));
 }
 
 export interface SessionSummary {
@@ -1064,13 +1067,13 @@ export interface SessionSummary {
 
 export async function listSessions(): Promise<SessionSummary[]> {
   const res = await fetch(`${API_BASE}/sessions`);
-  if (!res.ok) throw new Error("Failed to list sessions");
+  if (!res.ok) throw new Error(t("lib.api.listSessionsFailed"));
   return res.json();
 }
 
 export async function getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
   const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/messages`);
-  if (!res.ok) throw new Error("Failed to load session messages");
+  if (!res.ok) throw new Error(t("lib.api.loadSessionMessagesFailed"));
   return res.json();
 }
 
@@ -1078,7 +1081,7 @@ export async function deleteSession(sessionId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete session");
+  if (!res.ok) throw new Error(t("lib.api.deleteSessionFailed"));
 }
 
 export interface SuggestedPromptsResponse {
@@ -1091,7 +1094,7 @@ export async function getSuggestedPrompts(
   signal?: AbortSignal,
 ): Promise<SuggestedPromptsResponse> {
   const res = await fetch(`${API_BASE}/chat/suggested-prompts`, { signal });
-  if (!res.ok) throw new Error("Failed to load suggested prompts");
+  if (!res.ok) throw new Error(t("lib.api.loadSuggestedPromptsFailed"));
   return res.json();
 }
 
@@ -1191,7 +1194,7 @@ export interface PeopleMemory {
 
 export async function listDecisions(): Promise<Decision[]> {
   const res = await fetch(`${API_BASE}/memories/decisions`);
-  if (!res.ok) throw new Error("Failed to list decisions");
+  if (!res.ok) throw new Error(t("lib.api.listDecisionsFailed"));
   return res.json();
 }
 
@@ -1201,13 +1204,13 @@ export async function updateDecision(id: number, patch: Partial<Omit<Decision, "
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error("Failed to update decision");
+  if (!res.ok) throw new Error(t("lib.api.updateDecisionFailed"));
   return res.json();
 }
 
 export async function deleteDecision(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/memories/decisions/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete decision");
+  if (!res.ok) throw new Error(t("lib.api.deleteDecisionFailed"));
 }
 
 /** A standing fact or correction the principal or a teammate asked the
@@ -1258,7 +1261,7 @@ export interface FactApprovalRule {
 
 export async function listStandingFacts(): Promise<StandingFactsPage> {
   const res = await fetch(`${API_BASE}/memories/facts`);
-  if (!res.ok) throw new Error("Failed to list standing facts");
+  if (!res.ok) throw new Error(t("lib.api.listStandingFactsFailed"));
   return res.json();
 }
 
@@ -1268,7 +1271,7 @@ export async function retireStandingFact(id: number, reason = ""): Promise<Stand
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reason }),
   });
-  if (!res.ok) throw new Error("Failed to retire standing fact");
+  if (!res.ok) throw new Error(t("lib.api.retireStandingFactFailed"));
   return res.json();
 }
 
@@ -1281,13 +1284,13 @@ export async function reviewStandingFact(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
   });
-  if (!res.ok) throw new Error(`Failed to ${decision} standing fact`);
+  if (!res.ok) throw new Error(decision === "approve" ? t("lib.api.approveStandingFactFailed") : t("lib.api.declineStandingFactFailed"));
   return res.json();
 }
 
 export async function listFactApprovalRules(): Promise<FactApprovalRule[]> {
   const res = await fetch(`${API_BASE}/memories/facts/approval`);
-  if (!res.ok) throw new Error("Failed to list who needs approval");
+  if (!res.ok) throw new Error(t("lib.api.listWhoNeedsApprovalFailed"));
   return res.json();
 }
 
@@ -1300,13 +1303,13 @@ export async function setFactApprovalRule(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ needs_approval: needsApproval }),
   });
-  if (!res.ok) throw new Error("Failed to change who needs approval");
+  if (!res.ok) throw new Error(t("lib.api.changeWhoNeedsApprovalFailed"));
   return res.json();
 }
 
 export async function listInitiatives(): Promise<Initiative[]> {
   const res = await fetch(`${API_BASE}/memories/initiatives`);
-  if (!res.ok) throw new Error("Failed to list initiatives");
+  if (!res.ok) throw new Error(t("lib.api.listInitiativesFailed"));
   return res.json();
 }
 
@@ -1316,18 +1319,18 @@ export async function updateInitiative(id: number, patch: Partial<Omit<Initiativ
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error("Failed to update initiative");
+  if (!res.ok) throw new Error(t("lib.api.updateInitiativeFailed"));
   return res.json();
 }
 
 export async function deleteInitiative(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/memories/initiatives/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete initiative");
+  if (!res.ok) throw new Error(t("lib.api.deleteInitiativeFailed"));
 }
 
 export async function listAdvice(): Promise<Advice[]> {
   const res = await fetch(`${API_BASE}/memories/advice`);
-  if (!res.ok) throw new Error("Failed to list advice");
+  if (!res.ok) throw new Error(t("lib.api.listAdviceFailed"));
   return res.json();
 }
 
@@ -1337,13 +1340,13 @@ export async function updateAdvice(id: number, patch: Partial<Omit<Advice, "id" 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error("Failed to update advice");
+  if (!res.ok) throw new Error(t("lib.api.updateAdviceFailed"));
   return res.json();
 }
 
 export async function deleteAdvice(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/memories/advice/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete advice");
+  if (!res.ok) throw new Error(t("lib.api.deleteAdviceFailed"));
 }
 
 // Settings → About you reads this on mount; behind it are one Honcho listing
@@ -1370,7 +1373,7 @@ export function listPeopleMemory(recent = 5): Promise<PeopleMemory> {
   }
   const promise = (async () => {
     const res = await fetch(`${API_BASE}/memories/people?recent=${recent}`);
-    if (!res.ok) throw new Error("Failed to list people memory");
+    if (!res.ok) throw new Error(t("lib.api.listPeopleMemoryFailed"));
     return (await res.json()) as PeopleMemory;
   })();
   const entry = { recent, promise, settledAt: null as number | null };
@@ -1407,7 +1410,7 @@ export async function listPersonConclusions(
   const res = await fetch(
     `${API_BASE}/memories/people/${personId}/conclusions?page=${page}&size=${size}`,
   );
-  if (!res.ok) throw new Error("Failed to list person conclusions");
+  if (!res.ok) throw new Error(t("lib.api.listPersonConclusionsFailed"));
   return res.json();
 }
 
@@ -1441,23 +1444,23 @@ export async function listScheduledActions(
 ): Promise<ScheduledAction[]> {
   const params = new URLSearchParams({ status, limit: String(limit), order });
   const res = await fetch(`${API_BASE}/scheduled?${params.toString()}`, { signal });
-  if (!res.ok) throw new Error("Failed to list scheduled actions");
+  if (!res.ok) throw new Error(t("lib.api.listScheduledActionsFailed"));
   return res.json();
 }
 
 export async function cancelScheduledAction(id: number): Promise<ScheduledAction> {
   const res = await fetch(`${API_BASE}/scheduled/${id}`, { method: "DELETE" });
   if (res.status === 409) {
-    throw new Error("Action is no longer pending — can't cancel.");
+    throw new Error(t("lib.api.actionNoLongerPending"));
   }
   if (res.status === 401 || res.status === 503) {
     // Signed-in users can cancel once the API and the UI share
     // BACKEND_SHARED_SECRET (every internet-reachable deploy sets it).
     throw new Error(
-      "Cancel isn't enabled on this server yet. Ask your administrator to set the same BACKEND_SHARED_SECRET on the API and the UI.",
+      t("lib.api.cancelNotEnabled"),
     );
   }
-  if (!res.ok) throw new Error("Failed to cancel scheduled action");
+  if (!res.ok) throw new Error(t("lib.api.cancelScheduledActionFailed"));
   return res.json();
 }
 
@@ -1479,7 +1482,7 @@ export interface ExecutiveStatus {
 
 export async function getExecutiveStatus(signal?: AbortSignal): Promise<ExecutiveStatus> {
   const res = await fetch(`${API_BASE}/executive/status`, { signal });
-  if (!res.ok) throw new Error("Failed to load executive status");
+  if (!res.ok) throw new Error(t("lib.api.loadExecutiveStatusFailed"));
   return res.json();
 }
 
@@ -1487,7 +1490,7 @@ export async function getExecutiveStatus(signal?: AbortSignal): Promise<Executiv
 // this can take a few seconds; see api/setup_checks.py.
 export async function getSetupStatus(signal?: AbortSignal): Promise<SetupStatus> {
   const res = await fetch(`${API_BASE}/setup/status`, { signal, cache: "no-store" });
-  if (!res.ok) throw new Error(`Setup status request failed (HTTP ${res.status})`);
+  if (!res.ok) throw new Error(t("lib.api.setupStatusFailed", { code: res.status }));
   return res.json();
 }
 
@@ -1497,14 +1500,14 @@ export async function pauseExecutive(reason?: string): Promise<ExecutiveStatus> 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reason: reason?.trim() || null }),
   });
-  if (!res.ok) throw new Error("Failed to pause the Executive");
+  if (!res.ok) throw new Error(t("lib.api.pauseExecutiveFailed"));
   return res.json();
 }
 
 export async function resumeExecutive(): Promise<ExecutiveStatus> {
   const res = await fetch(`${API_BASE}/executive/resume`, { method: "POST" });
-  if (res.status === 403) throw new Error("Only the principal can resume the Executive.");
-  if (!res.ok) throw new Error("Failed to resume the Executive");
+  if (res.status === 403) throw new Error(t("lib.api.onlyPrincipalCanResumeExecutive"));
+  if (!res.ok) throw new Error(t("lib.api.resumeExecutiveFailed"));
   return res.json();
 }
 
@@ -1565,13 +1568,13 @@ export interface VersionInfo {
 
 export async function getVersion(signal?: AbortSignal): Promise<VersionInfo> {
   const res = await fetch(`${API_BASE}/version`, { signal });
-  if (!res.ok) throw new Error("Failed to load version");
+  if (!res.ok) throw new Error(t("lib.api.loadVersionFailed"));
   return res.json();
 }
 
 export async function getWorkspace(signal?: AbortSignal): Promise<WorkspaceSettings> {
   const res = await fetch(`${API_BASE}/workspace`, { signal });
-  if (!res.ok) throw new Error("Failed to load workspace settings");
+  if (!res.ok) throw new Error(t("lib.api.loadWorkspaceSettingsFailed"));
   return res.json();
 }
 
@@ -1581,7 +1584,7 @@ export async function updateWorkspace(update: WorkspaceUpdate): Promise<Workspac
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),
   });
-  if (res.status === 403) throw new Error("Only the principal can change workspace settings.");
+  if (res.status === 403) throw new Error(t("lib.api.onlyPrincipalCanChangeWorkspaceSettings"));
   if (res.status === 422) {
     // FastAPI validation errors: `detail` is a list of {msg}; surface the
     // first one ("timezone 'Mars/Base' is not a known IANA zone",
@@ -1589,9 +1592,9 @@ export async function updateWorkspace(update: WorkspaceUpdate): Promise<Workspac
     const body = (await res.json().catch(() => ({}))) as { detail?: unknown };
     const first = Array.isArray(body.detail) ? (body.detail[0] as { msg?: unknown }) : undefined;
     const msg = typeof first?.msg === "string" ? first.msg.replace(/^Value error, /, "") : null;
-    throw new Error(msg ?? "Invalid workspace settings");
+    throw new Error(msg ?? t("lib.api.invalidWorkspaceSettings"));
   }
-  if (!res.ok) throw new Error("Failed to update workspace settings");
+  if (!res.ok) throw new Error(t("lib.api.updateWorkspaceSettingsFailed"));
   return res.json();
 }
 
@@ -1786,7 +1789,7 @@ async function delegationError(res: Response, fallback: string): Promise<Error> 
 export async function getDelegation(signal?: AbortSignal): Promise<DelegationSettings | null> {
   const res = await fetch(`${API_BASE}/delegation`, { signal });
   if (res.status === 403 || res.status === 404) return null;
-  if (!res.ok) throw await delegationError(res, "Couldn't load Act as me.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.loadActAsMeFailed"));
   return res.json();
 }
 
@@ -1803,7 +1806,7 @@ export async function getHistory(query?: string, signal?: AbortSignal): Promise<
   const q = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
   const res = await fetch(`${API_BASE}/memories/history${q}`, { signal });
   if (res.status === 403 || res.status === 404) return null;
-  if (!res.ok) throw await delegationError(res, "Couldn't load your notes.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.loadNotesFailed"));
   return res.json();
 }
 
@@ -1817,7 +1820,7 @@ export async function updateHistorySettings(patch: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't save the setting.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.saveSettingFailed"));
   return res.json();
 }
 
@@ -1831,20 +1834,20 @@ export async function updateHistoryNote(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't change the note.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.changeNoteFailed"));
   return res.json();
 }
 
 export async function forgetHistoryNote(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/memories/history/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await delegationError(res, "Couldn't forget the note.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.forgetNoteFailed"));
 }
 
 /** "Don't remember this": forgets every note from that note's conversation,
  * and nothing from it is noted again. Answers how many were forgotten. */
 export async function forgetHistoryConversation(id: number): Promise<number> {
   const res = await fetch(`${API_BASE}/memories/history/${id}/forget-conversation`, { method: "POST" });
-  if (!res.ok) throw await delegationError(res, "Couldn't forget the conversation.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.forgetConversationFailed"));
   const body = (await res.json()) as { forgotten?: number };
   return body.forgotten ?? 0;
 }
@@ -1855,7 +1858,7 @@ export async function setDelegationEnabled(enabled: boolean): Promise<Delegation
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled }),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't change Act as me.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.changeActAsMeFailed"));
   return res.json();
 }
 
@@ -1865,7 +1868,7 @@ export async function setDelegationTeam(enabled: boolean): Promise<DelegationSet
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled }),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't change Act as me for your team.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.changeActAsMeTeamFailed"));
   return res.json();
 }
 
@@ -1875,7 +1878,7 @@ export async function setInboxWatch(enabled: boolean): Promise<DelegationSetting
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled }),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't change Draft replies to my inbox.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.changeInboxDraftsFailed"));
   return res.json();
 }
 
@@ -1888,7 +1891,7 @@ export async function setHandleIt(update: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't change Handle it for me.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.changeHandleItFailed"));
   return res.json();
 }
 
@@ -1896,7 +1899,7 @@ export async function setHandleIt(update: {
 export async function getHandledReplies(signal?: AbortSignal): Promise<HandledReply[] | null> {
   const res = await fetch(`${API_BASE}/delegation/handled`, { signal });
   if (res.status === 403 || res.status === 404) return null;
-  if (!res.ok) throw await delegationError(res, "Couldn't load what it handled for you.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.loadHandledFailed"));
   const body = (await res.json()) as { replies: HandledReply[] };
   return body.replies;
 }
@@ -1904,7 +1907,7 @@ export async function getHandledReplies(signal?: AbortSignal): Promise<HandledRe
 // Starts a check of your inbox; GET /delegation says when it is done.
 export async function checkInboxNow(): Promise<InboxWatch> {
   const res = await fetch(`${API_BASE}/delegation/inbox/check`, { method: "POST" });
-  if (!res.ok) throw await delegationError(res, "Couldn't check your inbox.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.checkInboxFailed"));
   return res.json();
 }
 
@@ -1912,7 +1915,7 @@ export async function checkInboxNow(): Promise<InboxWatch> {
 export async function getReplyCards(signal?: AbortSignal): Promise<ReplyCard[] | null> {
   const res = await fetch(`${API_BASE}/delegation/replies`, { signal });
   if (res.status === 403 || res.status === 404) return null;
-  if (!res.ok) throw await delegationError(res, "Couldn't load the replies waiting for you.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.loadWaitingRepliesFailed"));
   const body = (await res.json()) as { cards: ReplyCard[] };
   return body.cards;
 }
@@ -1953,7 +1956,7 @@ export async function sendReplyCard(
   if (res.ok) return { status: "sent" };
   const body = (await res.json().catch(() => ({}))) as { detail?: unknown };
   const detail = (body.detail && typeof body.detail === "object" ? body.detail : {}) as Record<string, unknown>;
-  const message = typeof detail.message === "string" ? detail.message : "Couldn't send that reply.";
+  const message = typeof detail.message === "string" ? detail.message : t("lib.api.sendReplyFailed");
   const code = typeof detail.code === "string" ? detail.code : res.status === 404 ? "draft_gone" : "error";
   if (res.status === 409 && code === "confirm") {
     return { status: "confirm", message, reasons: strings(detail.reasons), recipients: strings(detail.recipients) };
@@ -1970,18 +1973,18 @@ export async function dismissReplyCard(id: number): Promise<void> {
     body: JSON.stringify({ reason: "" }),
   });
   if (res.status === 404 || res.status === 409) return; // already gone or handled
-  if (!res.ok) throw await delegationError(res, "Couldn't dismiss that reply.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.dismissReplyFailed"));
 }
 
 export async function getVoiceProfile(signal?: AbortSignal): Promise<VoiceProfile> {
   const res = await fetch(`${API_BASE}/delegation/voice`, { signal });
-  if (!res.ok) throw await delegationError(res, "Couldn't load how you write.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.loadHowYouWriteFailed"));
   return res.json();
 }
 
 export async function learnVoiceProfile(): Promise<VoiceProfile> {
   const res = await fetch(`${API_BASE}/delegation/voice/learn`, { method: "POST" });
-  if (!res.ok) throw await delegationError(res, "Couldn't learn how you write.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.learnHowYouWriteFailed"));
   return res.json();
 }
 
@@ -1991,7 +1994,7 @@ export async function updateVoiceProfile(update: VoiceUpdate): Promise<VoiceProf
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't save how you write.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.saveHowYouWriteFailed"));
   return res.json();
 }
 
@@ -2001,20 +2004,20 @@ export async function describeVoiceProfile(description: string): Promise<Describ
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ description }),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't write your style. Try again.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.writeStyleFailed"));
   return res.json();
 }
 
 // Takes the signature from your Gmail settings again; nothing else changes.
 export async function refreshVoiceSignature(): Promise<VoiceProfile> {
   const res = await fetch(`${API_BASE}/delegation/voice/signature`, { method: "POST" });
-  if (!res.ok) throw await delegationError(res, "Couldn't read your Gmail signature.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.readGmailSignatureFailed"));
   return res.json();
 }
 
 export async function resetVoiceProfile(): Promise<VoiceProfile> {
   const res = await fetch(`${API_BASE}/delegation/voice`, { method: "DELETE" });
-  if (!res.ok) throw await delegationError(res, "Couldn't reset how you write.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.resetHowYouWriteFailed"));
   return res.json();
 }
 
@@ -2043,7 +2046,7 @@ export async function getDecisionClassMode(
     { signal },
   );
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Failed to load the setting");
+  if (!res.ok) throw new Error(t("lib.api.loadSettingFailed"));
   return res.json();
 }
 
@@ -2056,11 +2059,11 @@ export async function setDecisionClassMode(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ mode }),
   });
-  if (res.status === 403) throw new Error("Only the principal can change this setting.");
+  if (res.status === 403) throw new Error(t("lib.api.onlyPrincipalCanChangeThisSetting"));
   // 409: auto-booking can't be turned on before a principal exists; the
   // backend's detail says so in plain words.
-  if (res.status === 409) throw await onboardError(res, "This setting can't be turned on yet.");
-  if (!res.ok) throw new Error("Failed to save the setting");
+  if (res.status === 409) throw await onboardError(res, t("lib.api.settingCantTurnOnYet"));
+  if (!res.ok) throw new Error(t("lib.api.saveSettingFailedPlain"));
   return res.json();
 }
 
@@ -2205,14 +2208,14 @@ export const DYNAMIC_SPECIALISTS = [
 
 export async function listCustomWorkflows(): Promise<DynamicWorkflowDef[]> {
   const res = await fetch(`${API_BASE}/workflows/custom`);
-  if (!res.ok) throw new Error("Failed to list custom workflows");
+  if (!res.ok) throw new Error(t("lib.api.listCustomWorkflowsFailed"));
   const data = await res.json();
   return data.definitions;
 }
 
 export async function getCustomWorkflow(name: string): Promise<DynamicWorkflowDef> {
   const res = await fetch(`${API_BASE}/workflows/custom/${encodeURIComponent(name)}`);
-  if (!res.ok) throw new Error("Failed to load custom workflow");
+  if (!res.ok) throw new Error(t("lib.api.loadCustomWorkflowFailed"));
   return res.json();
 }
 
@@ -2330,7 +2333,7 @@ export async function deleteCustomWorkflow(name: string): Promise<void> {
   const res = await fetch(`${API_BASE}/workflows/custom/${encodeURIComponent(name)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete custom workflow");
+  if (!res.ok) throw new Error(t("lib.api.deleteCustomWorkflowFailed"));
 }
 
 // ---- Tools a workflow action step can use ----
@@ -2347,7 +2350,7 @@ export async function searchWorkflowTools(q: string): Promise<WorkflowToolInfo[]
   const res = await fetch(
     `${API_BASE}/workflows/tools/search?q=${encodeURIComponent(q)}`
   );
-  if (!res.ok) throw new Error("Tool search failed");
+  if (!res.ok) throw new Error(t("lib.api.toolSearchFailed"));
   return (await res.json()).tools;
 }
 
@@ -2358,7 +2361,7 @@ export async function describeWorkflowTools(
   const res = await fetch(
     `${API_BASE}/workflows/tools/describe?names=${encodeURIComponent(names.join(","))}`
   );
-  if (!res.ok) throw new Error("Tool lookup failed");
+  if (!res.ok) throw new Error(t("lib.api.toolLookupFailed"));
   return (await res.json()).tools;
 }
 
@@ -2402,7 +2405,7 @@ async function _designerPost(
 }
 
 export function startWorkflowDesigner(message: string): Promise<WorkflowDesignerTurn> {
-  return _designerPost("start", { message }, "Could not start the workflow assistant");
+  return _designerPost("start", { message }, t("lib.api.startWorkflowAssistantFailed"));
 }
 
 /** Open the designer on a saved workflow, to change it by conversation. */
@@ -2417,12 +2420,12 @@ export function sendWorkflowDesignerMessage(
   return _designerPost(
     "message",
     { session_id: sessionId, message },
-    "Could not send that message"
+    t("lib.api.sendMessageFailed")
   );
 }
 
 export function forceWorkflowDesignerDraft(sessionId: string): Promise<WorkflowDesignerTurn> {
-  return _designerPost("draft", { session_id: sessionId }, "Could not draft the workflow");
+  return _designerPost("draft", { session_id: sessionId }, t("lib.api.draftWorkflowFailed"));
 }
 
 export async function getWorkflowDesignerSession(
@@ -2431,7 +2434,7 @@ export async function getWorkflowDesignerSession(
   const res = await fetch(
     `${API_BASE}/workflows/designer/${encodeURIComponent(sessionId)}`
   );
-  if (!res.ok) throw await onboardError(res, "That workflow draft has expired");
+  if (!res.ok) throw await onboardError(res, t("lib.api.workflowDraftExpired"));
   return res.json();
 }
 
@@ -2543,20 +2546,20 @@ export interface WorkflowEvent {
 
 export async function listWorkflows(): Promise<WorkflowMeta[]> {
   const res = await fetch(`${API_BASE}/workflows`);
-  if (!res.ok) throw new Error("Failed to list workflows");
+  if (!res.ok) throw new Error(t("lib.api.listWorkflowsFailed"));
   const data = await res.json();
   return data.workflows;
 }
 
 export async function getWorkflow(name: string): Promise<WorkflowMeta> {
   const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(name)}`);
-  if (!res.ok) throw new Error("Failed to load workflow");
+  if (!res.ok) throw new Error(t("lib.api.loadWorkflowFailed"));
   return res.json();
 }
 
 export async function getWorkflowSample(name: string): Promise<WorkflowSample> {
   const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(name)}/sample`);
-  if (!res.ok) throw new Error("Failed to load workflow sample");
+  if (!res.ok) throw new Error(t("lib.api.loadWorkflowSampleFailed"));
   return res.json();
 }
 
@@ -2566,7 +2569,7 @@ export async function listWorkflowRuns(
   const params = new URLSearchParams();
   if (workflowName) params.set("workflow", workflowName);
   const res = await fetch(`${API_BASE}/workflows/runs?${params.toString()}`);
-  if (!res.ok) throw new Error("Failed to list workflow runs");
+  if (!res.ok) throw new Error(t("lib.api.listWorkflowRunsFailed"));
   const data = await res.json();
   return data.runs;
 }
@@ -2586,7 +2589,7 @@ export async function decideWorkflowRun(
 
 export async function getWorkflowRun(runId: string): Promise<WorkflowRunDetail> {
   const res = await fetch(`${API_BASE}/workflows/runs/${encodeURIComponent(runId)}`);
-  if (!res.ok) throw new Error("Failed to load workflow run");
+  if (!res.ok) throw new Error(t("lib.api.loadWorkflowRunFailed"));
   return res.json();
 }
 
@@ -2594,7 +2597,7 @@ export async function deleteWorkflowRun(runId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/workflows/runs/${encodeURIComponent(runId)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete workflow run");
+  if (!res.ok) throw new Error(t("lib.api.deleteWorkflowRunFailed"));
 }
 
 // ---------------------------------------------------------------------------
@@ -2651,14 +2654,14 @@ export async function listArtifacts(
 ): Promise<ArtifactSummary[]> {
   const qs = opts?.archived ? "?archived=true" : "";
   const res = await fetch(`${API_BASE}/artifacts${qs}`);
-  if (!res.ok) throw new Error("Failed to list artifacts");
+  if (!res.ok) throw new Error(t("lib.api.listArtifactsFailed"));
   const data = await res.json();
   return data.artifacts;
 }
 
 export async function getArtifact(id: string): Promise<ArtifactDetail> {
   const res = await fetch(`${API_BASE}/artifacts/${encodeURIComponent(id)}`);
-  if (!res.ok) throw new Error("Failed to load artifact");
+  if (!res.ok) throw new Error(t("lib.api.loadArtifactFailed"));
   return res.json();
 }
 
@@ -2667,7 +2670,7 @@ export async function archiveArtifact(id: string): Promise<void> {
     `${API_BASE}/artifacts/${encodeURIComponent(id)}/archive`,
     { method: "POST" }
   );
-  if (!res.ok) throw new Error("Failed to archive artifact");
+  if (!res.ok) throw new Error(t("lib.api.archiveArtifactFailed"));
 }
 
 export async function restoreArtifact(id: string): Promise<void> {
@@ -2675,14 +2678,14 @@ export async function restoreArtifact(id: string): Promise<void> {
     `${API_BASE}/artifacts/${encodeURIComponent(id)}/restore`,
     { method: "POST" }
   );
-  if (!res.ok) throw new Error("Failed to restore artifact");
+  if (!res.ok) throw new Error(t("lib.api.restoreArtifactFailed"));
 }
 
 export async function deleteArtifact(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/artifacts/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete artifact");
+  if (!res.ok) throw new Error(t("lib.api.deleteArtifactFailed"));
 }
 
 // ---------------------------------------------------------------------------
@@ -2754,19 +2757,19 @@ export async function listReviewItems(params?: {
   if (params?.offset != null) p.set("offset", String(params.offset));
   const qs = p.toString();
   const res = await fetch(`${API_BASE}/review/items${qs ? `?${qs}` : ""}`);
-  if (!res.ok) throw new Error("Failed to list review items");
+  if (!res.ok) throw new Error(t("lib.api.listReviewItemsFailed"));
   return res.json();
 }
 
 export async function getReviewItem(itemId: string): Promise<ReviewItemDetail> {
   const res = await fetch(`${API_BASE}/review/items/${encodeURIComponent(itemId)}`);
-  if (!res.ok) throw new Error("Failed to get review item");
+  if (!res.ok) throw new Error(t("lib.api.getReviewItemFailed"));
   return res.json();
 }
 
 export async function getReviewStats(): Promise<ReviewStats> {
   const res = await fetch(`${API_BASE}/review/stats`);
-  if (!res.ok) throw new Error("Failed to get review stats");
+  if (!res.ok) throw new Error(t("lib.api.getReviewStatsFailed"));
   return res.json();
 }
 
@@ -2776,7 +2779,7 @@ export async function patchReviewItem(itemId: string, patch: ReviewItemPatch): P
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error("Failed to update review item");
+  if (!res.ok) throw new Error(t("lib.api.updateReviewItemFailed"));
   return res.json();
 }
 
@@ -2791,7 +2794,7 @@ export async function bulkApproveReviewItems(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(domain ? { domain } : { all_pending: true }),
   });
-  if (!res.ok) throw new Error("Failed to bulk approve");
+  if (!res.ok) throw new Error(t("lib.api.bulkApproveFailed"));
   return res.json();
 }
 
@@ -2804,26 +2807,26 @@ export async function curateDomain(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ domain, action }),
   });
-  if (!res.ok) throw new Error("Failed to update curation");
+  if (!res.ok) throw new Error(t("lib.api.updateCurationFailed"));
   return res.json();
 }
 
 /** Domain → count of shipped docs nobody has reviewed yet. */
 export async function getTrustedDefaults(): Promise<Record<string, number>> {
   const res = await fetch(`${API_BASE}/review/trusted-defaults`);
-  if (!res.ok) throw new Error("Failed to load trusted defaults");
+  if (!res.ok) throw new Error(t("lib.api.loadTrustedDefaultsFailed"));
   return res.json();
 }
 
 export async function listAllAnnotations(activeOnly = true): Promise<ReviewAnnotation[]> {
   const res = await fetch(`${API_BASE}/review/annotations?active_only=${activeOnly}`);
-  if (!res.ok) throw new Error("Failed to list annotations");
+  if (!res.ok) throw new Error(t("lib.api.listAnnotationsFailed"));
   return res.json();
 }
 
 export async function listItemAnnotations(itemId: string): Promise<ReviewAnnotation[]> {
   const res = await fetch(`${API_BASE}/review/items/${encodeURIComponent(itemId)}/annotations`);
-  if (!res.ok) throw new Error("Failed to list annotations");
+  if (!res.ok) throw new Error(t("lib.api.listAnnotationsFailed"));
   return res.json();
 }
 
@@ -2833,7 +2836,7 @@ export async function addAnnotation(itemId: string, correction: string): Promise
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ correction }),
   });
-  if (!res.ok) throw new Error("Failed to add annotation");
+  if (!res.ok) throw new Error(t("lib.api.addAnnotationFailed"));
   return res.json();
 }
 
@@ -2846,14 +2849,14 @@ export async function patchAnnotation(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error("Failed to update annotation");
+  if (!res.ok) throw new Error(t("lib.api.updateAnnotationFailed"));
 }
 
 export async function deleteAnnotation(annotationId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/review/annotations/${encodeURIComponent(annotationId)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete annotation");
+  if (!res.ok) throw new Error(t("lib.api.deleteAnnotationFailed"));
 }
 
 export async function* runWorkflow(
@@ -2883,11 +2886,11 @@ export async function* runWorkflow(
     } catch {
       // body wasn't JSON
     }
-    throw new Error(refusal ?? `Workflow request failed: ${detail}`);
+    throw new Error(refusal ?? t("lib.api.workflowRequestFailed", { detail }));
   }
 
   const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body");
+  if (!reader) throw new Error(t("lib.api.noResponseBody"));
 
   const decoder = new TextDecoder();
   let buffer = "";
@@ -3000,13 +3003,13 @@ export interface Persona {
 
 export async function listPersonas(): Promise<PersonaMeta[]> {
   const res = await fetch(`${API_BASE}/personas`);
-  if (!res.ok) throw new Error("Failed to list personas");
+  if (!res.ok) throw new Error(t("lib.api.listPersonasFailed"));
   return res.json();
 }
 
 export async function getPersona(slug: string): Promise<Persona> {
   const res = await fetch(`${API_BASE}/personas/${encodeURIComponent(slug)}`);
-  if (!res.ok) throw new Error("Failed to load persona");
+  if (!res.ok) throw new Error(t("lib.api.loadPersonaFailed"));
   return res.json();
 }
 
@@ -3018,7 +3021,7 @@ export async function savePersona(slug: string, displayName: string, body: strin
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Failed to save persona");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.savePersonaFailed"));
   }
   return res.json();
 }
@@ -3031,7 +3034,7 @@ export async function createPersona(displayName: string, body: string): Promise<
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Failed to create persona");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.createPersonaFailed"));
   }
   return res.json();
 }
@@ -3042,7 +3045,7 @@ export async function resetPersona(slug: string): Promise<Persona> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Failed to reset persona");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.resetPersonaFailed"));
   }
   return res.json();
 }
@@ -3053,19 +3056,19 @@ export async function deletePersona(slug: string): Promise<void> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Failed to delete persona");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.deletePersonaFailed"));
   }
 }
 
 export async function listAgents(): Promise<AgentMeta[]> {
   const res = await fetch(`${API_BASE}/agents`);
-  if (!res.ok) throw new Error("Failed to list agents");
+  if (!res.ok) throw new Error(t("lib.api.listAgentsFailed"));
   return res.json();
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
   const res = await fetch(`${API_BASE}/agents/${encodeURIComponent(agentId)}`);
-  if (!res.ok) throw new Error("Failed to load agent detail");
+  if (!res.ok) throw new Error(t("lib.api.loadAgentDetailFailed"));
   return res.json();
 }
 
@@ -3077,7 +3080,7 @@ export async function patchAgent(agentId: string, patch: AgentPatch): Promise<Ag
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Failed to update agent");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.updateAgentFailed"));
   }
   return res.json();
 }
@@ -3086,12 +3089,12 @@ export async function resetAgent(agentId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/agents/${encodeURIComponent(agentId)}/override`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to reset agent");
+  if (!res.ok) throw new Error(t("lib.api.resetAgentFailed"));
 }
 
 export async function listAgentHistory(agentId: string): Promise<AgentHistoryEntry[]> {
   const res = await fetch(`${API_BASE}/agents/${encodeURIComponent(agentId)}/history`);
-  if (!res.ok) throw new Error("Failed to list history");
+  if (!res.ok) throw new Error(t("lib.api.listHistoryFailed"));
   return res.json();
 }
 
@@ -3103,7 +3106,7 @@ export async function rollbackAgent(
     `${API_BASE}/agents/${encodeURIComponent(agentId)}/rollback/${historyId}`,
     { method: "POST" }
   );
-  if (!res.ok) throw new Error("Failed to roll back");
+  if (!res.ok) throw new Error(t("lib.api.rollBackFailed"));
   return res.json();
 }
 
@@ -3124,7 +3127,7 @@ export async function testAgent(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Test call failed");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.testCallFailed"));
   }
   return res.json();
 }
@@ -3152,7 +3155,7 @@ export interface QualityPresets {
 
 export async function listQualityPresets(): Promise<QualityPresets> {
   const res = await fetch(`${API_BASE}/agents/presets`);
-  if (!res.ok) throw new Error("Failed to load quality presets");
+  if (!res.ok) throw new Error(t("lib.api.loadQualityPresetsFailed"));
   return res.json();
 }
 
@@ -3162,7 +3165,7 @@ export async function applyQualityPreset(id: QualityPresetId): Promise<QualityPr
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Failed to apply preset");
+    throw new Error((err as { detail?: string }).detail ?? t("lib.api.applyPresetFailed"));
   }
   return res.json();
 }
@@ -3181,7 +3184,7 @@ export interface ModelOption {
 export async function listAgentModelOptions(agentId?: string): Promise<ModelOption[]> {
   const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
   const res = await fetch(`${API_BASE}/agents/models/options${qs}`);
-  if (!res.ok) throw new Error("Failed to list models");
+  if (!res.ok) throw new Error(t("lib.api.listModelsFailed"));
   return res.json();
 }
 
@@ -3225,7 +3228,7 @@ export async function listAuditLogs(params: AuditQuery = {}): Promise<AuditListR
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
   }
   const res = await fetch(`${API_BASE}/audit/logs?${qs.toString()}`);
-  if (!res.ok) throw new Error("Failed to list audit logs");
+  if (!res.ok) throw new Error(t("lib.api.listAuditLogsFailed"));
   return res.json();
 }
 
@@ -3237,7 +3240,7 @@ export interface AuditEventDetail extends AuditEvent {
 
 export async function getAuditLog(id: number): Promise<AuditEventDetail> {
   const res = await fetch(`${API_BASE}/audit/logs/${id}`);
-  if (!res.ok) throw new Error("Failed to load audit event");
+  if (!res.ok) throw new Error(t("lib.api.loadAuditEventFailed"));
   return res.json();
 }
 
@@ -3310,9 +3313,9 @@ export async function getAuditSession(
   );
   if (!res.ok) {
     if (res.status === 404) {
-      throw new Error(`No events found for session ${sessionId}`);
+      throw new Error(t("lib.api.noEventsForSession", { sessionId }));
     }
-    throw new Error("Failed to load audit session");
+    throw new Error(t("lib.api.loadAuditSessionFailed"));
   }
   return res.json();
 }
@@ -3400,7 +3403,7 @@ export async function getAuditUsage(
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
   }
   const res = await fetch(`${API_BASE}/audit/usage?${qs.toString()}`);
-  if (!res.ok) throw new Error("Failed to load token usage");
+  if (!res.ok) throw new Error(t("lib.api.loadTokenUsageFailed"));
   return res.json();
 }
 
@@ -3444,7 +3447,7 @@ export interface FixtureLoadResult {
 
 export async function listFixtures(): Promise<FixtureSummary[]> {
   const res = await fetch(`${API_BASE}/fixtures`);
-  if (!res.ok) throw new Error("Failed to list fixtures");
+  if (!res.ok) throw new Error(t("lib.api.listFixturesFailed"));
   const data = await res.json();
   return data.fixtures as FixtureSummary[];
 }
@@ -3455,7 +3458,7 @@ export async function loadFixture(name: string): Promise<FixtureLoadResult> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to load fixture");
+    throw new Error(err.detail ?? t("lib.api.loadFixtureFailed"));
   }
   return res.json() as Promise<FixtureLoadResult>;
 }
@@ -3484,7 +3487,7 @@ export interface UnloadResult {
 
 export async function getFixtureStatus(): Promise<FixtureStatus> {
   const res = await fetch(`${API_BASE}/fixtures/status`);
-  if (!res.ok) throw new Error("Failed to fetch fixture status");
+  if (!res.ok) throw new Error(t("lib.api.fetchFixtureStatusFailed"));
   return res.json() as Promise<FixtureStatus>;
 }
 
@@ -3492,7 +3495,7 @@ export async function snapshotCurrentState(): Promise<SnapshotResult> {
   const res = await fetch(`${API_BASE}/fixtures/snapshot`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to snapshot current state");
+    throw new Error(err.detail ?? t("lib.api.snapshotCurrentStateFailed"));
   }
   return res.json() as Promise<SnapshotResult>;
 }
@@ -3501,7 +3504,7 @@ export async function unloadFixture(): Promise<UnloadResult> {
   const res = await fetch(`${API_BASE}/fixtures/unload`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to unload fixture");
+    throw new Error(err.detail ?? t("lib.api.unloadFixtureFailed"));
   }
   return res.json() as Promise<UnloadResult>;
 }
@@ -3517,7 +3520,7 @@ export async function resetAllState(): Promise<ResetResult> {
   const res = await fetch(`${API_BASE}/fixtures/reset`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to reset state");
+    throw new Error(err.detail ?? t("lib.api.resetStateFailed"));
   }
   return res.json() as Promise<ResetResult>;
 }
@@ -3564,7 +3567,7 @@ export async function generateFixture(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to generate fixture");
+    throw new Error(err.detail ?? t("lib.api.generateFixtureFailed"));
   }
   return res.json() as Promise<GenerateFixtureResult>;
 }
@@ -3587,7 +3590,7 @@ export async function createFixture(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to save fixture");
+    throw new Error(err.detail ?? t("lib.api.saveFixtureFailed"));
   }
   return res.json() as Promise<CreateFixtureResult>;
 }
@@ -3598,7 +3601,7 @@ export async function deleteFixture(name: string): Promise<void> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to delete fixture");
+    throw new Error(err.detail ?? t("lib.api.deleteFixtureFailed"));
   }
 }
 
@@ -3664,13 +3667,13 @@ export interface DepartmentState {
 
 export async function listDepartments(): Promise<DepartmentState[]> {
   const res = await fetch(`${API_BASE}/departments`);
-  if (!res.ok) throw new Error(`Failed to load departments: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadDepartmentsFailed", { status: res.statusText }));
   return res.json();
 }
 
 export async function getDepartment(slug: string): Promise<DepartmentState> {
   const res = await fetch(`${API_BASE}/departments/${slug}`);
-  if (!res.ok) throw new Error(`Failed to load department: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadDepartmentFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -3694,7 +3697,7 @@ export async function updateDepartment(slug: string, patch: DepartmentPatch): Pr
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw await onboardError(res, `Failed to update department: ${res.statusText}`);
+  if (!res.ok) throw await onboardError(res, t("lib.api.updateDepartmentFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -3709,7 +3712,7 @@ export async function createDepartment(body: DepartmentCreate): Promise<Departme
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Failed to create department: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.createDepartmentFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -3717,7 +3720,7 @@ export async function deleteDepartment(slug: string): Promise<void> {
   const res = await fetch(`${API_BASE}/departments/${slug}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error(`Failed to delete department: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.deleteDepartmentFailed", { status: res.statusText }));
 }
 
 // Only `key_result` is required: the server fills a missing `period_value`
@@ -3751,7 +3754,7 @@ export async function createGoal(slug: string, body: GoalCreate): Promise<Goal> 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw await goalError(res, "Couldn't add the goal");
+  if (!res.ok) throw await goalError(res, t("lib.api.addGoalFailed"));
   return res.json();
 }
 
@@ -3770,7 +3773,7 @@ export async function updateGoal(slug: string, goalId: number, patch: GoalPatch)
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw await goalError(res, "Couldn't save the goal");
+  if (!res.ok) throw await goalError(res, t("lib.api.saveGoalFailed"));
   return res.json();
 }
 
@@ -3778,7 +3781,7 @@ export async function deleteGoal(slug: string, goalId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/departments/${slug}/goals/${goalId}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error(`Failed to delete Goal: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.deleteGoalFailed", { status: res.statusText }));
 }
 
 // ---------------------------------------------------------------------------
@@ -3826,7 +3829,7 @@ export interface Person {
 export async function listPeople(opts: { includeContacts?: boolean } = {}): Promise<Person[]> {
   const query = opts.includeContacts ? "?include_contacts=true" : "";
   const res = await fetch(`${API_BASE}/people${query}`);
-  if (!res.ok) throw new Error(`Failed to load people: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadPeopleFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -3839,13 +3842,13 @@ export interface PeopleViewer {
 
 export async function getPeopleViewer(): Promise<PeopleViewer> {
   const res = await fetch(`${API_BASE}/people/me`);
-  if (!res.ok) throw new Error(`Failed to load viewer: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadViewerFailed", { status: res.statusText }));
   return res.json();
 }
 
 export async function getPerson(id: number): Promise<Person> {
   const res = await fetch(`${API_BASE}/people/${id}`);
-  if (!res.ok) throw new Error(`Failed to load person: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadPersonFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -3869,7 +3872,7 @@ export interface PersonCreate {
 
 // Adding, editing and archiving people is the principal's alone (403 for anyone
 // else): the People list is also who can sign in and who the Executive emails.
-const PEOPLE_PRINCIPAL_ONLY = "Only the principal can change the People list.";
+const peoplePrincipalOnly = () => t("lib.api.onlyPrincipalCanChangePeopleList");
 
 export async function createPerson(body: PersonCreate): Promise<Person> {
   const res = await fetch(`${API_BASE}/people`, {
@@ -3877,9 +3880,9 @@ export async function createPerson(body: PersonCreate): Promise<Person> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (res.status === 403) throw new Error(PEOPLE_PRINCIPAL_ONLY);
-  if (res.status === 409) throw new Error(await errorDetail(res, "That address is already on another person."));
-  if (!res.ok) throw new Error(`Failed to create person: ${res.statusText}`);
+  if (res.status === 403) throw new Error(peoplePrincipalOnly());
+  if (res.status === 409) throw new Error(await errorDetail(res, t("lib.api.addressAlreadyOnAnotherPerson")));
+  if (!res.ok) throw new Error(t("lib.api.createPersonFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -3908,9 +3911,9 @@ export async function updatePerson(id: number, patch: PersonPatch): Promise<Pers
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (res.status === 403) throw new Error(PEOPLE_PRINCIPAL_ONLY);
-  if (res.status === 409) throw new Error(await errorDetail(res, "That address is already on another person."));
-  if (!res.ok) throw new Error(`Failed to update person: ${res.statusText}`);
+  if (res.status === 403) throw new Error(peoplePrincipalOnly());
+  if (res.status === 409) throw new Error(await errorDetail(res, t("lib.api.addressAlreadyOnAnotherPerson")));
+  if (!res.ok) throw new Error(t("lib.api.updatePersonFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -3960,18 +3963,18 @@ export async function approveRosterRequest(id: number, answer: RosterRequestAnsw
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(answer),
   });
-  if (!res.ok) throw new Error(await errorDetail(res, `Could not add them: ${res.statusText}`));
+  if (!res.ok) throw new Error(await errorDetail(res, t("lib.api.addThemFailed", { status: res.statusText })));
 }
 
 export async function declineRosterRequest(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/people/requests/${id}/decline`, { method: "POST" });
-  if (!res.ok) throw new Error(await errorDetail(res, `Could not ignore them: ${res.statusText}`));
+  if (!res.ok) throw new Error(await errorDetail(res, t("lib.api.ignoreThemFailed", { status: res.statusText })));
 }
 
 export async function archivePerson(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/people/${id}/archive`, { method: "POST" });
-  if (res.status === 403) throw new Error(PEOPLE_PRINCIPAL_ONLY);
-  if (!res.ok) throw new Error(`Failed to archive person: ${res.statusText}`);
+  if (res.status === 403) throw new Error(peoplePrincipalOnly());
+  if (!res.ok) throw new Error(t("lib.api.archivePersonFailed", { status: res.statusText }));
 }
 
 // Attunement — open loops: things a person committed to or was asked for in
@@ -3988,7 +3991,7 @@ export interface OpenLoop {
 
 export async function getPersonOpenLoops(id: number): Promise<OpenLoop[]> {
   const res = await fetch(`${API_BASE}/people/${id}/open-loops`);
-  if (!res.ok) throw new Error(`Failed to load open loops: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadOpenLoopsFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4005,7 +4008,7 @@ export async function assignOpenLoop(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ task, ...(dueDate ? { due_date: dueDate } : {}) }),
   });
-  if (!res.ok) throw new Error(await errorDetail(res, `Couldn't assign the task (${res.status})`));
+  if (!res.ok) throw new Error(await errorDetail(res, t("lib.api.assignTaskFailed", { code: res.status })));
   return res.json();
 }
 
@@ -4018,7 +4021,7 @@ export async function closeOpenLoop(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reason }),
   });
-  if (!res.ok) throw new Error(`Failed to close open loop: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.closeOpenLoopFailed", { status: res.statusText }));
 }
 
 // Attunement outcome ledger: how a person responded to proactive outreach
@@ -4035,7 +4038,7 @@ export interface OutreachStat {
 
 export async function getPersonOutreach(id: number): Promise<OutreachStat[]> {
   const res = await fetch(`${API_BASE}/people/${id}/outreach`);
-  if (!res.ok) throw new Error(`Failed to load outreach: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadOutreachFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4051,7 +4054,7 @@ export interface WorkingStyle {
 
 export async function getPersonWorkingStyle(id: number): Promise<WorkingStyle> {
   const res = await fetch(`${API_BASE}/people/${id}/attunement`);
-  if (!res.ok) throw new Error(`Failed to load working style: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadWorkingStyleFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4069,7 +4072,7 @@ export async function savePersonWorkingStyle(
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(
-      typeof body?.detail === "string" ? body.detail : `Failed to save: ${res.statusText}`,
+      typeof body?.detail === "string" ? body.detail : t("lib.api.saveFailed", { status: res.statusText }),
     );
   }
   return res.json();
@@ -4077,7 +4080,7 @@ export async function savePersonWorkingStyle(
 
 export async function resetPersonWorkingStyle(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/people/${id}/attunement`, { method: "DELETE" });
-  if (!res.ok) throw new Error(`Failed to reset working style: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.resetWorkingStyleFailed", { status: res.statusText }));
 }
 
 // Explicit 👍/👎 on one assistant reply (null clears it).
@@ -4094,7 +4097,7 @@ export async function setMessageFeedback(
       body: JSON.stringify({ feedback }),
     },
   );
-  if (!res.ok) throw new Error(`Failed to save feedback: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.saveFeedbackFailed", { status: res.statusText }));
 }
 
 // ---------------------------------------------------------------------------
@@ -4274,7 +4277,7 @@ export interface Today {
 export async function getToday(): Promise<Today> {
   // Never a cached copy: the header is re-polled while it is being rewritten.
   const res = await fetch(`${API_BASE}/today`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Failed to load today: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadTodayFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4292,7 +4295,7 @@ export interface BriefDeliveryNotice {
 
 export async function getBriefDelivery(signal?: AbortSignal): Promise<BriefDeliveryNotice | null> {
   const res = await fetch(`${API_BASE}/today/brief-delivery`, { signal });
-  if (!res.ok) throw new Error(`Failed to load brief delivery: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadBriefDeliveryFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4315,7 +4318,7 @@ export interface TopThreeToday {
 
 export async function getTopThree(signal?: AbortSignal): Promise<TopThreeToday | null> {
   const res = await fetch(`${API_BASE}/today/top-three`, { signal });
-  if (!res.ok) throw new Error(`Failed to load the top three: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadTopThreeFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4334,7 +4337,7 @@ export interface WeeklyReviewSummary {
 
 export async function getWeeklyReview(signal?: AbortSignal): Promise<WeeklyReviewSummary | null> {
   const res = await fetch(`${API_BASE}/today/weekly-review`, { signal });
-  if (!res.ok) throw new Error(`Failed to load the weekly review: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadWeeklyReviewFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4353,7 +4356,7 @@ export async function ackAlert(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Failed to ack alert ${alertId}: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.ackAlertFailed", { id: alertId, status: res.statusText }));
 }
 
 // Groom many alerts at once. The briefing sends explicit ids (it knows which
@@ -4369,7 +4372,7 @@ export async function bulkAckAlerts(body: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Failed to bulk-ack alerts: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.bulkAckAlertsFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4377,7 +4380,7 @@ export async function bulkAckAlerts(body: {
 export async function reopenAlert(alertId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/alerts/${alertId}/reopen`, { method: "POST" });
   // 409 = already open (not an Undo target any more); callers treat it as done.
-  if (!res.ok) throw new Error(`Failed to reopen alert ${alertId}: ${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.reopenAlertFailed", { id: alertId, code: res.status, status: res.statusText }));
 }
 
 export interface AlertReviewSummary {
@@ -4396,7 +4399,7 @@ export interface AlertReviewSummary {
 // Run the Executive's relevance review on demand ("Re-check relevance").
 export async function reviewAlerts(): Promise<AlertReviewSummary> {
   const res = await fetch(`${API_BASE}/alerts/review`, { method: "POST" });
-  if (!res.ok) throw new Error(`Failed to run alert review: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.runAlertReviewFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4420,7 +4423,7 @@ export interface ActivityResponse {
 
 export async function getActivity(limit: number = 20): Promise<ActivityResponse> {
   const res = await fetch(`${API_BASE}/today/activity?limit=${limit}`);
-  if (!res.ok) throw new Error(`Failed to load activity: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadActivityFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4440,7 +4443,7 @@ export async function getActivityDaily(
   signal?: AbortSignal,
 ): Promise<DailyActivityResponse> {
   const res = await fetch(`${API_BASE}/today/activity/daily?days=${days}`, { signal });
-  if (!res.ok) throw new Error(`Failed to load activity heatmap: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadActivityHeatmapFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4540,13 +4543,13 @@ export async function listWatchlist(options: {
   if (options.signalType) params.set("signal_type", options.signalType);
   const qs = params.toString();
   const res = await fetch(`${API_BASE}/watchlist${qs ? `?${qs}` : ""}`);
-  if (!res.ok) throw new Error(`Failed to load watchlist: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadWatchlistFailed", { status: res.statusText }));
   return res.json();
 }
 
 export async function getWatchlistItem(slug: string): Promise<WatchlistItem> {
   const res = await fetch(`${API_BASE}/watchlist/${encodeURIComponent(slug)}`);
-  if (!res.ok) throw new Error(`Failed to load watchlist entry: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadWatchlistEntryFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4557,7 +4560,7 @@ export async function getWatchlistSignals(
   const res = await fetch(
     `${API_BASE}/watchlist/${encodeURIComponent(slug)}/signals?limit=${limit}`,
   );
-  if (!res.ok) throw new Error(`Failed to load signals: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.loadSignalsFailed", { status: res.statusText }));
   return res.json();
 }
 
@@ -4569,7 +4572,7 @@ export async function createWatchlistItem(body: WatchlistCreate): Promise<Watchl
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Failed to create watchlist entry: ${res.statusText}${text ? ` — ${text}` : ""}`);
+    throw new Error(`${t("lib.api.createWatchlistEntryFailed", { status: res.statusText })}${text ? ` — ${text}` : ""}`);
   }
   return res.json();
 }
@@ -4585,7 +4588,7 @@ export async function patchWatchlistItem(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Failed to update watchlist entry: ${res.statusText}${text ? ` — ${text}` : ""}`);
+    throw new Error(`${t("lib.api.updateWatchlistEntryFailed", { status: res.statusText })}${text ? ` — ${text}` : ""}`);
   }
   return res.json();
 }
@@ -4598,7 +4601,7 @@ export async function deleteWatchlistItem(
   const res = await fetch(`${API_BASE}/watchlist/${encodeURIComponent(slug)}${qs}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error(`Failed to delete watchlist entry: ${res.statusText}`);
+  if (!res.ok) throw new Error(t("lib.api.deleteWatchlistEntryFailed", { status: res.statusText }));
 }
 
 /** Turn a research suggestion (origin=research_proposed, dry_run) into a live watch. */
@@ -4608,7 +4611,7 @@ export async function approveWatchSuggestion(slug: string): Promise<WatchlistIte
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Failed to approve suggestion: ${res.statusText}${text ? ` — ${text}` : ""}`);
+    throw new Error(`${t("lib.api.approveSuggestionFailed", { status: res.statusText })}${text ? ` — ${text}` : ""}`);
   }
   return res.json();
 }
@@ -4632,7 +4635,7 @@ export async function declineWatchSuggestion(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Failed to decline suggestion: ${res.statusText}${text ? ` — ${text}` : ""}`);
+    throw new Error(`${t("lib.api.declineSuggestionFailed", { status: res.statusText })}${text ? ` — ${text}` : ""}`);
   }
   return res.json();
 }
@@ -4672,7 +4675,7 @@ export async function approveDecision(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Failed to approve decision: ${res.statusText}${text ? ` — ${text}` : ""}`);
+    throw new Error(`${t("lib.api.approveDecisionFailed", { status: res.statusText })}${text ? ` — ${text}` : ""}`);
   }
   return res.json();
 }
@@ -4688,7 +4691,7 @@ export async function rejectDecision(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Failed to reject decision: ${res.statusText}${text ? ` — ${text}` : ""}`);
+    throw new Error(`${t("lib.api.rejectDecisionFailed", { status: res.statusText })}${text ? ` — ${text}` : ""}`);
   }
   return res.json();
 }
@@ -4729,7 +4732,7 @@ export interface ClientsStatus {
 
 export async function listClients(): Promise<ClientsStatus> {
   const res = await fetch(`${API_BASE}/clients`);
-  if (!res.ok) throw new Error("Failed to list clients");
+  if (!res.ok) throw new Error(t("lib.api.listClientsFailed"));
   return res.json() as Promise<ClientsStatus>;
 }
 
@@ -4744,7 +4747,7 @@ export async function createClient(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to create client");
+    throw new Error(err.detail ?? t("lib.api.createClientFailed"));
   }
   return res.json();
 }
@@ -4758,7 +4761,7 @@ export async function activateClient(
   );
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to activate client");
+    throw new Error(err.detail ?? t("lib.api.activateClientFailed"));
   }
   return res.json();
 }
@@ -4767,7 +4770,7 @@ export async function saveActiveClient(): Promise<{ slug: string; saved: boolean
   const res = await fetch(`${API_BASE}/clients/save`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to save client");
+    throw new Error(err.detail ?? t("lib.api.saveClientFailed"));
   }
   return res.json();
 }
@@ -4778,7 +4781,7 @@ export async function deleteClient(slug: string): Promise<void> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to delete client");
+    throw new Error(err.detail ?? t("lib.api.deleteClientFailed"));
   }
 }
 
@@ -4819,7 +4822,7 @@ export async function generateClientDraft(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to generate client draft");
+    throw new Error(err.detail ?? t("lib.api.generateClientDraftFailed"));
   }
   return res.json() as Promise<ClientDraftResult>;
 }
@@ -4841,7 +4844,7 @@ export async function createClientFromDraft(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to create client from draft");
+    throw new Error(err.detail ?? t("lib.api.createClientFromDraftFailed"));
   }
   return res.json();
 }
@@ -4873,7 +4876,7 @@ export async function getClientsCockpit(): Promise<{
   generated_at: string;
 }> {
   const res = await fetch(`${API_BASE}/clients/cockpit`);
-  if (!res.ok) throw new Error("Failed to load practice cockpit");
+  if (!res.ok) throw new Error(t("lib.api.loadPracticeCockpitFailed"));
   return res.json();
 }
 
@@ -4899,7 +4902,7 @@ export async function updateClientMeta(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Failed to update client");
+    throw new Error(err.detail ?? t("lib.api.updateClientFailed"));
   }
   return res.json();
 }
@@ -4937,7 +4940,7 @@ async function leadError(res: Response, fallback: string): Promise<Error> {
 export async function getTakeTheLead(signal?: AbortSignal): Promise<TakeTheLead | null> {
   const res = await fetch(`${API_BASE}/take-the-lead`, { signal });
   if (res.status === 403 || res.status === 404) return null;
-  if (!res.ok) throw await leadError(res, "Couldn't load Take the lead.");
+  if (!res.ok) throw await leadError(res, t("lib.api.loadTakeLeadFailed"));
   return res.json();
 }
 
@@ -4950,7 +4953,7 @@ export async function setTakeTheLead(update: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),
   });
-  if (!res.ok) throw await leadError(res, "Couldn't change Take the lead.");
+  if (!res.ok) throw await leadError(res, t("lib.api.changeTakeLeadFailed"));
   return res.json();
 }
 
@@ -4960,13 +4963,13 @@ export async function addCompanyLeadRule(kind: LeadRuleKind, value: string): Pro
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind, value }),
   });
-  if (!res.ok) throw await leadError(res, "Couldn't add the rule.");
+  if (!res.ok) throw await leadError(res, t("lib.api.addRuleFailed"));
   return res.json();
 }
 
 export async function deleteCompanyLeadRule(id: number): Promise<TakeTheLead> {
   const res = await fetch(`${API_BASE}/take-the-lead/rules/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await leadError(res, "Couldn't remove the rule.");
+  if (!res.ok) throw await leadError(res, t("lib.api.removeRuleFailed"));
   return res.json();
 }
 
@@ -4976,13 +4979,13 @@ export async function setLeadAsYou(enabled: boolean): Promise<DelegationSettings
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled }),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't change Take the lead as you.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.changeTakeLeadAsYouFailed"));
   return res.json();
 }
 
 export async function getMyLeadRules(signal?: AbortSignal): Promise<LeadRule[]> {
   const res = await fetch(`${API_BASE}/delegation/take-the-lead/rules`, { signal });
-  if (!res.ok) throw await delegationError(res, "Couldn't load your rules.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.loadRulesFailed"));
   return ((await res.json()) as { rules: LeadRule[] }).rules;
 }
 
@@ -4992,13 +4995,13 @@ export async function addMyLeadRule(kind: LeadRuleKind, value: string): Promise<
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind, value }),
   });
-  if (!res.ok) throw await delegationError(res, "Couldn't add the rule.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.addRuleFailed"));
   return ((await res.json()) as { rules: LeadRule[] }).rules;
 }
 
 export async function deleteMyLeadRule(id: number): Promise<LeadRule[]> {
   const res = await fetch(`${API_BASE}/delegation/take-the-lead/rules/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await delegationError(res, "Couldn't remove the rule.");
+  if (!res.ok) throw await delegationError(res, t("lib.api.removeRuleFailed"));
   return ((await res.json()) as { rules: LeadRule[] }).rules;
 }
 

@@ -38,6 +38,7 @@ from openexecutive.onboarding.interview import (
     MAX_QUESTIONS,
     MAX_TRANSCRIPT_CHARS,
     OPENING_PROMPT,
+    OPENING_PROMPT_KO,
     CompanyDraft,
     Turn,
     transcript_chars,
@@ -49,6 +50,7 @@ from openexecutive.onboarding.wizard import (
     get_step,
     process_answer,
 )
+from openexecutive.utils.i18n import localized as _t
 from openexecutive.workflows.gate import ensure_workflow_event
 
 logger = logging.getLogger(__name__)
@@ -317,7 +319,7 @@ def _get_interview(session_id: str) -> InterviewSession:
     _sweep_interview_sessions()
     session = _interview_sessions.get(session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail="Setup session not found or expired.")
+        raise HTTPException(status_code=404, detail=_t("Setup session not found or expired.", "설정 세션을 찾을 수 없거나 만료됐어요."))
     session.last_touched = time.monotonic()
     _interview_sessions.move_to_end(session_id)
     return session
@@ -358,7 +360,7 @@ def _turn_response(session_id: str, session: InterviewSession) -> OnboardTurnRes
         phase="question",
         questions_asked=session.questions_asked,
         max_questions=MAX_QUESTIONS,
-        question=question or OPENING_PROMPT,
+        question=question or _t(OPENING_PROMPT, OPENING_PROMPT_KO),
         question_hint=session.last_hint or None,
     )
 
@@ -429,7 +431,10 @@ async def start_interview(
     if len(description) > ONBOARD_MESSAGE_MAX_CHARS:
         raise HTTPException(
             status_code=422,
-            detail=f"Description is too long (limit {ONBOARD_MESSAGE_MAX_CHARS:,} characters).",
+            detail=_t(
+                f"Description is too long (limit {ONBOARD_MESSAGE_MAX_CHARS:,} characters).",
+                f"설명이 너무 길어요(최대 {ONBOARD_MESSAGE_MAX_CHARS:,}자).",
+            ),
         )
 
     # Extract BEFORE registering a session. 400/413 from here propagate
@@ -485,14 +490,17 @@ async def understand_description(
     if len(description) > ONBOARD_MESSAGE_MAX_CHARS:
         raise HTTPException(
             status_code=422,
-            detail=f"Description is too long (limit {ONBOARD_MESSAGE_MAX_CHARS:,} characters).",
+            detail=_t(
+                f"Description is too long (limit {ONBOARD_MESSAGE_MAX_CHARS:,} characters).",
+                f"설명이 너무 길어요(최대 {ONBOARD_MESSAGE_MAX_CHARS:,}자).",
+            ),
         )
     extracted = await _gather_intake_attachments(files or [])
     text = description.strip()
     for name, body in extracted:
         text += f"\n\n=== Attached: {name} ===\n{body[:_INTAKE_GEN_CHARS_PER_FILE]}"
     if not text.strip():
-        raise HTTPException(status_code=422, detail="Tell me a little about your work first.")
+        raise HTTPException(status_code=422, detail=_t("Tell me a little about your work first.", "먼저 하는 일을 조금 알려 주세요."))
     try:
         result = await understand(text.strip())
     except InterviewTimeout as exc:
@@ -509,13 +517,16 @@ async def interview_message(body: OnboardMessageRequest) -> OnboardTurnResponse:
     if len(body.message) > ONBOARD_MESSAGE_MAX_CHARS:
         raise HTTPException(
             status_code=422,
-            detail=f"Message is too long (limit {ONBOARD_MESSAGE_MAX_CHARS:,} characters).",
+            detail=_t(
+                f"Message is too long (limit {ONBOARD_MESSAGE_MAX_CHARS:,} characters).",
+                f"메시지가 너무 길어요(최대 {ONBOARD_MESSAGE_MAX_CHARS:,}자).",
+            ),
         )
     session = _get_interview(body.session_id)
     if session.saved:
-        raise HTTPException(status_code=409, detail="This setup session was already saved.")
+        raise HTTPException(status_code=409, detail=_t("This setup session was already saved.", "이 설정 세션은 이미 저장됐어요."))
     if not body.message.strip():
-        raise HTTPException(status_code=422, detail="Message is empty.")
+        raise HTTPException(status_code=422, detail=_t("Message is empty.", "메시지가 비어 있어요."))
 
     # Bound the conversation in memory as well as in questions. The budget in
     # interview.py only forces a draft; without this a client could grow the
@@ -523,9 +534,10 @@ async def interview_message(body: OnboardMessageRequest) -> OnboardTurnResponse:
     if transcript_chars(session.transcript) + len(body.message) > MAX_TRANSCRIPT_CHARS:
         raise HTTPException(
             status_code=422,
-            detail=(
+            detail=_t(
                 "This setup conversation has gotten long. Draft the profile "
-                "now and edit it directly."
+                "now and edit it directly.",
+                "설정 대화가 길어졌어요. 지금 프로필 초안을 만들고 직접 고치세요.",
             ),
         )
 
@@ -541,11 +553,11 @@ async def interview_draft(body: OnboardSessionRequest) -> OnboardTurnResponse:
     """Force a draft now, however much is still unknown."""
     session = _get_interview(body.session_id)
     if session.saved:
-        raise HTTPException(status_code=409, detail="This setup session was already saved.")
+        raise HTTPException(status_code=409, detail=_t("This setup session was already saved.", "이 설정 세션은 이미 저장됐어요."))
     if not session.transcript:
         raise HTTPException(
             status_code=422,
-            detail="Tell me a little about your company first.",
+            detail=_t("Tell me a little about your company first.", "먼저 회사에 대해 조금 알려 주세요."),
         )
     return await _advance_interview(body.session_id, session, force_draft=True)
 
@@ -588,16 +600,17 @@ async def commit_interview(body: OnboardCommitRequest, request: Request) -> Comp
     if session.saved:
         raise HTTPException(
             status_code=409,
-            detail=(
+            detail=_t(
                 "This setup session was already saved. Edit your company "
-                "profile on the Company Profile page."
+                "profile on the Company Profile page.",
+                "이 설정 세션은 이미 저장됐어요. 회사 프로필은 회사 프로필 페이지에서 고치세요.",
             ),
         )
     # A service (signed callers on, no assertion) names no one. On a first
     # setup the owner checks below let anyone choose the owner and their
     # sign-in email, which must be someone signed in.
     if api_caller.caller(request).kind == "service":
-        raise HTTPException(status_code=403, detail="Sign in to save setup.")
+        raise HTTPException(status_code=403, detail=_t("Sign in to save setup.", "설정을 저장하려면 로그인하세요."))
 
     settings = get_settings()
 
@@ -617,9 +630,11 @@ async def commit_interview(body: OnboardCommitRequest, request: Request) -> Comp
         )
         raise HTTPException(
             status_code=422,
-            detail=(
+            detail=_t(
                 "That profile could not be saved. Check that numbers are "
-                "numbers and no field was left in a bad state, then try again."
+                "numbers and no field was left in a bad state, then try again.",
+                "프로필을 저장하지 못했어요. 숫자 칸에 숫자가 들어갔는지, 잘못 입력된 칸이 없는지 "
+                "확인하고 다시 시도하세요.",
             ),
         ) from exc
 
@@ -651,14 +666,19 @@ async def commit_interview(body: OnboardCommitRequest, request: Request) -> Comp
     except (OSError, sqlite3.Error) as exc:
         logger.warning("onboarding commit: owner lookup failed (%s)", type(exc).__name__)
         raise HTTPException(
-            status_code=503, detail="Could not check who owns this workspace. Try again."
+            status_code=503, detail=_t(
+                "Could not check who owns this workspace. Try again.",
+                "이 워크스페이스의 소유자를 확인하지 못했어요. 다시 시도하세요.",
+            )
         ) from exc
     if blocked:
         raise HTTPException(
             status_code=403,
-            detail=(
+            detail=_t(
                 "Only the current owner can make someone else the owner. Mark the current "
-                'owner as "This is me", or ask them to run setup.'
+                'owner as "This is me", or ask them to run setup.',
+                "다른 사람을 소유자로 바꾸는 건 현재 소유자만 할 수 있어요. 현재 소유자를 “나”로 "
+                "표시하거나, 현재 소유자에게 설정을 진행해 달라고 하세요.",
             ),
         )
     try:
@@ -673,14 +693,19 @@ async def commit_interview(body: OnboardCommitRequest, request: Request) -> Comp
     except (OSError, sqlite3.Error) as exc:
         logger.warning("onboarding commit: owner lookup failed (%s)", type(exc).__name__)
         raise HTTPException(
-            status_code=503, detail="Could not check who owns this workspace. Try again."
+            status_code=503, detail=_t(
+                "Could not check who owns this workspace. Try again.",
+                "이 워크스페이스의 소유자를 확인하지 못했어요. 다시 시도하세요.",
+            )
         ) from exc
     if email_blocked:
         raise HTTPException(
             status_code=403,
-            detail=(
+            detail=_t(
                 "Only the owner can put another address on the owner's entry. If you "
-                "are the owner, use the email you signed in with; if not, leave it blank."
+                "are the owner, use the email you signed in with; if not, leave it blank.",
+                "소유자 정보에 다른 주소를 넣는 건 소유자만 할 수 있어요. 소유자라면 로그인한 "
+                "이메일을 쓰고, 아니라면 비워 두세요.",
             ),
         )
 
@@ -689,7 +714,7 @@ async def commit_interview(body: OnboardCommitRequest, request: Request) -> Comp
     # 2. is_empty() keys off the name — a nameless profile is invisible to
     #    every consumer, including the health check that gates onboarding.
     if not profile.name.strip():
-        raise HTTPException(status_code=422, detail="Your company needs a name.")
+        raise HTTPException(status_code=422, detail=_t("Your company needs a name.", "회사 이름이 필요해요."))
 
     # 3. The write. Atomic (write-then-rename, O_EXCL, fsync) inside.
     try:
@@ -698,7 +723,7 @@ async def commit_interview(body: OnboardCommitRequest, request: Request) -> Comp
         logger.error("onboarding commit: save failed (%s)", type(exc).__name__)
         raise HTTPException(
             status_code=422,
-            detail="Could not save the company profile. Try again.",
+            detail=_t("Could not save the company profile. Try again.", "회사 프로필을 저장하지 못했어요. 다시 시도하세요."),
         ) from exc
 
     # 4. Past this point the profile exists; nothing below may fail the request.

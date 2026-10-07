@@ -12,10 +12,10 @@ import {
   isDestinationActive,
   isAdvancedPath,
   isNavActive,
-  NEW_CHAT_DESCRIPTION,
   SETTINGS_NAV_ITEM,
 } from "@/components/shell/navConfig";
 import { getReviewStats } from "@/lib/api";
+import { t } from "@/i18n/index.ts";
 
 /**
  * Wiring the chat home passes in. `/` keeps its state in memory (mode,
@@ -86,7 +86,7 @@ export default function AppSidebar({
         <SidebarEntry
           href={home ? undefined : "/"}
           onClick={home ? home.onBriefing : onClose}
-          ariaLabel="Back to home"
+          ariaLabel={t("chat.shell.backHome")}
           className="flex items-center gap-2.5 min-w-0 text-left text-fg cursor-pointer hover:opacity-80 transition-opacity"
         >
           <span className="flex-shrink-0">
@@ -101,7 +101,7 @@ export default function AppSidebar({
         </SidebarEntry>
         <button
           type="button"
-          aria-label="Close menu"
+          aria-label={t("chat.shell.closeMenu")}
           onClick={onClose}
           className={`${HIDE_FROM[breakpoint]} min-h-touch min-w-touch flex items-center justify-center text-fg-muted hover:text-fg cursor-pointer rounded-lg hover:bg-surface-overlay transition-colors`}
         >
@@ -113,18 +113,18 @@ export default function AppSidebar({
         <SidebarEntry
           href={home ? undefined : "/?new=1"}
           onClick={home ? home.onNewChat : onClose}
-          title={NEW_CHAT_DESCRIPTION}
+          title={t("chat.nav.desc.newChat")}
           ariaCurrent={newChatActive}
           className="w-full h-11 rounded-xl bg-accent-strong text-white text-[15px] font-semibold flex items-center justify-center gap-2 shadow-sm hover:bg-accent-strong/90 transition-colors cursor-pointer"
         >
           <Icon name="plus" size="w-5 h-5" />
-          New chat
+          {t("chat.nav.newChat")}
         </SidebarEntry>
       </div>
 
       {/* The six places. Everything else is a tab inside one of them, or a
           tool on Settings. */}
-      <nav aria-label="Main" className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
+      <nav aria-label={t("chat.shell.mainNav")} className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
         <div className="space-y-1">
           {destinations.map((d) => {
             const isHome = d.key === "home";

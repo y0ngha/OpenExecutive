@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import RosterRequestCard from "@/components/RosterRequestCard";
+import { displayLocale, t } from "@/i18n/index.ts";
 import Button, { buttonClass } from "@/components/ui/Button";
 import OverflowMenu, { type OverflowItem } from "@/components/ui/OverflowMenu";
 import type { PersonBriefItem, ProposalItem } from "@/lib/api";
@@ -24,15 +25,15 @@ const LONG_BODY_CHARS = 180;
 function artifactBadge(format: ProposalItem["artifact_format"]): string {
   switch (format) {
     case "html":
-      return "Web page";
+      return t("briefing.card.badgeWebPage");
     case "docx":
-      return "Word doc";
+      return t("briefing.card.badgeWordDoc");
     case "xlsx":
-      return "Spreadsheet";
+      return t("briefing.card.badgeSpreadsheet");
     case "link":
-      return "Link";
+      return t("briefing.card.badgeLink");
     default:
-      return "Document";
+      return t("briefing.card.badgeDocument");
   }
 }
 
@@ -53,29 +54,40 @@ function buildProposalLifecycle(proposal: ProposalItem): {
   const reviewLine = proposal.review_note ? (
     <p className={`text-sm leading-snug ${isLikelyStale ? TONE_TEXT.amber : "text-fg-muted"}`}>
       <span className="mr-1.5 text-xs font-semibold uppercase tracking-wide">
-        {isLikelyStale ? "Likely stale" : verdict === "changed" ? "Updated" : "Since you last looked"}
+        {isLikelyStale
+          ? t("briefing.card.likelyStale")
+          : verdict === "changed"
+            ? t("briefing.card.updated")
+            : t("briefing.card.sinceLastLooked")}
       </span>
       {proposal.review_note}
     </p>
   ) : null;
   const chips: { label: string; tone: "neutral" | "amber" | "sky"; title?: string }[] = [];
-  if (age) chips.push({ label: age, tone: "neutral", title: `Raised ${new Date(proposal.created_at).toLocaleString()}` });
+  if (age) chips.push({ label: age, tone: "neutral", title: t("briefing.card.raisedAt", { when: new Date(proposal.created_at).toLocaleString(displayLocale()) }) });
   if ((proposal.occurrence_count ?? 1) > 1)
     chips.push({
-      label: `seen ×${proposal.occurrence_count}`,
+      label: t("briefing.card.seenTimes", { n: proposal.occurrence_count ?? 0 }),
       tone: "neutral",
-      title: proposal.last_seen_at ? `Last seen ${ageLabel(proposal.last_seen_at)} ago` : undefined,
+      title: proposal.last_seen_at ? t("briefing.card.lastSeen", { age: ageLabel(proposal.last_seen_at) }) : undefined,
     });
   if (proposal.why_now || dueIn != null) {
-    const due = dueIn == null ? "" : dueIn < 0 ? "overdue" : dueIn === 0 ? "due today" : `due in ${dueIn}d`;
+    const due =
+      dueIn == null
+        ? ""
+        : dueIn < 0
+          ? t("briefing.inFlight.overdue")
+          : dueIn === 0
+            ? t("briefing.card.dueToday")
+            : t("briefing.card.dueIn", { n: dueIn });
     chips.push({ label: [proposal.why_now, due].filter(Boolean).join(" · "), tone: "amber" });
   }
-  if (isLikelyStale && !proposal.review_note) chips.push({ label: "Likely stale", tone: "amber" });
+  if (isLikelyStale && !proposal.review_note) chips.push({ label: t("briefing.card.likelyStale"), tone: "amber" });
   if ((proposal.superseded_count ?? 0) > 0)
-    chips.push({ label: `${proposal.superseded_count} folded in`, tone: "neutral" });
+    chips.push({ label: t("briefing.card.foldedIn", { n: proposal.superseded_count ?? 0 }), tone: "neutral" });
   if (verdict === "changed" && !proposal.review_note)
-    chips.push({ label: "Updated by the Executive", tone: "sky" });
-  if (verdict === "drafted") chips.push({ label: "Draft ready in your queue", tone: "amber" });
+    chips.push({ label: t("briefing.card.updatedByExecutive"), tone: "sky" });
+  if (verdict === "drafted") chips.push({ label: t("briefing.card.draftReady"), tone: "amber" });
   const lifecycleRow = chips.length > 0 ? (
     <div className="flex flex-wrap gap-1.5">
       {chips.map((c) => (
@@ -87,7 +99,7 @@ function buildProposalLifecycle(proposal: ProposalItem): {
   ) : null;
   const reviewedFooter = proposal.last_reviewed_at ? (
     <p className="text-xs text-fg-subtle">
-      Reviewed {ageLabel(proposal.last_reviewed_at)} ago
+      {t("briefing.card.reviewedAgo", { age: ageLabel(proposal.last_reviewed_at) })}
       {verdict && verdict !== "likely_stale" ? ` · ${verdict}` : ""}
     </p>
   ) : null;
@@ -281,7 +293,7 @@ export default function ProposalCard({
     !isMonitoring && proposal.suggested_action ? (
       <div className="rounded-xl border border-accent/30 bg-accent/5 px-3.5 py-2.5">
         <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
-          {isArtifact ? "Why this is worth your time" : "If you approve"}
+          {isArtifact ? t("briefing.card.worthYourTime") : t("briefing.card.ifYouApprove")}
         </div>
         <p className="text-sm leading-snug text-fg whitespace-pre-wrap break-words">
           {proposal.suggested_action}
@@ -297,7 +309,7 @@ export default function ProposalCard({
       >
         <div className="mb-3 flex items-start justify-between gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Editing proposal — sent word for word
+            {t("briefing.card.editingHeader")}
           </span>
           {assignee && <span className="flex-shrink-0 text-sm text-accent">→ {assignee.full_name}</span>}
         </div>
@@ -309,16 +321,16 @@ export default function ProposalCard({
           onChange={(e) => setEditedBody(e.target.value)}
           rows={6}
           disabled={busy}
-          aria-label="Proposal text to send"
+          aria-label={t("briefing.card.editLabel")}
           className="w-full rounded-xl border border-line bg-surface p-3 text-[15px] leading-snug text-fg whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
           autoFocus
         />
         <div className="mt-3 flex flex-wrap justify-end gap-2">
           <Button variant="ghost" onClick={cancelEditing} disabled={busy}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button variant="primary" onClick={submitEdit} disabled={busy || !editedBody.trim()}>
-            Send approval
+            {t("briefing.card.sendApproval")}
           </Button>
         </div>
       </div>
@@ -331,7 +343,7 @@ export default function ProposalCard({
   const nudge: CardAction | null =
     move === "nudge" && onContinue && !isArtifact && !isMonitoring
       ? {
-          label: `Nudge ${firstName ?? "owner"}`,
+          label: t("briefing.card.nudge", { name: firstName ?? t("briefing.card.owner") }),
           onSelect: () => {
             const who = assignee?.full_name ?? "the owner";
             onContinue(
@@ -345,30 +357,37 @@ export default function ProposalCard({
   const workflow: CardAction | null =
     move === "suggest_workflow" && proposal.suggested_workflow && !isArtifact && !isMonitoring
       ? {
-          label: `Run ${proposal.suggested_workflow.replace(/_/g, " ")}`,
+          label: t("briefing.card.runWorkflow", { name: proposal.suggested_workflow.replace(/_/g, " ") }),
           href: `/jobs/${proposal.suggested_workflow}`,
         }
       : null;
   const approve: CardAction | null =
-    !isMonitoring && !isArtifact && onApprove ? { label: "Approve", onSelect: () => onApprove(proposal) } : null;
+    !isMonitoring && !isArtifact && onApprove ? { label: t("common.approve"), onSelect: () => onApprove(proposal) } : null;
   const editApprove: CardAction | null =
     !isMonitoring && !isArtifact && !isDecision && onApproveWithEdits
-      ? { label: "Edit & approve", onSelect: startEditing }
+      ? { label: t("briefing.card.editApprove"), onSelect: startEditing }
       : null;
   const dismiss: CardAction | null = onDismiss
     ? isArtifact
-      ? { label: "Mark reviewed", onSelect: () => onDismiss(proposal) }
-      : { label: isMonitoring ? "Dismiss signal" : "Dismiss", onSelect: () => onDismiss(proposal) }
+      ? { label: t("briefing.card.markReviewed"), onSelect: () => onDismiss(proposal) }
+      : {
+          label: isMonitoring ? t("briefing.monitoring.dismissSignal") : t("briefing.card.dismiss"),
+          onSelect: () => onDismiss(proposal),
+        }
     : null;
   const openDoc: CardAction | null = isArtifact
-    ? { label: "Open document", href: `/artifacts/${encodeURIComponent(`alert:${proposal.alert_id}`)}` }
+    ? { label: t("briefing.card.openDocument"), href: `/artifacts/${encodeURIComponent(`alert:${proposal.alert_id}`)}` }
     : null;
   const openInApp: CardAction | null =
     isArtifact && proposal.artifact_format === "link" && proposal.artifact_url
-      ? { label: `Open in app (${hostOf(proposal.artifact_url)})`, href: proposal.artifact_url, external: true }
+      ? {
+          label: t("briefing.card.openInApp", { host: hostOf(proposal.artifact_url) }),
+          href: proposal.artifact_url,
+          external: true,
+        }
       : null;
   const personPage: CardAction | null = assignee
-    ? { label: `Open ${firstName ?? assignee.full_name}'s page`, href: `/people/${assignee.id}` }
+    ? { label: t("briefing.card.personPage", { name: firstName ?? assignee.full_name }), href: `/people/${assignee.id}` }
     : null;
 
   // The primary: the review's recommended move when it is one the user
@@ -385,7 +404,7 @@ export default function ProposalCard({
   const showActions = Boolean(onApprove || onDismiss || onApproveWithEdits);
 
   const status = isMonitoring ? null : proposalStatusChip(proposal);
-  const visibleTags = proposal.topic_tags.filter((t) => t !== "artifact");
+  const visibleTags = proposal.topic_tags.filter((tag) => tag !== "artifact");
   const { reviewLine, lifecycleRow, reviewedFooter } = buildProposalLifecycle(proposal);
   const surfacedNote = proposal.surfaced_reason ? (
     <p className="text-sm text-fg-muted leading-snug">{proposal.surfaced_reason}</p>
@@ -434,7 +453,7 @@ export default function ProposalCard({
           {assignee && <span>→ {assignee.full_name}</span>}
           {hasDetails && (
             <span className="inline-flex items-center gap-1 text-fg-subtle">
-              {expanded ? "Less" : "Details"}
+              {expanded ? t("briefing.card.less") : t("briefing.card.details")}
               <span aria-hidden="true" className={`text-[10px] transition-transform ${expanded ? "rotate-90" : ""}`}>
                 ▸
               </span>
@@ -470,7 +489,7 @@ export default function ProposalCard({
           {radarBody && (
             <div>
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
-                Why this is on your radar
+                {t("briefing.card.onYourRadar")}
               </div>
               <p className="text-sm text-fg-muted whitespace-pre-wrap break-words">{radarBody}</p>
             </div>
@@ -481,11 +500,11 @@ export default function ProposalCard({
           {surfacedNote}
           {visibleTags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {visibleTags.map((t) => (
+              {visibleTags.map((tag) => (
                 // `external:*` tags come from the external-monitoring layer —
                 // sky marks outside-world provenance at a glance.
-                <Chip key={t} tone={t.startsWith("external:") ? "sky" : "neutral"}>
-                  {t}
+                <Chip key={tag} tone={tag.startsWith("external:") ? "sky" : "neutral"}>
+                  {tag}
                 </Chip>
               ))}
             </div>
@@ -519,11 +538,11 @@ export default function ProposalCard({
               onClick={() => onContinue(handoffPrompt, handoffMemory)}
               disabled={busy}
             >
-              Discuss
+              {t("briefing.card.discuss")}
             </Button>
           )}
           <OverflowMenu
-            label="More actions for this item"
+            label={t("briefing.card.moreActions")}
             items={menu.map(
               (a): OverflowItem => ({
                 label: a.label,

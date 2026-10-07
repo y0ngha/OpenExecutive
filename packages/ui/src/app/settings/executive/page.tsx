@@ -9,13 +9,15 @@ import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsSubpage from "@/components/settings/SettingsSubpage";
 import TakeTheLeadCard from "@/components/settings/TakeTheLeadCard";
 import { MeetingAutonomySwitch } from "@/components/settings/WorkspaceCard";
+import { t, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 
 // What it always does without asking: no switch, only Pause stops these.
-const ALWAYS_DOES: { title: string; text: string }[] = [
-  { title: "Morning brief and evening digest", text: "Sums up your day and what's waiting for you." },
-  { title: "Nudges", text: "Reminds people about things they owe you." },
-  { title: "Looks over your day", text: "Spots what's stuck or coming up and tells you." },
-  { title: "Research and monitoring", text: "Follows the topics and sources you asked it to watch." },
+const ALWAYS_DOES: { title: MessageKey; text: MessageKey }[] = [
+  { title: "settings.executive.always.briefs.title", text: "settings.executive.always.briefs.text" },
+  { title: "settings.executive.always.nudges.title", text: "settings.executive.always.nudges.text" },
+  { title: "settings.executive.always.day.title", text: "settings.executive.always.day.text" },
+  { title: "settings.executive.always.research.title", text: "settings.executive.always.research.text" },
 ];
 
 // Settings → Your Executive: everything the Executive does without asking
@@ -26,24 +28,24 @@ const ALWAYS_DOES: { title: string; text: string }[] = [
 export default function ExecutiveSettingsPage() {
   return (
     <SettingsSubpage
-      title="Your Executive"
-      description="What it does without asking you first, how much, and the voice it answers in."
+      title={t("settings.executive.title")}
+      description={t("settings.executive.description")}
     >
       <SettingsCard
-        title="Pause everything"
-        description="Stops everything it does on its own below, plus briefs, nudges and research. It still answers when someone messages it, and anything you tap Send or Approve on still goes."
+        title={t("settings.executive.pauseTitle")}
+        description={t("settings.executive.pauseDescription")}
       >
         <ExecutiveRunSwitch />
       </SettingsCard>
 
       <PausedNote />
 
-      <SettingsCard title="Always does on its own" description="No switch for these. Pause stops them too.">
+      <SettingsCard title={t("settings.executive.alwaysTitle")} description={t("settings.executive.alwaysDescription")}>
         <ul className="flex flex-col gap-3">
           {ALWAYS_DOES.map((item) => (
             <li key={item.title} className="text-[15px] leading-snug">
-              <span className="font-semibold text-fg">{item.title}.</span>{" "}
-              <span className="text-fg-muted">{item.text}</span>
+              <span className="font-semibold text-fg">{t(item.title)}.</span>{" "}
+              <span className="text-fg-muted">{t(item.text)}</span>
             </li>
           ))}
         </ul>
@@ -51,22 +53,24 @@ export default function ExecutiveSettingsPage() {
 
       <section aria-labelledby="exec-as-executive" className="space-y-3">
         <div>
-          <h2 id="exec-as-executive" className="text-lg font-semibold text-fg">As the Executive</h2>
-          <p className="mt-1 text-[15px] text-fg-muted">In its own name. People can see it&apos;s the Executive.</p>
+          <h2 id="exec-as-executive" className="text-lg font-semibold text-fg">{t("settings.executive.asExecutiveTitle")}</h2>
+          <p className="mt-1 text-[15px] text-fg-muted">{t("settings.executive.asExecutiveText")}</p>
         </div>
         <TakeTheLeadCard />
         <MeetingAutonomySwitch />
       </section>
 
       <p className="text-[15px] text-fg-muted">
-        Replies it sends as you, from your own mailbox, are under{" "}
-        <Link href="/settings/act-as-me" className="font-medium text-accent underline-offset-2 hover:underline">
-          Act as me
-        </Link>
-        .
+        {tRich("settings.executive.actAsMeNote", {
+          link: (
+            <Link href="/settings/act-as-me" className="font-medium text-accent underline-offset-2 hover:underline">
+              {t("settings.actAsMe.title")}
+            </Link>
+          ),
+        })}
       </p>
 
-      <SettingsCard title="Voice" description="How it sounds when it answers you.">
+      <SettingsCard title={t("settings.executive.voiceTitle")} description={t("settings.executive.voiceDescription")}>
         <VoicePicker variant="card" />
       </SettingsCard>
     </SettingsSubpage>
@@ -82,7 +86,7 @@ function PausedNote() {
       role="status"
       className="rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-3 text-[15px] font-medium text-fg"
     >
-      Paused. Nothing on this page runs until you resume, whatever its switch says.
+      {t("settings.executive.pausedNote")}
     </p>
   );
 }

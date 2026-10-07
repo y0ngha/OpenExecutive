@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { WorkflowToolInfo, describeWorkflowTools } from "@/lib/api";
+import { t } from "@/i18n/index.ts";
 
 /**
  * "google_workspace__append_table_rows" → { label: "Append table rows", source: "google_workspace" }
@@ -30,7 +31,7 @@ export function useToolInfo(names: string[]): Map<string, WorkflowToolInfo> {
     let cancelled = false;
     describeWorkflowTools(key.split(","))
       .then((tools) => {
-        if (!cancelled) setInfo(new Map(tools.map((t) => [t.name, t])));
+        if (!cancelled) setInfo(new Map(tools.map((tool) => [tool.name, tool])));
       })
       .catch(() => {
         if (!cancelled) setInfo(new Map());
@@ -72,14 +73,14 @@ export default function ToolChips({
             {source && <span className="text-fg-subtle">· {source}</span>}
             {writes && (
               <span className="rounded bg-amber-500/15 px-1 text-[10px] text-amber-300">
-                may change things
+                {t("jobs.tools.mayChange")}
               </span>
             )}
             {onRemove && (
               <button
                 type="button"
                 onClick={() => onRemove(name)}
-                aria-label={`Remove ${name}`}
+                aria-label={t("jobs.tools.removeAria", { name })}
                 className="ml-0.5 text-fg-subtle hover:text-red-400"
               >
                 ×

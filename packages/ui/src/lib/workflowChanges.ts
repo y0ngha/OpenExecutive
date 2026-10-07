@@ -1,30 +1,32 @@
 // Plain-words view of a custom workflow: its schedule, and what a revision
-// changes compared with the saved version. Pure (type imports only), so the
-// node test runner can load it.
+// changes compared with the saved version. Pure (type imports and the
+// relative i18n import only), so the node test runner can load it.
 import type { DynamicStep, DynamicWorkflowDef } from "./api";
+import { t, type MessageKey } from "../i18n/index.ts";
 
-const DAYS: Record<string, string> = {
-  mon: "Monday",
-  tue: "Tuesday",
-  wed: "Wednesday",
-  thu: "Thursday",
-  fri: "Friday",
-  sat: "Saturday",
-  sun: "Sunday",
+const DAYS: Record<string, MessageKey> = {
+  mon: "jobs.day.mon",
+  tue: "jobs.day.tue",
+  wed: "jobs.day.wed",
+  thu: "jobs.day.thu",
+  fri: "jobs.day.fri",
+  sat: "jobs.day.sat",
+  sun: "jobs.day.sun",
 };
 
 /** Plain-words rendering of the cadence DSL (daily@HH:MM, weekly@DOW@HH:MM, quarterly@DD-HH:MM). */
 export function describeCadence(cadence: string | null | undefined): string {
-  if (!cadence) return "Only when you run it";
+  if (!cadence) return t("jobs.cadence.manual");
   const parts = cadence.split("@");
-  if (parts[0] === "daily" && parts[1]) return `Every day at ${parts[1]} UTC`;
+  if (parts[0] === "daily" && parts[1]) return t("jobs.cadence.daily", { time: parts[1] });
   if (parts[0] === "weekly" && parts[1] && parts[2]) {
-    const day = DAYS[parts[1].toLowerCase()] ?? parts[1];
-    return `Every ${day} at ${parts[2]} UTC`;
+    const dayKey = DAYS[parts[1].toLowerCase()];
+    const day = dayKey ? t(dayKey) : parts[1];
+    return t("jobs.cadence.weekly", { day, time: parts[2] });
   }
   if (parts[0] === "quarterly" && parts[1]) {
     const [dd, time] = parts[1].split("-");
-    return `Quarterly on day ${Number(dd)} at ${time} UTC`;
+    return t("jobs.cadence.quarterly", { day: Number(dd), time });
   }
   return cadence;
 }

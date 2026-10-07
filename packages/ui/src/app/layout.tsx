@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist } from "next/font/google";
+import { connection } from "next/server";
 import AuthProvider from "@/components/AuthProvider";
 import { ExecutiveStatusProvider } from "@/components/executive/ExecutiveStatusContext";
 import { SessionsProvider } from "@/components/sessions/SessionsContext";
 import AppShell from "@/components/shell/AppShell";
 import { WorkspaceProvider } from "@/components/workspace/WorkspaceContext";
+import { locale, t } from "@/i18n/index.ts";
 import "./globals.css";
 
 // Geist, self-hosted by next/font at build time: no request to Google from
@@ -18,10 +20,13 @@ const bricolage = Bricolage_Grotesque({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "Open Executive",
-  description: "Your AI-powered virtual executive team",
-};
+// A function, not a constant, so the text is looked up per request.
+export function generateMetadata(): Metadata {
+  return {
+    title: t("lib.meta.title"),
+    description: t("lib.meta.description"),
+  };
+}
 
 // `viewport-fit=cover` lets the page reach under the iPhone notch and home
 // indicator; the mobile bottom bar pads itself by the safe-area inset so its
@@ -32,13 +37,17 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Render every page per request, so OE_LANGUAGE is read when the server
+  // runs, not frozen into prebuilt HTML at `next build` (a Docker image is
+  // built once and run with either language).
+  await connection();
   return (
-    <html lang="en" className={`h-full ${geist.variable} ${bricolage.variable}`}>
+    <html lang={locale()} className={`h-full ${geist.variable} ${bricolage.variable}`}>
       <body className="h-full antialiased bg-surface text-fg">
         <AuthProvider>
           <SessionsProvider>

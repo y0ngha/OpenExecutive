@@ -8,6 +8,7 @@ import {
   resumeExecutive,
   type ExecutiveStatus,
 } from "@/lib/api";
+import { displayLocale, t } from "@/i18n/index.ts";
 
 // App-wide pause state for the Executive's autonomous work. Lives in the root
 // layout so the sidebar switch, the paused banner, and the Settings card all
@@ -88,7 +89,7 @@ export function ExecutiveStatusProvider({ children }: { children: React.ReactNod
       }
       ok = true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Request failed");
+      setError(err instanceof Error ? err.message : t("settings.executive.requestFailed"));
     } finally {
       mutatingRef.current = false;
       setBusy(false);
@@ -121,7 +122,7 @@ export function formatPausedAt(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const time = d.toLocaleTimeString(displayLocale(), { hour: "numeric", minute: "2-digit" });
   const sameDay = d.toDateString() === new Date().toDateString();
-  return sameDay ? time : `${d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} ${time}`;
+  return sameDay ? time : `${d.toLocaleDateString(displayLocale(), { weekday: "short", month: "short", day: "numeric" })} ${time}`;
 }

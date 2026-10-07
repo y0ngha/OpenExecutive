@@ -333,6 +333,18 @@ caching:
 providers:
   module: openexecutive.providers
   protocol: openexecutive.providers.provider.LLMProvider — two-method surface (messages_create / messages_stream) that mirrors anthropic.AsyncAnthropic().messages.create/stream so call sites stay Anthropic-shaped.
+  output_language: |
+    OE_LANGUAGE (ENGLISH default | KOREAN) sets the language people read.
+    Prompts stay English. providers.output_language.apply_output_language
+    runs in both backends' messages_create/messages_stream; for KOREAN it
+    appends one constant, uncached system block after the existing ones
+    (no new cache_control breakpoint, so the cached prefix still hits).
+    The block keeps fixed reply tokens (YES/NO, NO|reason for the response
+    gate, IDENTITY: for Honcho, JSON, list labels) in English, since
+    those are parsed. Fixed display text in code goes through
+    utils.i18n.localized(english, korean), read per call; the guide serves
+    guide/prebuilt/ko/<id>.json with English fallback; the web UI reads the
+    same variable (packages/ui/src/i18n, <html lang> stamped per request).
   resolver: |
     openexecutive.providers.registry.get_provider(model) picks the
     backend per call. Module-level singletons cache one provider per

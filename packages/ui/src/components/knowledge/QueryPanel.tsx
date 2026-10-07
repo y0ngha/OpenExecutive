@@ -8,26 +8,35 @@ import {
   type KnowledgeSourceType,
 } from "@/lib/api";
 import Button from "@/components/ui/Button";
+import { t, tp, type MessageKey } from "@/i18n/index.ts";
+import { domainLabel } from "./SourceTree";
 
 interface QueryPanelProps {
   domains: string[];
   onOpenFile?: (kind: "builtin" | "failures", domain: string, filename: string) => void;
 }
 
-const SPECIALISTS = [
-  { id: "", label: "All specialists" },
-  { id: "cso", label: "CSO (Strategy)" },
-  { id: "cfo", label: "CFO (Finance)" },
-  { id: "chro", label: "CHRO (HR)" },
-  { id: "gc", label: "GC (Legal)" },
-  { id: "coo", label: "COO (Operations)" },
-  { id: "cmo", label: "CMO (Marketing)" },
-  { id: "cpo", label: "CPO (Product + Strategy)" },
-  { id: "sales", label: "Sales (Sales + Marketing)" },
-  { id: "board_comms", label: "Board Comms (Board + Finance)" },
+const SPECIALISTS: { id: string; label: MessageKey }[] = [
+  { id: "", label: "audit.query.specialist.all" },
+  { id: "cso", label: "audit.query.specialist.cso" },
+  { id: "cfo", label: "audit.query.specialist.cfo" },
+  { id: "chro", label: "audit.query.specialist.chro" },
+  { id: "gc", label: "audit.query.specialist.gc" },
+  { id: "coo", label: "audit.query.specialist.coo" },
+  { id: "cmo", label: "audit.query.specialist.cmo" },
+  { id: "cpo", label: "audit.query.specialist.cpo" },
+  { id: "sales", label: "audit.query.specialist.sales" },
+  { id: "board_comms", label: "audit.query.specialist.boardComms" },
 ];
 
 const ALL_SOURCES: KnowledgeSourceType[] = ["builtin", "company", "failures", "external"];
+
+const SOURCE_TYPE_KEYS: Record<KnowledgeSourceType, MessageKey> = {
+  builtin: "audit.query.source.builtin",
+  company: "audit.query.source.company",
+  failures: "audit.query.source.failures",
+  external: "audit.query.source.external",
+};
 
 export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
   const [query, setQuery] = useState("");
@@ -51,17 +60,17 @@ export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
       });
       setResult(res);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Search failed");
+      setError(e instanceof Error ? e.message : t("audit.query.searchFailed"));
     } finally {
       setRunning(false);
     }
   }
 
-  function toggleInclude(t: KnowledgeSourceType) {
+  function toggleInclude(type: KnowledgeSourceType) {
     setIncludes((prev) => {
       const next = new Set(prev);
-      if (next.has(t)) next.delete(t);
-      else next.add(t);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
       return next;
     });
   }
@@ -79,8 +88,7 @@ export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
     <div className="flex flex-col gap-5 max-w-4xl">
       <div>
         <p className="text-[15px] text-fg-muted">
-          Test what the Executive would retrieve for a given question. Distances are
-          cosine — lower is closer.
+          {t("audit.query.intro")}
         </p>
       </div>
 
@@ -95,19 +103,19 @@ export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
                 run();
               }
             }}
-            placeholder="e.g. how should we think about pricing for a new SaaS product?"
-            aria-label="Question to test"
+            placeholder={t("audit.query.placeholder")}
+            aria-label={t("audit.query.questionLabel")}
             className="w-full sm:flex-1 h-11 rounded-xl border border-line-strong bg-surface-elevated px-3.5 text-[15px] text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent/50"
           />
           <Button variant="primary" onClick={run} disabled={!query.trim() || running}>
-            {running ? "Running…" : "Run"}
+            {running ? t("audit.query.running") : t("audit.query.run")}
           </Button>
         </div>
 
         <div className="flex flex-wrap gap-4">
           <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
             <label className="text-sm font-medium text-fg-muted flex-shrink-0">
-              Specialist
+              {t("audit.query.specialist")}
             </label>
             <select
               value={specialist}
@@ -116,7 +124,7 @@ export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
             >
               {SPECIALISTS.map((s) => (
                 <option key={s.id || "all"} value={s.id}>
-                  {s.label}
+                  {t(s.label)}
                 </option>
               ))}
             </select>
@@ -124,20 +132,20 @@ export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
 
           <div className="flex items-center gap-2 flex-wrap">
             <label className="text-sm font-medium text-fg-muted">
-              Include
+              {t("audit.query.include")}
             </label>
-            {ALL_SOURCES.map((t) => (
+            {ALL_SOURCES.map((type) => (
               <button
-                key={t}
-                onClick={() => toggleInclude(t)}
-                aria-pressed={includes.has(t)}
+                key={type}
+                onClick={() => toggleInclude(type)}
+                aria-pressed={includes.has(type)}
                 className={`h-10 text-sm px-3.5 rounded-xl border transition-colors ${
-                  includes.has(t)
+                  includes.has(type)
                     ? "bg-accent/10 text-accent border-accent/30"
                     : "bg-surface-overlay/40 text-fg-muted border-line"
                 }`}
               >
-                {t}
+                {t(SOURCE_TYPE_KEYS[type])}
               </button>
             ))}
           </div>
@@ -145,7 +153,7 @@ export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
 
         <div className="flex items-center gap-2 flex-wrap">
           <label className="text-sm font-medium text-fg-muted">
-            Domains
+            {t("audit.query.domains")}
           </label>
           {domains.map((d) => (
             <button
@@ -158,7 +166,7 @@ export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
                   : "bg-surface-overlay/40 text-fg-muted border-line hover:text-fg"
               }`}
             >
-              {d}
+              {domainLabel(d)}
             </button>
           ))}
           {selectedDomains.size > 0 && (
@@ -166,7 +174,7 @@ export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
               onClick={() => setSelectedDomains(new Set())}
               className="h-10 px-2 text-sm text-fg-muted hover:text-fg underline-offset-2 hover:underline"
             >
-              Clear
+              {t("audit.query.clear")}
             </button>
           )}
         </div>
@@ -183,42 +191,43 @@ export default function QueryPanel({ domains, onOpenFile }: QueryPanelProps) {
           <div className="text-sm text-fg-muted space-y-1">
             {result.effective_domains && result.effective_domains.length > 0 ? (
               <p>
-                <span className="text-fg-muted">Domain filter:</span>{" "}
+                <span className="text-fg-muted">{t("audit.query.domainFilter")}</span>{" "}
                 {result.effective_domains.join(", ")}
               </p>
             ) : (
               <p>
-                <span className="text-fg-muted">Domain filter:</span> none (all domains)
+                <span className="text-fg-muted">{t("audit.query.domainFilter")}</span>{" "}
+                {t("audit.query.allDomains")}
               </p>
             )}
             <p>
-              <span className="text-fg-muted">Specialists that would see these chunks:</span>{" "}
+              <span className="text-fg-muted">{t("audit.query.specialistsSee")}</span>{" "}
               {result.specialists_that_would_see_this.join(", ") || "—"}
             </p>
           </div>
 
           <ResultGroup
-            title="Playbooks"
+            title={t("audit.knowledge.playbooks")}
             kind="builtin"
             hits={result.builtin}
             accent="indigo"
             onOpenFile={onOpenFile}
           />
           <ResultGroup
-            title="Failures"
+            title={t("audit.knowledge.failures")}
             kind="failures"
             hits={result.failures}
             accent="rose"
             onOpenFile={onOpenFile}
           />
           <ResultGroup
-            title="Company documents"
+            title={t("audit.query.companyDocs")}
             kind="company"
             hits={result.company}
             accent="emerald"
           />
           <ResultGroup
-            title="Reference Library"
+            title={t("audit.query.referenceLibrary")}
             kind="external"
             hits={result.external}
             accent="amber"
@@ -256,10 +265,10 @@ function ResultGroup({
         <h3 className={`text-sm font-semibold ${accentClass.split(" ")[0]}`}>
           {title}
         </h3>
-        <span className="text-xs text-fg-subtle">{hits.length} hit{hits.length === 1 ? "" : "s"}</span>
+        <span className="text-xs text-fg-subtle">{tp("audit.query.hits", hits.length)}</span>
       </div>
       {hits.length === 0 ? (
-        <p className="text-sm text-fg-subtle">No matches.</p>
+        <p className="text-sm text-fg-subtle">{t("audit.query.noMatches")}</p>
       ) : (
         <div className="space-y-2">
           {hits.map((h, i) => (
@@ -279,14 +288,14 @@ function ResultGroup({
                     </>
                   )}
                   <span className="text-fg-muted">·</span>
-                  <span className="text-fg-muted">dist {h.distance.toFixed(3)}</span>
+                  <span className="text-fg-muted">{t("audit.query.dist", { d: h.distance.toFixed(3) })}</span>
                 </div>
                 {isOpenable && onOpenFile && (
                   <button
                     onClick={() => onOpenFile(kind, h.domain, h.filename)}
                     className="h-9 px-2 text-sm font-medium text-accent hover:underline"
                   >
-                    Open →
+                    {t("audit.query.open")}
                   </button>
                 )}
               </div>

@@ -122,6 +122,19 @@ class Settings(BaseSettings):
     # Set RESEARCH_MODEL=claude-opus-5-5 to restore the prior behavior.
     research_model: str = Field("claude-sonnet-5-5", alias="RESEARCH_MODEL")
 
+    # Language of everything the models write for people — replies, briefs,
+    # notes, drafts: ENGLISH (default) or KOREAN. Prompts stay in English
+    # either way (providers/output_language.py adds one fixed instruction).
+    # The web UI reads the same variable for its own text.
+    oe_language: Literal["ENGLISH", "KOREAN"] = Field("ENGLISH", alias="OE_LANGUAGE")
+
+    @field_validator("oe_language", mode="before")
+    @classmethod
+    def _parse_oe_language(cls, v: Any) -> Any:
+        if _blank_or_comment(v):
+            return "ENGLISH"
+        return v.strip().upper() if isinstance(v, str) else v
+
     vector_store_path: Path = Field(_ROOT / "chroma_db", alias="VECTOR_STORE_PATH")
     company_profile_path: Path = Field(
         _ROOT / "company" / "profile.yaml", alias="COMPANY_PROFILE_PATH"

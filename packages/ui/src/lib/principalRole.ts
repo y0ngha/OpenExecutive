@@ -7,21 +7,26 @@
 // Type-only imports, so `npm test` can exercise this under
 // `node --experimental-strip-types` (see scripts/principalRole.test.mjs).
 
+import { t, type MessageKey } from "../i18n/index.ts";
 import type { PrincipalRole, RoleKind, WorkspaceUpdate } from "@/lib/api";
 
+function roleOption(kind: RoleKind, label: MessageKey, hint: MessageKey): { kind: RoleKind; label: string; hint: string } {
+  return {
+    kind,
+    get label() {
+      return t(label);
+    },
+    get hint() {
+      return t(hint);
+    },
+  };
+}
+
 export const ROLE_KIND_OPTIONS: { kind: RoleKind; label: string; hint: string }[] = [
-  { kind: "owner", label: "Owner / founder", hint: "It's your own business." },
-  {
-    kind: "in_house",
-    label: "Executive inside an organisation",
-    hint: "You lead a function or team in a company you don't own.",
-  },
-  {
-    kind: "independent",
-    label: "Independent or fractional",
-    hint: "You advise or lead for clients.",
-  },
-  { kind: "other", label: "Other", hint: "Something else — your title says it." },
+  roleOption("owner", "lib.role.owner", "lib.role.ownerHint"),
+  roleOption("in_house", "lib.role.inHouse", "lib.role.inHouseHint"),
+  roleOption("independent", "lib.role.independent", "lib.role.independentHint"),
+  roleOption("other", "lib.role.other", "lib.role.otherHint"),
 ];
 
 // The server's caps, checked after trimming (memory/workspace_settings.py
@@ -94,13 +99,13 @@ export function roleUpdate(form: RoleForm, current?: Partial<PrincipalRole> | nu
 // be saved.
 export function roleFormErrors(form: RoleForm): string[] {
   const labels: Record<RoleTextField, string> = {
-    role_title: "Title",
-    reports_to: "Reports to",
-    remit: "What you're responsible for",
-    measured_on: "What you're measured on",
+    role_title: t("lib.role.field.title"),
+    reports_to: t("lib.role.field.reportsTo"),
+    remit: t("lib.role.field.remit"),
+    measured_on: t("lib.role.field.measuredOn"),
   };
   return ROLE_TEXT_FIELDS.filter((f) => form[f].trim().length > ROLE_TEXT_MAX[f]).map(
-    (f) => `${labels[f]} is too long (at most ${ROLE_TEXT_MAX[f]} characters).`,
+    (f) => t("lib.role.tooLong", { field: labels[f], max: ROLE_TEXT_MAX[f] }),
   );
 }
 
@@ -119,6 +124,6 @@ export function describeRole(role: Partial<PrincipalRole> | null | undefined): s
   const option = ROLE_KIND_OPTIONS.find((o) => o.kind === role.role_kind);
   if (option && option.kind !== "other") parts.push(option.label);
   const boss = role.reports_to?.trim();
-  if (boss) parts.push(`reports to ${boss}`);
+  if (boss) parts.push(t("lib.role.reportsTo", { boss }));
   return parts.join(" · ");
 }

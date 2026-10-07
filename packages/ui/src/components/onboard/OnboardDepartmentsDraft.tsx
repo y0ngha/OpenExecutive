@@ -1,11 +1,12 @@
 "use client";
 
 import { type OnboardDepartmentDraft, type OnboardPersonDraft } from "@/lib/api";
+import { t, type MessageKey } from "@/i18n/index.ts";
 
-const AUTHORITY_LEVELS = [
-  { value: "propose_only", label: "Proposes, you approve" },
-  { value: "escalate", label: "Escalates to you" },
-  { value: "auto_execute", label: "Acts on its own" },
+const AUTHORITY_LEVELS: { value: string; label: MessageKey }[] = [
+  { value: "propose_only", label: "chat.deptDraft.authority.proposeOnly" },
+  { value: "escalate", label: "chat.deptDraft.authority.escalate" },
+  { value: "auto_execute", label: "chat.deptDraft.authority.autoExecute" },
 ];
 
 interface Props {
@@ -23,7 +24,7 @@ export default function OnboardDepartmentsDraft({
   existingTitles,
   onChange,
 }: Props) {
-  const existing = new Set(existingTitles.map((t) => t.trim().toLowerCase()));
+  const existing = new Set(existingTitles.map((title) => title.trim().toLowerCase()));
 
   function update(i: number, patch: Partial<OnboardDepartmentDraft>) {
     onChange(departments.map((d, j) => (j === i ? { ...d, ...patch } : d)));
@@ -32,7 +33,7 @@ export default function OnboardDepartmentsDraft({
   return (
     <div className="bg-surface-elevated border border-line rounded-xl p-5">
       <div className="flex items-baseline justify-between mb-1">
-        <h2 className="text-sm font-semibold text-fg">Departments</h2>
+        <h2 className="text-sm font-semibold text-fg">{t("chat.nav.departments")}</h2>
         <button
           onClick={() =>
             onChange([
@@ -47,16 +48,13 @@ export default function OnboardDepartmentsDraft({
           }
           className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
         >
-          Add department
+          {t("chat.deptDraft.add")}
         </button>
       </div>
-      <p className="text-xs text-fg-muted mb-4">
-        Saving updates the departments listed here and adds any that are new.
-        Departments you don&rsquo;t list are left exactly as they are.
-      </p>
+      <p className="text-xs text-fg-muted mb-4">{t("chat.deptDraft.lead")}</p>
 
       {departments.length === 0 && (
-        <p className="text-sm text-fg-subtle italic">No departments drafted.</p>
+        <p className="text-sm text-fg-subtle italic">{t("chat.deptDraft.empty")}</p>
       )}
 
       <div className="flex flex-col gap-3">
@@ -68,7 +66,7 @@ export default function OnboardDepartmentsDraft({
                 <input
                   value={d.title}
                   onChange={(e) => update(i, { title: e.target.value })}
-                  placeholder="Department"
+                  placeholder={t("chat.deptDraft.title")}
                   className="flex-1 rounded-lg border border-line-strong bg-surface-overlay px-3 py-2 text-sm text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-colors"
                 />
                 <span
@@ -78,11 +76,11 @@ export default function OnboardDepartmentsDraft({
                       : "bg-indigo-500/10 text-indigo-400"
                   }`}
                 >
-                  {d.title.trim() ? (isExisting ? "Updates existing" : "New") : "—"}
+                  {d.title.trim() ? t(isExisting ? "chat.deptDraft.existing" : "chat.deptDraft.new") : "—"}
                 </span>
                 <button
                   onClick={() => onChange(departments.filter((_, j) => j !== i))}
-                  aria-label={`Remove ${d.title || "department"}`}
+                  aria-label={t("chat.removeNamed", { name: d.title || t("chat.deptDraft.department") })}
                   className="text-xs text-fg-subtle hover:text-red-400 px-1 transition-colors"
                 >
                   ✕
@@ -91,7 +89,7 @@ export default function OnboardDepartmentsDraft({
               <input
                 value={d.mission}
                 onChange={(e) => update(i, { mission: e.target.value })}
-                placeholder="What this function owns"
+                placeholder={t("chat.deptDraft.mission")}
                 className="w-full rounded-lg border border-line-strong bg-surface-overlay px-3 py-2 text-sm text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-colors"
               />
               <div className="flex items-center gap-2">
@@ -100,7 +98,7 @@ export default function OnboardDepartmentsDraft({
                   onChange={(e) => update(i, { head_person_name: e.target.value })}
                   className="flex-1 rounded-lg border border-line-strong bg-surface-overlay px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-colors"
                 >
-                  <option value="">No head assigned</option>
+                  <option value="">{t("chat.deptDraft.noHead")}</option>
                   {people
                     .filter((p) => p.full_name.trim())
                     .map((p) => (
@@ -116,7 +114,7 @@ export default function OnboardDepartmentsDraft({
                 >
                   {AUTHORITY_LEVELS.map((a) => (
                     <option key={a.value} value={a.value}>
-                      {a.label}
+                      {t(a.label)}
                     </option>
                   ))}
                 </select>

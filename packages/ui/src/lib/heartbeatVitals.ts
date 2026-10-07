@@ -3,6 +3,8 @@
 // calendar day present, oldest → newest, the last entry is today, UTC).
 // Kept dependency-free so `node --test` can import it directly.
 
+import { displayLocale, t } from "../i18n/index.ts";
+
 /** One day of activity; structurally the same as `DailyActivityCount` in api.ts. */
 export interface ActivityDay {
   date: string; // YYYY-MM-DD (UTC)
@@ -101,7 +103,7 @@ export function deriveVitals(days: ActivityDay[]): HeartbeatVitals {
 
 /** "Tue, Sep 9" for a YYYY-MM-DD date, formatted in UTC to match the buckets. */
 export function formatVitalDate(date: string): string {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString(displayLocale(), {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -110,16 +112,16 @@ export function formatVitalDate(date: string): string {
 }
 
 /** Display text for a trend: "▲ 18%", "▼ 12%", "flat", "new", or "—". */
-export function formatTrend(t: HeartbeatTrend): string {
-  switch (t.direction) {
+export function formatTrend(tr: HeartbeatTrend): string {
+  switch (tr.direction) {
     case "up":
-      return `▲ ${t.pct}%`;
+      return `▲ ${tr.pct}%`;
     case "down":
-      return `▼ ${Math.abs(t.pct ?? 0)}%`;
+      return `▼ ${Math.abs(tr.pct ?? 0)}%`;
     case "flat":
-      return "flat";
+      return t("lib.vitals.flat");
     case "new":
-      return "new";
+      return t("lib.vitals.new");
     case "none":
       return "—";
   }
@@ -136,10 +138,10 @@ export function formatNextBeat(runAt: string, now: number = Date.now()): string 
   const at = new Date(runAt).getTime();
   if (!Number.isFinite(at)) return "";
   const deltaMs = at - now;
-  if (deltaMs < 60_000) return "Due now";
+  if (deltaMs < 60_000) return t("lib.vitals.dueNow");
   const mins = Math.round(deltaMs / 60_000);
-  if (mins < 60) return `in ${mins}m`;
+  if (mins < 60) return t("lib.vitals.inMinutes", { n: mins });
   const hours = Math.round(deltaMs / 3_600_000);
-  if (hours < 48) return `in ${hours}h`;
-  return `in ${Math.round(deltaMs / 86_400_000)}d`;
+  if (hours < 48) return t("lib.vitals.inHours", { n: hours });
+  return t("lib.vitals.inDays", { n: Math.round(deltaMs / 86_400_000) });
 }

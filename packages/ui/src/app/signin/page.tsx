@@ -5,6 +5,7 @@ import { GOOGLE_SIGN_IN, LOCAL_LOGIN, OIDC, auth, sessionStillAllowed, signIn } 
 import { LOCAL_LOGIN_PROVIDER_ID } from "@/lib/localLogin";
 import { OIDC_PROVIDER_ID } from "@/lib/oidc";
 import BrandMark from "@/components/BrandMark";
+import { t } from "@/i18n/index.ts";
 
 type SearchParams = Promise<{ callbackUrl?: string; error?: string }>;
 
@@ -42,8 +43,8 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
         </h1>
         <p className="mt-2 text-sm text-fg-muted">
           {LOCAL_LOGIN
-            ? "This copy runs on your computer, and only you can reach it — so there’s no sign-in."
-            : "Sign in to continue."}
+            ? t("lib.signin.localIntro")
+            : t("lib.signin.intro")}
         </p>
 
         {errorMessage && (
@@ -75,11 +76,11 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
                 type="submit"
                 className="w-full rounded-md bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100 transition"
               >
-                Open
+                {t("lib.signin.open")}
               </button>
             </form>
             <p className="mt-4 text-xs text-fg-subtle">
-              To invite your team, or to run it on a server, set up Google or SSO sign-in (see docs/auth.md).
+              {t("lib.signin.localHint")}
             </p>
           </>
         ) : (
@@ -93,7 +94,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
                 className="mt-6"
               >
                 <button type="submit" className={buttonClass}>
-                  Sign in with {OIDC.name}
+                  {t("lib.signin.withProvider", { name: OIDC.name })}
                 </button>
               </form>
             )}
@@ -108,17 +109,17 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
                 className={OIDC ? "mt-3" : "mt-6"}
               >
                 <button type="submit" className={buttonClass}>
-                  Sign in with Google
+                  {t("lib.signin.withGoogle")}
                 </button>
               </form>
             )}
             {!googleConfigured && !OIDC && (
               <div className="mt-6 rounded-xl border border-line bg-surface-elevated px-4 py-3">
-                <p className="text-sm font-medium text-fg">Sign-in isn’t set up here yet.</p>
+                <p className="text-sm font-medium text-fg">{t("lib.signin.notSetUpTitle")}</p>
                 <p className="mt-1 text-sm text-fg-muted">
-                  Ask whoever runs Open Executive for you to turn on Google or SSO sign-in.
+                  {t("lib.signin.notSetUpBody")}
                 </p>
-                <p className="mt-2 text-xs text-fg-muted">If that’s you: see docs/auth.md.</p>
+                <p className="mt-2 text-xs text-fg-muted">{t("lib.signin.notSetUpSelf")}</p>
               </div>
             )}
           </>
@@ -131,12 +132,12 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
 function describeError(code: string): string {
   switch (code) {
     case "AccessDenied":
-      return "That account can’t sign in here: it isn’t on the allow-list for this workspace, or its email isn’t verified. Ask an admin to add you.";
+      return t("lib.signin.errorAccessDenied");
     case "CredentialsSignin":
-      return "Open only works in a browser on the computer running Open Executive, at http://localhost:3000.";
+      return t("lib.signin.errorCredentials");
     case "Configuration":
-      return "Authentication is misconfigured. Contact the administrator.";
+      return t("lib.signin.errorConfiguration");
     default:
-      return "Sign-in failed. Try again, or contact the administrator if this keeps happening.";
+      return t("lib.signin.errorDefault");
   }
 }

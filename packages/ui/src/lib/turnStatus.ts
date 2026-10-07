@@ -5,6 +5,8 @@
 // with no bytes at all. This works out the status line from what has arrived
 // so far and how long ago it arrived.
 
+import { t } from "../i18n/index.ts";
+
 // Text that stops coming in for this long is treated as the Executive working
 // on something, not a pause between tokens.
 export const STALL_MS = 4000;
@@ -66,8 +68,8 @@ export function turnStatus(input: TurnStatusInput): TurnStatus {
 
 export function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
-  if (total < 60) return `${total}s`;
+  if (total < 60) return t("lib.elapsed.seconds", { s: total });
   const m = Math.floor(total / 60);
   const s = total % 60;
-  return `${m}m ${String(s).padStart(2, "0")}s`;
+  return t("lib.elapsed.minutes", { m, s: String(s).padStart(2, "0") });
 }

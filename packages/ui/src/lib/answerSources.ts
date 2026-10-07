@@ -6,6 +6,8 @@
 // No imports, so `npm test` can exercise this under
 // `node --experimental-strip-types` (see scripts/answerSources.test.mjs).
 
+import { t } from "../i18n/index.ts";
+
 export type SourceKind =
   | "company"
   | "knowledge"
@@ -32,15 +34,15 @@ export interface AnswerSources {
 // Display order and headings — one per SourceKind in answer_sources.py, and
 // scripts/answerSources.test.mjs fails if the two ever disagree.
 export const SOURCE_GROUPS: ReadonlyArray<{ kind: SourceKind; label: string }> = [
-  { kind: "company", label: "Your documents" },
-  { kind: "document", label: "Earlier documents" },
+  { kind: "company", get label() { return t("lib.sources.company"); } },
+  { kind: "document", get label() { return t("lib.sources.document"); } },
   { kind: "notion", label: "Notion" },
   { kind: "drive", label: "Google Drive" },
   { kind: "onedrive", label: "OneDrive" },
   { kind: "confluence", label: "Confluence" },
-  { kind: "research", label: "Research notes" },
-  { kind: "knowledge", label: "Built-in knowledge" },
-  { kind: "web", label: "Web" },
+  { kind: "research", get label() { return t("lib.sources.research"); } },
+  { kind: "knowledge", get label() { return t("lib.sources.knowledge"); } },
+  { kind: "web", get label() { return t("lib.sources.web"); } },
 ];
 
 export interface SourceGroup {
@@ -111,5 +113,5 @@ export function sourceSite(url: string | null | undefined): string | null {
 export function missingNote(unavailable: readonly string[]): string | null {
   const areas = unavailable.filter((area) => typeof area === "string" && area.trim());
   if (areas.length === 0) return null;
-  return `Some of the analysis is missing (${areas.join(", ")}). Asking again may fill it in.`;
+  return t("lib.sources.missing", { areas: areas.join(", ") });
 }

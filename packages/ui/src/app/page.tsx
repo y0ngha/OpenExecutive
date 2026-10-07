@@ -16,6 +16,7 @@ import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useExecutiveStatus } from "@/components/executive/ExecutiveStatusContext";
 import PausedBanner from "@/components/executive/PausedBanner";
 import OverflowMenu from "@/components/ui/OverflowMenu";
+import { t } from "@/i18n/index.ts";
 import { ChatMessage, DebugEvent, getSessionMessages } from "@/lib/api";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -222,7 +223,7 @@ export default function HomePage() {
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-accent/5 px-4 py-3">
       <p className="text-[15px] text-fg-muted">{profileCopy.missingBanner}</p>
       <Link href="/onboard" className="text-sm font-semibold text-accent hover:underline whitespace-nowrap">
-        Set up profile →
+        {t("briefing.page.setUpProfile")}
       </Link>
     </div>
   ) : deliveryNotice ? (
@@ -266,7 +267,7 @@ export default function HomePage() {
             {/* Hamburger — mobile only */}
             <button
               type="button"
-              aria-label="Open menu"
+              aria-label={t("briefing.page.openMenu")}
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
               className="md:hidden min-h-touch min-w-touch flex items-center justify-center text-fg-muted hover:text-fg cursor-pointer rounded-lg hover:bg-surface-overlay transition-colors"
@@ -280,10 +281,10 @@ export default function HomePage() {
           {/* Agent activity (the live trace of the Executive's turn) lives in
               this ⋯ menu; the panel itself opens on the right as before. */}
           <OverflowMenu
-            label="Home options"
+            label={t("briefing.page.homeOptions")}
             items={[
               {
-                label: debugOpen ? "Hide agent activity" : "Show agent activity",
+                label: debugOpen ? t("briefing.page.hideActivity") : t("briefing.page.showActivity"),
                 onSelect: () => setDebugOpen((o) => !o),
               },
             ]}
@@ -297,7 +298,7 @@ export default function HomePage() {
           <div className="border-b border-line bg-accent/5 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
             <p className="text-sm text-fg-muted">{profileCopy.missingBanner}</p>
             <Link href="/onboard" className="text-sm text-accent hover:underline font-medium whitespace-nowrap cursor-pointer">
-              Set up profile →
+              {t("briefing.page.setUpProfile")}
             </Link>
           </div>
         )}

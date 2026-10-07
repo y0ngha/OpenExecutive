@@ -5,6 +5,7 @@ import { PROFILE_COPY } from "@/components/company-profile/profileCopy";
 import { profileWording } from "@/components/shell/navConfig";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { startOnboarding, submitOnboardAnswer, type OnboardStatus } from "@/lib/api";
+import { t } from "@/i18n/index.ts";
 
 interface OnboardWizardProps {
   onComplete: () => void;
@@ -23,7 +24,7 @@ export default function OnboardWizard({ onComplete }: OnboardWizardProps) {
       const s = await startOnboarding();
       setStatus(s);
     } catch {
-      setError("Failed to start onboarding. Is the API server running?");
+      setError(t("chat.wizard.startFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -50,7 +51,7 @@ export default function OnboardWizard({ onComplete }: OnboardWizardProps) {
         setTimeout(onComplete, 1500);
       }
     } catch {
-      setError("Failed to submit answer. Please try again.");
+      setError(t("chat.wizard.submitFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +72,7 @@ export default function OnboardWizard({ onComplete }: OnboardWizardProps) {
           onClick={init}
           className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg transition-colors"
         >
-          Retry
+          {t("chat.wizard.retry")}
         </button>
       </div>
     );
@@ -94,8 +95,8 @@ export default function OnboardWizard({ onComplete }: OnboardWizardProps) {
           </svg>
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-fg">Profile complete</h2>
-          <p className="text-sm text-fg-muted mt-1">Redirecting you to the Executive...</p>
+          <h2 className="text-lg font-semibold text-fg">{t("chat.wizard.complete")}</h2>
+          <p className="text-sm text-fg-muted mt-1">{t("chat.wizard.redirecting")}</p>
         </div>
       </div>
     );
@@ -112,7 +113,7 @@ export default function OnboardWizard({ onComplete }: OnboardWizardProps) {
       <div className="mb-10">
         <div className="flex justify-between text-xs text-fg-muted mb-2.5 font-medium">
           <span>{PROFILE_COPY[profileWording(mode, role.role_kind)].progress}</span>
-          <span>{status.progress_percent}% complete</span>
+          <span>{t("chat.wizard.percent", { n: status.progress_percent })}</span>
         </div>
         <div className="w-full bg-surface-overlay rounded-full h-1.5">
           <div
@@ -126,9 +127,9 @@ export default function OnboardWizard({ onComplete }: OnboardWizardProps) {
       <div className="flex-1 flex flex-col justify-center gap-8">
         <div className="gap-2 flex flex-col">
           <p className="text-xs font-semibold text-indigo-400 uppercase tracking-widest">
-            Step {status.current_step + 1} of {status.total_steps}
+            {t("chat.wizard.step", { n: status.current_step + 1, total: status.total_steps })}
             {isOptionalStep && (
-              <span className="ml-2 text-fg-subtle normal-case font-normal tracking-normal">optional</span>
+              <span className="ml-2 text-fg-subtle normal-case font-normal tracking-normal">{t("chat.wizard.optional")}</span>
             )}
           </p>
           <h2 className="text-xl font-semibold text-fg leading-snug">
@@ -147,7 +148,7 @@ export default function OnboardWizard({ onComplete }: OnboardWizardProps) {
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type your answer..."
+            placeholder={t("chat.wizard.placeholder")}
             rows={4}
             className="w-full rounded-xl border border-line-strong bg-surface-elevated px-4 py-3 text-sm text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 resize-none transition-colors disabled:opacity-50"
             disabled={isLoading}
@@ -160,7 +161,7 @@ export default function OnboardWizard({ onComplete }: OnboardWizardProps) {
               disabled={!answer.trim() || isLoading}
               className="flex-1 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors"
             >
-              {isLoading ? "Saving..." : "Continue →"}
+              {isLoading ? t("chat.wizard.saving") : t("chat.wizard.continue")}
             </button>
             {isOptionalStep && (
               <button
@@ -168,12 +169,12 @@ export default function OnboardWizard({ onComplete }: OnboardWizardProps) {
                 disabled={isLoading}
                 className="px-5 py-2.5 border border-line-strong text-fg-muted hover:text-fg hover:border-line-strong text-sm rounded-xl transition-colors disabled:opacity-40"
               >
-                Skip
+                {t("chat.wizard.skip")}
               </button>
             )}
           </div>
           <p className="text-xs text-fg-muted text-center">
-            Enter to continue · Shift+Enter for new line
+            {t("chat.wizard.hint")}
           </p>
         </div>
       </div>

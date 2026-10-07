@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import LeadRulesEditor from "@/components/settings/LeadRulesEditor";
 import SettingsCard from "@/components/settings/SettingsCard";
+import { t, tp, type MessageKey } from "@/i18n/index.ts";
 import {
   addMyLeadRule,
   deleteMyLeadRule,
@@ -28,24 +29,24 @@ import { formatAgo } from "@/lib/setupStatus";
 // (PUT /delegation/take-the-lead), where links, the topics that always wait and
 // the added rules hold a reply back. Anything it won't send waits on Today as
 // before. Below the dial, what it sent in the last week (GET /delegation/handled).
-export const HANDLE_IT_MODES: { mode: HandleItMode; label: string; replies: string; followUps: string }[] = [
+export const HANDLE_IT_MODES: { mode: HandleItMode; label: MessageKey; replies: MessageKey; followUps: MessageKey }[] = [
   {
     mode: "careful",
-    label: "Easy ones",
-    replies: "Only short replies to people you know, when it's very sure.",
-    followUps: "Written for you, and they wait on Today for you to send.",
+    label: "settings.handleIt.careful.label",
+    replies: "settings.handleIt.careful.replies",
+    followUps: "settings.handleIt.careful.followUps",
   },
   {
     mode: "balanced",
-    label: "People I know",
-    replies: "Replies to people you know. Strangers, links and amounts wait for you.",
-    followUps: "Sent to your team and contacts when they haven't answered a question of yours in a few days.",
+    label: "settings.handleIt.balanced.label",
+    replies: "settings.handleIt.balanced.replies",
+    followUps: "settings.handleIt.balanced.followUps",
   },
   {
     mode: "bold",
-    label: "Most mail",
-    replies: "Also strangers and longer replies, and links or amounts when it's very sure.",
-    followUps: "Sent to anyone you wrote to who hasn't answered a question of yours in a few days.",
+    label: "settings.handleIt.bold.label",
+    replies: "settings.handleIt.bold.replies",
+    followUps: "settings.handleIt.bold.followUps",
   },
 ];
 
@@ -73,11 +74,11 @@ export default function HandleItCard() {
     return () => controller.abort();
   }, []);
 
-  if (state === "loading") return <p className="text-[15px] text-fg-muted">Loading…</p>;
+  if (state === "loading") return <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>;
   if (state === "error") {
     return (
       <SettingsCard>
-        <p className="text-sm text-fg-muted">Couldn&apos;t load Handle it for me.</p>
+        <p className="text-sm text-fg-muted">{t("settings.handleIt.loadFailed")}</p>
       </SettingsCard>
     );
   }
@@ -89,11 +90,6 @@ export default function HandleItCard() {
 
 type Step = "off" | HandleItMode | "lead";
 
-const OFF_STEP = { label: "Off", text: "Every reply waits for you to tap Send." };
-const LEAD_STEP = {
-  label: "Everything",
-  text: "Uses Take the lead. It decides what to send as you. Replies with a link, the topics that always wait and your rules still hold it back.",
-};
 
 export function HandleItSection({
   handleIt,
@@ -145,32 +141,37 @@ export function HandleItSection({
         onSettings(await setHandleIt(next === "off" ? { enabled: false } : { enabled: true, mode: next }));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the setting.");
+      setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
     } finally {
       setBusy(false);
     }
   };
 
   const steps: { step: Step; label: string; lines: string[] }[] = [
-    { step: "off", label: OFF_STEP.label, lines: [OFF_STEP.text] },
+    { step: "off", label: t("common.off"), lines: [t("settings.handleIt.off.text")] },
     ...HANDLE_IT_MODES.map((m) => ({
       step: m.mode as Step,
-      label: m.label,
-      lines: [`Replies: ${m.replies}`, `Follow-ups: ${m.followUps}`],
+      label: t(m.label),
+      lines: [
+        t("settings.handleIt.repliesLine", { text: t(m.replies) }),
+        t("settings.handleIt.followUpsLine", { text: t(m.followUps) }),
+      ],
     })),
-    ...(handleIt.lead_available ? [{ step: "lead" as Step, label: LEAD_STEP.label, lines: [LEAD_STEP.text] }] : []),
+    ...(handleIt.lead_available
+      ? [{ step: "lead" as Step, label: t("settings.handleIt.lead.label"), lines: [t("settings.handleIt.lead.text")] }]
+      : []),
   ];
 
   return (
     <SettingsCard
-      title="Handle it for me"
+      title={t("settings.handleIt.title")}
       titleId="handle-it-label"
       description={
         !handleIt.available
-          ? "Needs signed sign-ins on this server before it can send anything as you."
+          ? t("settings.handleIt.needsSignedSignIns")
           : inboxOn
-            ? "How much it sends from your mailbox on its own. Whatever it doesn't send waits for you on Today."
-            : "Turn on Draft replies to my inbox above first."
+            ? t("settings.handleIt.description")
+            : t("settings.handleIt.turnOnInboxFirst")
       }
     >
       <div className="flex flex-col gap-4">
@@ -209,19 +210,18 @@ export function HandleItSection({
         </div>
         {on && (
           <p className="text-sm text-fg-muted">
-            Money, contracts, legal, hiring, the press and passwords always wait for you, and it never writes to anyone
-            the email didn&apos;t go to.
+            {t("settings.handleIt.alwaysWait")}
           </p>
         )}
         {lead && (
           <div>
-            <h3 className="text-[15px] font-semibold text-fg">Your rules</h3>
+            <h3 className="text-[15px] font-semibold text-fg">{t("settings.handleIt.yourRules")}</h3>
             <p className="mt-1 mb-3 text-sm text-fg-muted">
-              Replies matching one of these wait for you, on top of your company&apos;s rules.
+              {t("settings.handleIt.yourRulesDescription")}
             </p>
             <LeadRulesEditor
               rules={rules ?? []}
-              emptyText="No rules of your own yet."
+              emptyText={t("settings.handleIt.noRules")}
               disabled={busy}
               onAdd={async (kind, value) => setRules(await addMyLeadRule(kind, value))}
               onDelete={async (id) => setRules(await deleteMyLeadRule(id))}
@@ -230,28 +230,28 @@ export function HandleItSection({
         )}
         {on && (
           <p className="text-sm text-fg-muted">
-            {handleIt.sent_today === 1
-              ? "Sent 1 reply on its own today."
-              : `Sent ${handleIt.sent_today} replies on its own today.`}
+            {tp("settings.handleIt.sentToday", handleIt.sent_today)}
           </p>
         )}
         {on && handled && handled.length > 0 && (
-          <ul className="flex flex-col gap-2" aria-label="Handled for you this week">
+          <ul className="flex flex-col gap-2" aria-label={t("settings.handleIt.handledLabel")}>
             {handled.map((h) => (
               <li key={h.decision_id} className="rounded-md border border-border px-3 py-2 text-sm">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="min-w-0 font-medium">
-                    {h.source === "follow_up" ? "Followed up with" : "Replied to"} {h.to_name || h.to_email}:{" "}
+                    {t(h.source === "follow_up" ? "settings.handleIt.followedUpWith" : "settings.handleIt.repliedTo", {
+                      who: h.to_name || h.to_email,
+                    })}{" "}
                     {h.subject}
                   </span>
                   <span className="text-xs text-fg-muted">{formatAgo(h.sent_at)}</span>
                 </div>
                 {h.open_questions.length > 0 && (
-                  <p className="mt-1 text-fg-muted">Still yours to answer: {h.open_questions.join(" ")}</p>
+                  <p className="mt-1 text-fg-muted">{t("settings.handleIt.stillYours", { questions: h.open_questions.join(" ") })}</p>
                 )}
                 {h.gmail_link && (
                   <a href={h.gmail_link} target="_blank" rel="noreferrer" className="mt-1 inline-block text-accent">
-                    Open in your mailbox
+                    {t("settings.handleIt.openInMailbox")}
                   </a>
                 )}
               </li>

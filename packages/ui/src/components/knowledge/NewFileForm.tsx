@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Button from "@/components/ui/Button";
+import { t } from "@/i18n/index.ts";
+import { domainLabel } from "./SourceTree";
 
 interface NewFileFormProps {
   domains: string[];
@@ -28,7 +30,7 @@ export default function NewFileForm({
     const trimmed = filename.trim();
     const fullName = trimmed.endsWith(".md") ? trimmed : `${trimmed}.md`;
     if (!/^[a-zA-Z0-9_\-]+\.md$/.test(fullName)) {
-      setError("Filename must be alphanumeric with dashes or underscores");
+      setError(t("audit.knowledge.filenameInvalid"));
       return;
     }
     setIsSaving(true);
@@ -36,16 +38,16 @@ export default function NewFileForm({
     try {
       await onSave(domain, fullName, content);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create file");
+      setError(e instanceof Error ? e.message : t("audit.knowledge.createFailed"));
       setIsSaving(false);
     }
   }
 
-  const title = variant === "failure" ? "New failure case" : "New playbook file";
+  const title = variant === "failure" ? t("audit.knowledge.newFailureCase") : t("audit.knowledge.newPlaybookFile");
   const placeholder =
     variant === "failure"
-      ? "# Company X: <one-line failure summary>\n\n## Situation\n\n## What Happened\n\n## Root Cause\n\n## Key Decision Failures\n"
-      : "# Title\n\nWrite your knowledge here…";
+      ? t("audit.knowledge.failurePlaceholder")
+      : t("audit.knowledge.playbookPlaceholder");
 
   return (
     <div className="flex flex-col gap-4">
@@ -59,12 +61,12 @@ export default function NewFileForm({
         <select
           value={domain}
           onChange={(e) => setDomain(e.target.value)}
-          aria-label="Domain"
+          aria-label={t("audit.knowledge.domain")}
           className="h-11 rounded-xl border border-line-strong bg-surface-elevated px-3 text-[15px] text-fg capitalize focus:outline-none focus:ring-2 focus:ring-accent/50"
         >
           {domains.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {domainLabel(d)}
             </option>
           ))}
         </select>
@@ -72,7 +74,7 @@ export default function NewFileForm({
           value={filename}
           onChange={(e) => setFilename(e.target.value)}
           placeholder={variant === "failure" ? "my-failure-case.md" : "my_topic.md"}
-          aria-label="Filename"
+          aria-label={t("audit.knowledge.filename")}
           className="flex-1 h-11 rounded-xl border border-line-strong bg-surface-elevated px-3 text-[15px] text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent/50"
         />
       </div>
@@ -88,10 +90,10 @@ export default function NewFileForm({
           onClick={handleSubmit}
           disabled={!filename.trim() || !content.trim() || isSaving}
         >
-          {isSaving ? "Creating…" : "Create file"}
+          {isSaving ? t("audit.knowledge.creating") : t("audit.knowledge.createFile")}
         </Button>
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("common.cancel")}
         </Button>
       </div>
     </div>

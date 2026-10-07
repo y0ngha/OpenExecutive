@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import SectionTabs from "@/components/ui/SectionTabs";
+import { t } from "@/i18n/index.ts";
 import RhythmSection, { FollowUpsCard, RecentActivity } from "./CadenceSection";
 import MemorySection, { MEMORY_TABS } from "./MemorySection";
 import { HeartbeatCard, PulseSummary, usePulseData } from "./PulseHeader";
@@ -47,22 +48,21 @@ export default function PulsePage() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <header>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">Pulse</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">{t("people.pulse.title")}</h1>
         <p className="text-[15px] text-fg-muted mt-1.5 max-w-2xl">
-          What the Executive knows, and the rhythm it runs on — the briefs,
-          reflections, and check-ins that fire on their own while you&apos;re away.
+          {t("people.pulse.intro")}
         </p>
       </header>
 
       <PulseSummary pulse={pulse} />
 
       <SectionTabs
-        label="Pulse"
+        label={t("people.pulse.title")}
         active={tab}
         onChange={setTab}
         tabs={[
-          { id: "heartbeat", label: "Heartbeat" },
-          { id: "memory", label: "Memory" },
+          { id: "heartbeat", label: t("people.pulse.heartbeat") },
+          { id: "memory", label: t("people.pulse.memory") },
         ]}
       />
 
@@ -70,13 +70,13 @@ export default function PulsePage() {
         <div className="space-y-5">
           <HeartbeatCard pulse={pulse} />
           <SectionTabs
-            label="Heartbeat"
+            label={t("people.pulse.heartbeat")}
             active={beatView}
             onChange={setBeatView}
             tabs={[
-              { id: "activity", label: "Activity" },
-              { id: "rhythm", label: "Rhythm" },
-              { id: "followups", label: "Follow-ups", badge: followups },
+              { id: "activity", label: t("people.pulse.activity") },
+              { id: "rhythm", label: t("people.pulse.rhythm") },
+              { id: "followups", label: t("people.pulse.followUps"), badge: followups },
             ]}
           />
           {beatView === "activity" && <RecentActivity />}

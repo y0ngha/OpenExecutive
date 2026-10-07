@@ -8,6 +8,8 @@ import {
   type ExternalSourceInfo,
 } from "@/lib/api";
 import { buttonClass } from "@/components/ui/Button";
+import { displayLocale, t, tp } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 
 export default function ReferencePanel() {
   const [sources, setSources] = useState<ExternalSourceInfo[] | null>(null);
@@ -23,7 +25,7 @@ export default function ReferencePanel() {
         setSources(data.sources);
         setTotalChunks(data.total_chunks);
       })
-      .catch(() => setError("Failed to load reference library"));
+      .catch(() => setError(t("audit.reference.loadFailed")));
   }, []);
 
   async function handlePeek(id: string) {
@@ -34,12 +36,10 @@ export default function ReferencePanel() {
       const data = await peekExternalSource(id, 5);
       setPeekChunks(data.chunks);
       if (data.chunks.length === 0) {
-        setPeekError(
-          "No indexed chunks yet — run `openexecutive ingest-oer` to populate this source."
-        );
+        setPeekError(t("audit.reference.noChunks"));
       }
     } catch {
-      setPeekError("Failed to load chunks");
+      setPeekError(t("audit.reference.loadChunksFailed"));
     }
   }
 
@@ -51,7 +51,7 @@ export default function ReferencePanel() {
     );
   }
   if (sources === null) {
-    return <p className="text-sm text-fg-muted">Loading…</p>;
+    return <p className="text-sm text-fg-muted">{t("common.loading")}</p>;
   }
 
   const ingested = sources.filter((s) => s.is_ingested);
@@ -61,13 +61,17 @@ export default function ReferencePanel() {
     <div className="space-y-6">
       <div>
         <p className="text-[15px] text-fg-muted max-w-2xl">
-          Open-licensed textbooks and handbooks the Executive draws on. Declared in{" "}
-          <code className="text-fg">knowledge/sources.yaml</code>. To add or
-          refresh: run <code className="text-fg">openexecutive ingest-oer</code>.
+          {tRich("audit.reference.intro", {
+            file: <code className="text-fg">knowledge/sources.yaml</code>,
+            command: <code className="text-fg">openexecutive ingest-oer</code>,
+          })}
         </p>
         <p className="text-sm text-fg-muted mt-2">
-          {ingested.length} ingested · {pending.length} pending ·{" "}
-          {totalChunks.toLocaleString()} indexed chunks
+          {t("audit.reference.summary", {
+            ingested: ingested.length,
+            pending: pending.length,
+            chunks: totalChunks.toLocaleString(displayLocale()),
+          })}
         </p>
       </div>
 
@@ -108,8 +112,8 @@ function SourceCard({
   onCollapse: () => void;
 }) {
   const fetchedLabel = source.last_fetched_at
-    ? new Date(source.last_fetched_at * 1000).toLocaleString()
-    : "never";
+    ? new Date(source.last_fetched_at * 1000).toLocaleString(displayLocale())
+    : t("audit.reference.never");
 
   return (
     <div className="rounded-2xl bg-surface-elevated border border-line overflow-hidden">
@@ -124,10 +128,10 @@ function SourceCard({
                 aria-hidden
                 className={`h-2 w-2 rounded-full ${source.is_ingested ? "bg-emerald-500" : "bg-fg-subtle"}`}
               />
-              {source.is_ingested ? "Ingested" : "Pending"}
+              {source.is_ingested ? t("audit.reference.ingested") : t("audit.reference.pending")}
             </span>
             <span className="text-sm text-fg-subtle">
-              · phase {source.phase}
+              {t("audit.reference.phase", { phase: source.phase })}
             </span>
           </div>
           <p className="text-sm text-fg-muted mt-1">
@@ -138,7 +142,7 @@ function SourceCard({
               rel="noopener noreferrer"
               className="text-fg-muted hover:text-fg underline-offset-2 hover:underline"
             >
-              source ↗
+              {t("audit.reference.sourceLink")}
             </a>
           </p>
           <div className="flex items-center gap-1.5 mt-2 flex-wrap">
@@ -152,8 +156,11 @@ function SourceCard({
             ))}
           </div>
           <p className="text-sm text-fg-muted mt-2">
-            {source.chunks.toLocaleString()} chunks · {source.files} file
-            {source.files === 1 ? "" : "s"} · fetched {fetchedLabel}
+            {t("audit.reference.stats", {
+              chunks: source.chunks.toLocaleString(displayLocale()),
+              files: tp("audit.reference.files", source.files),
+              fetched: fetchedLabel,
+            })}
           </p>
         </div>
         <button
@@ -161,7 +168,7 @@ function SourceCard({
           disabled={!source.is_ingested}
           className={buttonClass("secondary", "sm", "!h-10 flex-shrink-0")}
         >
-          {isExpanded ? "Hide" : "Peek"}
+          {isExpanded ? t("audit.reference.hide") : t("audit.reference.peek")}
         </button>
       </div>
       {isExpanded && (
@@ -173,7 +180,11 @@ function SourceCard({
               className="text-sm text-fg bg-surface-elevated border border-line rounded-xl px-3.5 py-2.5"
             >
               <p className="text-xs text-fg-muted mb-1">
-                {c.domain} · {c.filename} · chunk #{c.chunk_index}
+                {t("audit.reference.chunkMeta", {
+                  domain: c.domain,
+                  filename: c.filename,
+                  index: c.chunk_index,
+                })}
               </p>
               <p className="whitespace-pre-wrap leading-relaxed">
                 {c.text.length > 600 ? c.text.slice(0, 600) + "…" : c.text}

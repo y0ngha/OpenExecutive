@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { WorkflowToolInfo, searchWorkflowTools } from "@/lib/api";
 import ToolChips, { toolLabel, useToolInfo } from "./ToolChips";
+import { t } from "@/i18n/index.ts";
 
 /**
  * Pick the tools an action step may use: the chosen list (removable chips)
@@ -44,16 +45,16 @@ export default function ToolPicker({
         <ToolChips
           names={value}
           info={info}
-          onRemove={(name) => onChange(value.filter((t) => t !== name))}
+          onRemove={(name) => onChange(value.filter((n) => n !== name))}
         />
       ) : (
-        <p className="text-xs text-fg-subtle">No tools yet — search below.</p>
+        <p className="text-xs text-fg-subtle">{t("jobs.tools.noneYet")}</p>
       )}
       <div className="flex gap-2">
         <input
           className={inputCls}
           value={query}
-          placeholder="What should it do? e.g. append rows to a sheet"
+          placeholder={t("jobs.tools.searchPlaceholder")}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -68,38 +69,38 @@ export default function ToolPicker({
           disabled={searching || !query.trim()}
           className="shrink-0 rounded-md border border-line px-3 text-xs text-fg-muted hover:text-fg disabled:opacity-50"
         >
-          {searching ? "Searching…" : "Search tools"}
+          {searching ? t("jobs.common.searching") : t("jobs.tools.search")}
         </button>
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
       {results && results.length === 0 && (
-        <p className="text-xs text-fg-subtle">No matching tools are connected.</p>
+        <p className="text-xs text-fg-subtle">{t("jobs.tools.noMatches")}</p>
       )}
       {results && results.length > 0 && (
         <ul className="divide-y divide-line rounded-md border border-line">
-          {results.map((t) => {
-            const added = value.includes(t.name);
-            const { label, source } = toolLabel(t.name);
+          {results.map((tool) => {
+            const added = value.includes(tool.name);
+            const { label, source } = toolLabel(tool.name);
             return (
-              <li key={t.name} className="flex items-start gap-3 px-3 py-2">
+              <li key={tool.name} className="flex items-start gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-fg">
                     {label} <span className="text-fg-subtle">· {source}</span>
-                    {t.read_only !== true && (
+                    {tool.read_only !== true && (
                       <span className="ml-1 rounded bg-amber-500/15 px-1 text-[10px] text-amber-300">
-                        may change things
+                        {t("jobs.tools.mayChange")}
                       </span>
                     )}
                   </p>
-                  <p className="text-[11px] text-fg-muted line-clamp-2">{t.description}</p>
+                  <p className="text-[11px] text-fg-muted line-clamp-2">{tool.description}</p>
                 </div>
                 <button
                   type="button"
                   disabled={added}
-                  onClick={() => onChange([...value, t.name])}
+                  onClick={() => onChange([...value, tool.name])}
                   className="shrink-0 text-xs text-indigo-400 hover:text-indigo-300 disabled:text-fg-subtle"
                 >
-                  {added ? "Added" : "+ Add"}
+                  {added ? t("jobs.tools.added") : t("jobs.tools.add")}
                 </button>
               </li>
             );

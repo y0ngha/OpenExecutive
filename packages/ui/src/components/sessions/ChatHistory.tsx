@@ -8,6 +8,7 @@ import type { SessionSummary } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/relativeTime";
 import { CHANNEL_LABELS, sessionChannel, sessionTitle } from "@/lib/sessionChannel";
 import { groupSessionsByDate, type GroupKey } from "@/lib/sessionGroups";
+import { t, tp } from "@/i18n/index.ts";
 
 const GROUP_CAP = 20;
 const DEFAULT_COLLAPSED = new Set<GroupKey>(["older"]);
@@ -31,7 +32,7 @@ export default function ChatHistory({ sessions, searching, onSelect, onDelete }:
   const groups = useMemo(() => groupSessionsByDate(sessions), [sessions]);
 
   if (groups.length === 0) {
-    return <p className="px-1 py-6 text-[15px] text-fg-muted">No conversations match.</p>;
+    return <p className="px-1 py-6 text-[15px] text-fg-muted">{t("chat.history.noMatch")}</p>;
   }
 
   // Stored collapse state (default-collapsed unless the user toggled it). While
@@ -78,7 +79,7 @@ export default function ChatHistory({ sessions, searching, onSelect, onDelete }:
                     onClick={() => revealAll(group.key)}
                     className="w-full text-left min-h-[40px] px-4 text-sm font-medium text-fg-muted hover:text-fg cursor-pointer"
                   >
-                    Show {hiddenCount} more
+                    {t("chat.history.showMore", { n: hiddenCount })}
                   </button>
                 )}
               </div>
@@ -104,7 +105,7 @@ function ChatRow({
   const [deleting, setDeleting] = useState(false);
   const [failed, setFailed] = useState(false);
   const channel = sessionChannel(session.session_id);
-  const messages = `${session.message_count} message${session.message_count === 1 ? "" : "s"}`;
+  const messages = tp("chat.history.messages", session.message_count);
 
   const confirmDelete = async () => {
     setDeleting(true);
@@ -138,17 +139,17 @@ function ChatRow({
           </span>
         </button>
         <OverflowMenu
-          label="More actions for this chat"
-          items={[{ label: "Delete chat", danger: true, onSelect: () => setConfirming(true) }]}
+          label={t("chat.history.moreActions")}
+          items={[{ label: t("chat.history.deleteChat"), danger: true, onSelect: () => setConfirming(true) }]}
         />
       </div>
       {(confirming || failed) && (
         <div role="alert" className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3">
           <p className="mr-auto text-sm text-fg">
-            {failed ? "Couldn't delete this chat. Try again?" : "Delete this chat? This cannot be undone."}
+            {t(failed ? "chat.history.deleteFailed" : "chat.history.deleteConfirm")}
           </p>
           <Button size="sm" variant="danger" onClick={() => void confirmDelete()} disabled={deleting}>
-            {deleting ? "Deleting…" : "Delete"}
+            {deleting ? t("chat.history.deleting") : t("common.delete")}
           </Button>
           <Button
             size="sm"
@@ -159,7 +160,7 @@ function ChatRow({
             }}
             disabled={deleting}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       )}

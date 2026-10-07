@@ -3,6 +3,7 @@
 import AboutYouCard from "@/components/settings/AboutYouCard";
 import { CompanyRetentionCard, KeepTrackCard } from "@/components/settings/HistorySettings";
 import SettingsSubpage from "@/components/settings/SettingsSubpage";
+import { t } from "@/i18n/index.ts";
 
 // Settings → About you: everything the Executive keeps about the signed-in
 // person, which only they see. What peer memory has learned about them
@@ -11,8 +12,8 @@ import SettingsSubpage from "@/components/settings/SettingsSubpage";
 export default function MemorySettingsPage() {
   return (
     <SettingsSubpage
-      title="What the Executive knows about you"
-      description="What it has learned from talking with you, and the private notes it keeps of what you tell it. Each person sees only their own."
+      title={t("settings.memory.title")}
+      description={t("settings.memory.description")}
     >
       <div className="space-y-4">
         <AboutYouCard />

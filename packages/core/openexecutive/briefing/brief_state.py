@@ -167,15 +167,63 @@ DELIVERY_PROBLEMS: dict[str, tuple[str, str]] = {
 }
 
 
+# DELIVERY_PROBLEMS in Korean (OE_LANGUAGE=KOREAN). The problem is a clause
+# the caller ends with a period, as in English.
+_DELIVERY_PROBLEMS_KO: dict[str, tuple[str, str]] = {
+    "no_owner": (
+        "보낼 소유자가 구성원 목록에 없어요",
+        "설정을 마쳐서 구성원 목록에 소유자로 등록하세요.",
+    ),
+    "no_channel": (
+        "보낼 수단이 설정되지 않았어요",
+        "Gmail을 연결하거나, 구성원 프로필에 Slack, Telegram, Discord 중 하나를 추가하세요.",
+    ),
+    "send_failed": (
+        "보내는 방법이 모두 실패했어요",
+        "어느 연결을 손봐야 하는지 설정 상태 페이지에서 확인할 수 있어요.",
+    ),
+    "not_written": (
+        "브리핑을 작성하지 못했어요",
+        "어느 부분을 손봐야 하는지 설정 상태 페이지에서 확인할 수 있어요. AI 모델 문제인 경우가 많아요.",
+    ),
+}
+_BRIEF_NAMES_KO: dict[str, str] = {
+    "principal_brief_morning": "아침 브리핑",
+    "principal_brief_eod": "저녁 요약",
+    "principal_weekly_review": "주간 리뷰",
+}
+
+_CHANNEL_PHRASES_KO: dict[str, str] = {
+    "email": "이메일로",
+    "slack_dm": "Slack으로",
+    "discord_dm": "Discord로",
+    "telegram": "Telegram으로",
+}
+
+
+def delivery_problem(reason: str) -> tuple[str, str]:
+    """``DELIVERY_PROBLEMS[reason]``, in OE_LANGUAGE."""
+    from openexecutive.utils.i18n import is_korean
+
+    return (_DELIVERY_PROBLEMS_KO if is_korean() else DELIVERY_PROBLEMS)[reason]
+
+
 def brief_name(kind: str) -> str:
     """The brief's name in the app ("morning brief"): the scheduler's own label."""
     from openexecutive.scheduler.action_phrasing import KIND_LABEL
+    from openexecutive.utils.i18n import is_korean
 
+    if is_korean():
+        return _BRIEF_NAMES_KO.get(kind, "브리핑")
     return KIND_LABEL.get(kind, "brief")
 
 
 def channel_phrase(channel: str) -> str:
     """As in "sent to you by email" or "sent to you on Slack"."""
+    from openexecutive.utils.i18n import is_korean
+
+    if is_korean():
+        return _CHANNEL_PHRASES_KO.get(channel, f"{channel} 채널로")
     return "by email" if channel == "email" else f"on {CHANNEL_NAMES.get(channel, channel)}"
 
 
@@ -506,6 +554,7 @@ __all__ = [
     "CHANNEL_NAMES",
     "DELIVERY_KINDS",
     "DELIVERY_PROBLEMS",
+    "delivery_problem",
     "HANDLED_EVENT_KINDS",
     "REVIEW_EVENT_TYPES",
     "SUPPRESSED_TEMPLATE",

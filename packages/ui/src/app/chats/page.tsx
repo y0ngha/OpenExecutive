@@ -14,6 +14,7 @@ import {
   filterSessions,
   type SessionChannel,
 } from "@/lib/sessionChannel";
+import { t } from "@/i18n/index.ts";
 
 type ChannelFilter = SessionChannel | "all";
 
@@ -57,40 +58,37 @@ export default function ChatsPage() {
         <div className="max-w-3xl mx-auto">
           <div className="mb-6 flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg mb-1">Chats</h1>
-              <p className="text-[15px] text-fg-muted">
-                Every conversation with the Executive, from the web app and from connected
-                channels.
-              </p>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg mb-1">{t("chat.nav.chats")}</h1>
+              <p className="text-[15px] text-fg-muted">{t("chat.chats.subtitle")}</p>
             </div>
             <Link href="/?new=1" className={buttonClass("primary", "md", "flex-shrink-0")}>
               <Icon name="plus" size="w-4 h-4" />
-              <span className="hidden sm:inline">New chat</span>
-              <span className="sm:hidden">New</span>
+              <span className="hidden sm:inline">{t("chat.nav.newChat")}</span>
+              <span className="sm:hidden">{t("chat.chats.newShort")}</span>
             </Link>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
             <div
               role="tablist"
-              aria-label="Filter by channel"
+              aria-label={t("chat.chats.filterLabel")}
               className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl ring-1 ring-line bg-surface-elevated"
             >
-              {tabs.map((t) => {
-                const active = activeChannel === t;
-                const count = t === "all" ? sessions.length : (counts[t] ?? 0);
+              {tabs.map((tab) => {
+                const active = activeChannel === tab;
+                const count = tab === "all" ? sessions.length : (counts[tab] ?? 0);
                 return (
                   <button
-                    key={t}
+                    key={tab}
                     type="button"
                     role="tab"
                     aria-selected={active}
-                    onClick={() => setChannel(t)}
+                    onClick={() => setChannel(tab)}
                     className={`min-h-[40px] px-4 text-[15px] font-medium rounded-lg transition cursor-pointer ${
                       active ? "bg-accent/10 text-accent" : "text-fg-muted hover:text-fg hover:bg-surface-overlay"
                     }`}
                   >
-                    {t === "all" ? "All" : CHANNEL_LABELS[t]}
+                    {tab === "all" ? t("chat.chats.all") : CHANNEL_LABELS[tab]}
                     <span className="ml-1.5 text-fg-subtle">{count}</span>
                   </button>
                 );
@@ -106,30 +104,28 @@ export default function ChatsPage() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search conversations"
-                aria-label="Search conversations"
+                placeholder={t("chat.chats.search")}
+                aria-label={t("chat.chats.search")}
                 className="w-full h-11 rounded-xl bg-surface-elevated border border-line pl-10 pr-3 text-[15px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/20"
               />
             </div>
           </div>
 
           {!loaded ? (
-            <p className="px-1 py-6 text-[15px] text-fg-muted">Loading conversations…</p>
+            <p className="px-1 py-6 text-[15px] text-fg-muted">{t("chat.chats.loading")}</p>
           ) : error && sessions.length === 0 ? (
             <p className="px-1 py-6 text-[15px] text-fg-muted">
-              Couldn&apos;t load your conversations.{" "}
+              {t("chat.chats.loadFailed")}{" "}
               <button
                 type="button"
                 onClick={refresh}
                 className="text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer"
               >
-                Try again
+                {t("common.retry")}
               </button>
             </p>
           ) : sessions.length === 0 ? (
-            <p className="px-1 py-6 text-[15px] text-fg-muted">
-              No conversations yet. Start one with New chat.
-            </p>
+            <p className="px-1 py-6 text-[15px] text-fg-muted">{t("chat.chats.empty")}</p>
           ) : (
             <ChatHistory
               sessions={visible}

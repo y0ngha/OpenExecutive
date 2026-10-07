@@ -16,10 +16,12 @@ import {
   type WatchlistItem,
   type WatchlistSignal,
 } from "@/lib/api";
+import { t } from "@/i18n/index.ts";
+import { valueLabel } from "../labels";
 
 /** Relative time for display, e.g. "3h ago", "just now", "never". */
 function formatRelTime(iso: string | null): string {
-  if (!iso) return "never";
+  if (!iso) return t("jobs.watch.never");
   try {
     const diff = new Date(iso).getTime() - Date.now();
     // new Date("garbage") yields NaN rather than throwing; every comparison
@@ -32,12 +34,12 @@ function formatRelTime(iso: string | null): string {
     // than dressed up as recent (the source controls published_at). The
     // tolerance absorbs ordinary browser/server clock drift, so our own
     // timestamps don't read as tampered with.
-    if (diff > 300_000) return "in the future";
-    if (diff > -60_000) return "just now";
+    if (diff > 300_000) return t("jobs.watch.inFuture");
+    if (diff > -60_000) return t("jobs.watch.justNow");
     const abs = Math.abs(diff);
-    if (abs < 3_600_000) return `${Math.round(abs / 60_000)}m ago`;
-    if (abs < 86_400_000) return `${Math.round(abs / 3_600_000)}h ago`;
-    return `${Math.round(abs / 86_400_000)}d ago`;
+    if (abs < 3_600_000) return t("jobs.watch.minutesAgo", { n: Math.round(abs / 60_000) });
+    if (abs < 86_400_000) return t("jobs.watch.hoursAgo", { n: Math.round(abs / 3_600_000) });
+    return t("jobs.watch.daysAgo", { n: Math.round(abs / 86_400_000) });
   } catch {
     return "—";
   }
@@ -59,8 +61,12 @@ function outcomeStyle(outcome: string | null): string {
 }
 
 function outcomeLabel(outcome: string | null): string {
-  if (outcome === null) return "pending";
-  return outcome.replace(/^suppressed_/, "suppressed: ");
+  if (outcome === null) return t("jobs.watch.outcomePending");
+  if (outcome === "alerted") return t("jobs.watch.outcomeAlerted");
+  if (outcome === "failed") return t("jobs.watch.outcomeFailed");
+  if (outcome.startsWith("suppressed_"))
+    return t("jobs.watch.outcomeSuppressed", { reason: outcome.slice("suppressed_".length) });
+  return outcome;
 }
 
 function SignalRow({ signal }: { signal: WatchlistSignal }) {
@@ -73,9 +79,12 @@ function SignalRow({ signal }: { signal: WatchlistSignal }) {
           </div>
           <div className="text-sm text-fg-muted mt-0.5">
             {signal.published_at
-              ? `published ${formatRelTime(signal.published_at)} · seen ${formatRelTime(signal.captured_at)}`
+              ? t("jobs.watch.publishedSeen", {
+                  published: formatRelTime(signal.published_at),
+                  seen: formatRelTime(signal.captured_at),
+                })
               : formatRelTime(signal.captured_at)}
-            {" "}· severity {signal.severity_hint}
+            {" "}{t("jobs.watch.severityHint", { severity: valueLabel(signal.severity_hint) })}
           </div>
         </div>
         <span
@@ -92,11 +101,11 @@ function SignalRow({ signal }: { signal: WatchlistSignal }) {
             rel="noreferrer"
             className="text-accent hover:underline truncate max-w-xs"
           >
-            source ↗
+            {t("jobs.watch.source")}
           </a>
         )}
         {signal.promoted_alert_id != null && (
-          <span className="text-fg-subtle">alert #{signal.promoted_alert_id}</span>
+          <span className="text-fg-subtle">{t("jobs.watch.alertId", { id: signal.promoted_alert_id })}</span>
         )}
       </div>
     </li>
@@ -140,7 +149,7 @@ export default function WatchDetailPage() {
         setNotes(w.notes);
         setSignals(s);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+      .catch((e) => setError(e instanceof Error ? e.message : t("jobs.watch.loadFailed")))
       .finally(() => setLoading(false));
   }, [slug]);
 
@@ -154,7 +163,7 @@ export default function WatchDetailPage() {
       setItem(updated);
     } catch (e) {
       setItem({ ...item, enabled: !next });
-      setError(e instanceof Error ? e.message : "Toggle failed");
+      setError(e instanceof Error ? e.message : t("jobs.watch.toggleFailed"));
     } finally {
       setToggling(false);
     }
@@ -167,7 +176,7 @@ export default function WatchDetailPage() {
       const updated = await patchWatchlistItem(slug, { mode: nextMode });
       setItem(updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Mode change failed");
+      setError(e instanceof Error ? e.message : t("jobs.watch.modeChangeFailed"));
     } finally {
       setModeChanging(false);
     }
@@ -180,7 +189,7 @@ export default function WatchDetailPage() {
       const updated = await patchWatchlistItem(slug, { notes });
       setItem(updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      setError(e instanceof Error ? e.message : t("jobs.watch.saveFailed"));
     } finally {
       setSavingNotes(false);
     }
@@ -191,7 +200,7 @@ export default function WatchDetailPage() {
       await deleteWatchlistItem(slug);
       router.push("/watchlist");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      setError(e instanceof Error ? e.message : t("jobs.watch.deleteFailed"));
       setConfirming(false);
     }
   }
@@ -199,7 +208,7 @@ export default function WatchDetailPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-full bg-surface p-6">
-        <p className="text-fg-muted text-sm">Loading…</p>
+        <p className="text-fg-muted text-sm">{t("common.loading")}</p>
       </div>
     );
   }
@@ -207,7 +216,7 @@ export default function WatchDetailPage() {
     return (
       <div className="flex flex-col h-full bg-surface p-6">
         <Link href="/watchlist" className="text-xs text-indigo-300 hover:text-indigo-200">
-          ← Back
+          {t("jobs.watch.backShort")}
         </Link>
         <div className="mt-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm">
           {error}
@@ -225,7 +234,7 @@ export default function WatchDetailPage() {
             href="/watchlist"
             className="text-sm text-fg-muted hover:text-fg inline-block mb-4"
           >
-            ← Watch list
+            {t("jobs.watch.backToList")}
           </Link>
 
           <div className="flex items-start justify-between mb-6 gap-4">
@@ -238,21 +247,21 @@ export default function WatchDetailPage() {
               </p>
             </div>
             <OverflowMenu
-              label="More actions"
-              items={[{ label: "Delete monitor", danger: true, onSelect: () => setConfirming(true) }]}
+              label={t("jobs.watch.moreActions")}
+              items={[{ label: t("jobs.watch.deleteMonitor"), danger: true, onSelect: () => setConfirming(true) }]}
             />
           </div>
 
           {confirming && (
             <div className="rounded-2xl border border-rose-500/30 bg-rose-500/5 p-4 mb-4 flex flex-wrap items-center gap-3">
               <span className="text-[15px] text-fg flex-1 min-w-[12rem]">
-                Delete this monitor? Historical signals stay in the audit log.
+                {t("jobs.watch.confirmDelete")}
               </span>
               <Button variant="danger" onClick={remove}>
-                Delete
+                {t("common.delete")}
               </Button>
               <Button variant="ghost" onClick={() => setConfirming(false)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
             </div>
           )}
@@ -261,12 +270,12 @@ export default function WatchDetailPage() {
             <div className="flex items-center justify-between gap-4 pb-4">
               <div>
                 <div id="watch-enabled-label" className="text-[15px] font-semibold text-fg">
-                  {item.enabled ? "Watching" : "Paused"}
+                  {item.enabled ? t("jobs.watch.watching") : t("jobs.watch.paused")}
                 </div>
                 <p className="text-sm text-fg-muted">
                   {item.enabled
-                    ? "Polled on its cadence."
-                    : "Not polled until you switch it back on."}
+                    ? t("jobs.watch.polled")
+                    : t("jobs.watch.notPolled")}
                 </p>
               </div>
               {/* The label pads the small switch out to a 40px tap target. */}
@@ -281,22 +290,22 @@ export default function WatchDetailPage() {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-4 pt-4">
               <div>
-                <div className="text-[15px] font-semibold text-fg">When it fires</div>
+                <div className="text-[15px] font-semibold text-fg">{t("jobs.watch.whenItFires")}</div>
                 <p className="text-sm text-fg-muted">
                   {item.mode === "active"
-                    ? "Signals can become alerts in your briefing."
-                    : "Shadow mode (dry_run): polls and records signals, never alerts."}
+                    ? t("jobs.watch.modeActiveHint")
+                    : t("jobs.watch.modeDryRunHint")}
                 </p>
               </div>
               <div
                 role="group"
-                aria-label="Mode"
+                aria-label={t("jobs.watch.mode")}
                 className="inline-flex rounded-xl border border-line bg-surface p-1"
               >
                 {(
                   [
-                    ["active", "Alert me"],
-                    ["dry_run", "Shadow only"],
+                    ["active", t("jobs.watch.alertMe")],
+                    ["dry_run", t("jobs.watch.shadowOnly")],
                   ] as const
                 ).map(([value, label]) => (
                   <button
@@ -325,43 +334,45 @@ export default function WatchDetailPage() {
           )}
 
           <div className="rounded-2xl border border-line bg-surface-elevated p-5 mb-4">
-            <h2 className="text-base font-semibold text-fg mb-3">Configuration</h2>
+            <h2 className="text-base font-semibold text-fg mb-3">{t("jobs.watch.configuration")}</h2>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
-              <dt className="text-fg-muted">Mode</dt>
-              <dd className="text-fg">{item.mode}</dd>
-              <dt className="text-fg-muted">Cadence</dt>
-              <dd className="text-fg">{item.cadence}</dd>
-              <dt className="text-fg-muted">Severity range</dt>
+              <dt className="text-fg-muted">{t("jobs.watch.mode")}</dt>
+              <dd className="text-fg">{valueLabel(item.mode)}</dd>
+              <dt className="text-fg-muted">{t("jobs.builder.cadence")}</dt>
+              <dd className="text-fg">{valueLabel(item.cadence)}</dd>
+              <dt className="text-fg-muted">{t("jobs.watch.severityRange")}</dt>
               <dd className="text-fg">
-                {item.severity_floor} → {item.severity_ceiling}
+                {valueLabel(item.severity_floor)} → {valueLabel(item.severity_ceiling)}
               </dd>
-              <dt className="text-fg-muted">Specialist</dt>
+              <dt className="text-fg-muted">{t("jobs.builder.specialist")}</dt>
               <dd className="text-fg">{item.route_to_specialist || "—"}</dd>
-              <dt className="text-fg-muted">Fired count</dt>
+              <dt className="text-fg-muted">{t("jobs.watch.firedCount")}</dt>
               <dd className="text-fg">{item.fired_count}</dd>
-              <dt className="text-fg-muted">Dismissed</dt>
+              <dt className="text-fg-muted">{t("jobs.watch.dismissed")}</dt>
               <dd className="text-fg">{item.dismiss_count}</dd>
-              <dt className="text-fg-muted">Trust score</dt>
+              <dt className="text-fg-muted">{t("jobs.watch.trustScore")}</dt>
               <dd className="text-fg">{item.trust_score.toFixed(2)}</dd>
-              <dt className="text-fg-muted">Last polled</dt>
+              <dt className="text-fg-muted">{t("jobs.watch.lastPolled")}</dt>
               <dd className="text-fg">{formatRelTime(item.last_polled_at)}</dd>
-              <dt className="text-fg-muted">Last fired</dt>
+              <dt className="text-fg-muted">{t("jobs.watch.lastFired")}</dt>
               <dd className="text-fg">{formatRelTime(item.last_fired_at)}</dd>
               {item.origin === "research" && (
                 <>
-                  <dt className="text-fg-muted">Added by</dt>
+                  <dt className="text-fg-muted">{t("jobs.watch.addedBy")}</dt>
                   <dd className="text-fg">
-                    The Executive
-                    {policyEntity(item) ? ` · about ${policyEntity(item)}` : ""}
+                    {t("jobs.watch.theExecutive")}
+                    {policyEntity(item) ? t("jobs.watch.aboutSuffix", { entity: policyEntity(item)! }) : ""}
                     {item.route_to_department
-                      ? ` · for ${departmentTitles[item.route_to_department] ?? item.route_to_department}`
+                      ? t("jobs.watch.forSuffix", {
+                          department: departmentTitles[item.route_to_department] ?? item.route_to_department,
+                        })
                       : ""}
                   </dd>
                 </>
               )}
             </dl>
             <div className="mt-3">
-              <div className="text-sm text-fg-muted mb-1">Trigger</div>
+              <div className="text-sm text-fg-muted mb-1">{t("jobs.watch.trigger")}</div>
               <pre className="text-xs font-mono bg-surface-input/40 border border-line rounded p-2 overflow-x-auto">
                 {JSON.stringify(item.trigger_json, null, 2)}
               </pre>
@@ -369,29 +380,29 @@ export default function WatchDetailPage() {
           </div>
 
           <div className="rounded-2xl border border-line bg-surface-elevated p-5 mb-4">
-            <h2 className="text-base font-semibold text-fg mb-2">Notes</h2>
+            <h2 className="text-base font-semibold text-fg mb-2">{t("jobs.watch.notes")}</h2>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               onBlur={saveNotes}
               rows={3}
               maxLength={500}
-              placeholder="Why are we watching this?"
-              aria-label="Notes"
+              placeholder={t("jobs.watch.notesDetailPlaceholder")}
+              aria-label={t("jobs.watch.notes")}
               className="w-full px-3.5 py-2.5 text-[15px] rounded-xl bg-surface border border-line focus:outline-none focus:ring-2 focus:ring-accent/40"
             />
             {savingNotes && (
-              <p className="text-xs text-fg-subtle mt-1">Saving…</p>
+              <p className="text-xs text-fg-subtle mt-1">{t("common.saving")}</p>
             )}
           </div>
 
           <div className="rounded-2xl border border-line bg-surface-elevated p-5 mb-4">
             <h2 className="text-base font-semibold text-fg mb-3">
-              Recent signals ({signals.length})
+              {t("jobs.watch.recentSignals", { n: signals.length })}
             </h2>
             {signals.length === 0 ? (
               <p className="text-sm text-fg-muted">
-                No signals yet. The next poll runs on cadence: {item.cadence}.
+                {t("jobs.watch.noSignals", { cadence: valueLabel(item.cadence) })}
               </p>
             ) : (
               <ul className="space-y-2">

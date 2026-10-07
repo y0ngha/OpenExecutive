@@ -43,6 +43,7 @@ from openexecutive.providers.feature_gate import (
     fit_claude_generation,
     relax_forced_tool_choice,
 )
+from openexecutive.providers.output_language import apply_output_language
 from openexecutive.providers.translator import (
     StreamAccumulator,
     from_openai_response,
@@ -194,8 +195,11 @@ class OpenAICompatibleProvider:
         slug, spec = self._resolve(model)
         # Fitted before the gate, so a backend whose spec takes no thinking
         # (a local gateway serving a Claude slug) drops the added field too.
-        gated = apply_feature_gates(
-            spec, fit_claude_generation(slug, relax_forced_tool_choice(slug, kwargs))
+        gated = apply_output_language(
+            apply_feature_gates(
+                spec,
+                fit_claude_generation(slug, relax_forced_tool_choice(slug, kwargs)),
+            )
         )
         body = to_openai_request(
             slug, gated, include_usage=self._include_usage_accounting
@@ -227,8 +231,11 @@ class OpenAICompatibleProvider:
         slug, spec = self._resolve(model)
         # Fitted before the gate, so a backend whose spec takes no thinking
         # (a local gateway serving a Claude slug) drops the added field too.
-        gated = apply_feature_gates(
-            spec, fit_claude_generation(slug, relax_forced_tool_choice(slug, kwargs))
+        gated = apply_output_language(
+            apply_feature_gates(
+                spec,
+                fit_claude_generation(slug, relax_forced_tool_choice(slug, kwargs)),
+            )
         )
         body = to_openai_request(
             slug, gated, include_usage=self._include_usage_accounting

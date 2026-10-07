@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import Icon from "@/components/Icon";
+import { t } from "@/i18n/index.ts";
 
 // The fold at the foot of a Settings page that holds its rarer settings.
 // Closed by default; `summary` says what is inside without opening it.
@@ -26,7 +27,7 @@ export default function AdvancedFold({
         className="flex w-full min-h-[3rem] items-center gap-3 rounded-2xl border border-line bg-surface-elevated px-5 py-3 text-left transition-colors hover:bg-surface-overlay cursor-pointer"
       >
         <span className="min-w-0 flex-1">
-          <span className="block text-base font-semibold text-fg">Advanced</span>
+          <span className="block text-base font-semibold text-fg">{t("settings.advancedFold.title")}</span>
           <span className="block text-sm text-fg-muted truncate">{summary}</span>
         </span>
         <Icon

@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { buttonClass } from "@/components/ui/Button";
 import { nextMenuIndex } from "@/lib/menuNav";
+import { t } from "@/i18n/index.ts";
 
 // The ⋯ menu: where a card's rarer actions live (edit, dismiss, delete...)
 // so the card shows one primary button. Items are buttons or links.
@@ -25,7 +26,7 @@ export interface OverflowItem {
 
 export default function OverflowMenu({
   items,
-  label = "More actions",
+  label: labelProp,
   size = "md",
   align = "right",
   placement = "down",
@@ -44,6 +45,7 @@ export default function OverflowMenu({
   /** Text for the button in place of ⋯, styled as a secondary button. */
   trigger?: string;
 }) {
+  const label = labelProp ?? t("misc.overflow.moreActions");
   const [open, setOpen] = useState(false);
   const [focus, setFocus] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);

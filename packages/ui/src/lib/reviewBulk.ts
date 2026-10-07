@@ -3,6 +3,8 @@
 // Kept apart from ReviewQueue so `npm test` can check it
 // (scripts/reviewBulk.test.mjs).
 
+import { t } from "../i18n/index.ts";
+
 export interface BulkPendingItem {
   domain: string;
   trusted_default?: boolean;
@@ -36,8 +38,8 @@ export function domainBulkActions(
       kind: "approve",
       domain,
       count: pendingInDomain.length,
-      label: `Approve all pending in ${domain} (${pendingInDomain.length})`,
-      detail: `Approve the ${pendingInDomain.length} pending item(s) in ${domain}.`,
+      label: t("lib.bulk.approveLabel", { domain, n: pendingInDomain.length }),
+      detail: t("lib.bulk.approveDetail", { domain, n: pendingInDomain.length }),
     });
   }
   // "Stop curating" reverses queue_for_curation, whose selector is
@@ -53,16 +55,16 @@ export function domainBulkActions(
       kind: "curate-stop",
       domain,
       count: untouchedPending,
-      label: `Stop curating ${domain}`,
-      detail: `Return ${untouchedPending} unreviewed item(s) in ${domain} to trusted default.`,
+      label: t("lib.bulk.stopLabel", { domain }),
+      detail: t("lib.bulk.stopDetail", { domain, n: untouchedPending }),
     });
   } else if (defaults > 0) {
     actions.push({
       kind: "curate-start",
       domain,
       count: defaults,
-      label: `Curate ${domain} (${defaults})`,
-      detail: `Send ${defaults} shipped item(s) in ${domain} for review — they will be withheld from the Executive until approved.`,
+      label: t("lib.bulk.startLabel", { domain, n: defaults }),
+      detail: t("lib.bulk.startDetail", { domain, n: defaults }),
     });
   }
   return actions;

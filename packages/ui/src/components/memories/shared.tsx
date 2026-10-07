@@ -7,6 +7,7 @@
 
 import Icon, { type IconName } from "@/components/Icon";
 import type { ScheduledAction, WorkspaceMode } from "@/lib/api";
+import { displayLocale, t, type MessageKey } from "@/i18n/index.ts";
 
 export const DOMAINS = [
   "strategy",
@@ -22,6 +23,22 @@ export const DOMAINS = [
 
 export const STATUSES = ["active", "paused", "completed", "planned"];
 
+// Display labels for the raw domain / initiative-status values above; the raw
+// value stays what is stored and sent. Unknown values show as-is.
+function labelFor(prefix: string, value: string): string {
+  const key = `${prefix}.${value}` as MessageKey;
+  const text = t(key);
+  return text === key ? value : text;
+}
+
+export function domainLabel(domain: string): string {
+  return labelFor("people.domain", domain);
+}
+
+export function initiativeStatusLabel(status: string): string {
+  return labelFor("people.initiativeStatus", status);
+}
+
 /** ISO timestamp → YYYY-MM-DD. */
 export function formatDate(iso: string): string {
   return iso.slice(0, 10);
@@ -31,17 +48,17 @@ export function formatDate(iso: string): string {
 export function formatRunAt(iso: string): { absolute: string; relative: string } {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return { absolute: iso, relative: "" };
-  const absolute = d.toLocaleString();
+  const absolute = d.toLocaleString(displayLocale());
   const deltaMs = d.getTime() - Date.now();
   const abs = Math.abs(deltaMs);
   const mins = Math.round(abs / 60_000);
   const hours = Math.round(abs / 3_600_000);
   const days = Math.round(abs / 86_400_000);
   let unit: string;
-  if (mins < 60) unit = `${mins}m`;
-  else if (hours < 48) unit = `${hours}h`;
-  else unit = `${days}d`;
-  const relative = deltaMs >= 0 ? `in ${unit}` : `${unit} ago`;
+  if (mins < 60) unit = t("people.time.minutes", { n: mins });
+  else if (hours < 48) unit = t("people.time.hours", { n: hours });
+  else unit = t("people.time.days", { n: days });
+  const relative = deltaMs >= 0 ? t("people.time.in", { unit }) : t("people.time.ago", { unit });
   return { absolute, relative };
 }
 
@@ -52,6 +69,20 @@ export const STATUS_PILL: Record<string, string> = {
   failed: "bg-red-500/15 text-red-500 border-red-500/30",
   cancelled: "bg-surface-input/40 text-fg-muted border-line-strong/40",
 };
+
+const STATUS_LABEL_KEY: Record<string, MessageKey> = {
+  pending: "people.status.pending",
+  running: "people.status.running",
+  done: "people.status.done",
+  failed: "people.status.failed",
+  cancelled: "people.status.cancelled",
+};
+
+/** Display label for a scheduled_actions status; the raw value stays the key. */
+export function statusLabel(status: string): string {
+  const key = STATUS_LABEL_KEY[status];
+  return key ? t(key) : status;
+}
 
 export function EmptyState({ message }: { message: string }) {
   return (
@@ -74,55 +105,62 @@ export interface KindMeta {
   blurb?: string;
 }
 
-export const KIND_META: Record<string, KindMeta> = {
+// Labels and blurbs are dictionary keys, looked up when metaFor runs.
+const KIND_META: Record<string, { label: MessageKey; group: RhythmGroup; blurb?: MessageKey }> = {
   principal_brief_morning: {
-    label: "Morning brief",
+    label: "people.kind.morningBrief",
     group: "daily",
-    blurb: "Whole-company state, sent to you each morning.",
+    blurb: "people.kind.morningBriefBlurb",
   },
   executive_reflection: {
-    label: "Executive reflection",
+    label: "people.kind.reflection",
     group: "daily",
-    blurb: "Decides what to act on, just before the morning brief.",
+    blurb: "people.kind.reflectionBlurb",
   },
   principal_brief_eod: {
-    label: "End-of-day digest",
+    label: "people.kind.eod",
     group: "daily",
-    blurb: "What landed today and what's still open.",
+    blurb: "people.kind.eodBlurb",
   },
   // Solo mode only: scheduled weekly, Friday afternoon by default.
   principal_weekly_review: {
-    label: "Weekly review",
+    label: "people.kind.weeklyReview",
     group: "daily",
-    blurb: "Goals graded, what's due, and next week's top three.",
+    blurb: "people.kind.weeklyReviewBlurb",
   },
-  dept_cadence: { label: "Check-in", group: "departments" },
-  awaiting_human: { label: "Awaiting a human reply", group: "awaiting" },
-  proactive_nudge: { label: "Nudge", group: "awaiting" },
+  dept_cadence: { label: "people.kind.checkIn", group: "departments" },
+  awaiting_human: { label: "people.kind.awaitingHuman", group: "awaiting" },
+  proactive_nudge: { label: "people.kind.nudge", group: "awaiting" },
   nudge_scan: {
-    label: "Nudge scan",
+    label: "people.kind.nudgeScan",
     group: "system",
-    blurb: "Chases stalled commitments and idle initiatives.",
+    blurb: "people.kind.nudgeScanBlurb",
   },
   external_monitor_scan: {
-    label: "External monitor",
+    label: "people.kind.externalMonitor",
     group: "system",
-    blurb: "Watches the watch list for material signals.",
+    blurb: "people.kind.externalMonitorBlurb",
   },
   watchlist_research_scan: {
-    label: "Watchlist research",
+    label: "people.kind.watchlistResearch",
     group: "system",
-    blurb: "Periodic research pass over your watch list.",
+    blurb: "people.kind.watchlistResearchBlurb",
   },
 };
 
 export function metaFor(action: ScheduledAction): KindMeta {
   const meta = KIND_META[action.kind];
-  if (meta) return meta;
+  if (meta) {
+    return {
+      label: t(meta.label),
+      group: meta.group,
+      blurb: meta.blurb ? t(meta.blurb) : undefined,
+    };
+  }
   // Unknown kind: keep it visible rather than dropping it. Internal-channel
   // rows are system plumbing; anything else is a pending commitment.
   return {
-    label: action.kind || "Scheduled action",
+    label: action.kind || t("people.kind.scheduledAction"),
     group: action.channel === "__internal__" ? "system" : "awaiting",
   };
 }
@@ -203,7 +241,7 @@ export function StatTile({
  * shows, so the indicator never disappears, it just stops animating.
  */
 export function LivePulse({
-  label = "Live",
+  label = t("people.pulse.live"),
   className = "",
 }: {
   label?: string;

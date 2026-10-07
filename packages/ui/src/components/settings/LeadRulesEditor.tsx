@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 
+import { t, type MessageKey } from "@/i18n/index.ts";
 import type { LeadRule, LeadRuleKind } from "@/lib/api";
 
 // Rules added on top of Take the lead's gate (orchestrator/take_the_lead.py):
 // anything matching one always waits for someone first. The company's live
 // on As the Executive, a person's own on their As you.
-export const RULE_KINDS: { kind: LeadRuleKind; label: string; placeholder: string; describe: (v: string) => string }[] = [
-  { kind: "person", label: "A person", placeholder: "Name or email", describe: (v) => `Anything to or about ${v}` },
-  { kind: "domain", label: "A company", placeholder: "example.com", describe: (v) => `Anything to someone at ${v}` },
-  { kind: "words", label: "Words", placeholder: "acquisition", describe: (v) => `Anything that mentions “${v}”` },
-  { kind: "amount", label: "An amount", placeholder: "500", describe: (v) => `Any amount of ${v} or more, written with a currency ($, €, USD…)` },
+export const RULE_KINDS: { kind: LeadRuleKind; label: MessageKey; placeholder: MessageKey; describe: (v: string) => string }[] = [
+  { kind: "person", label: "settings.rules.person.label", placeholder: "settings.rules.person.placeholder", describe: (v) => t("settings.rules.person.describe", { v }) },
+  { kind: "domain", label: "settings.rules.domain.label", placeholder: "settings.rules.domain.placeholder", describe: (v) => t("settings.rules.domain.describe", { v }) },
+  { kind: "words", label: "settings.rules.words.label", placeholder: "settings.rules.words.placeholder", describe: (v) => t("settings.rules.words.describe", { v }) },
+  { kind: "amount", label: "settings.rules.amount.label", placeholder: "settings.rules.amount.placeholder", describe: (v) => t("settings.rules.amount.describe", { v }) },
 ];
 
 export default function LeadRulesEditor({
@@ -39,7 +40,7 @@ export default function LeadRulesEditor({
     try {
       await work();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the rule.");
+      setError(err instanceof Error ? err.message : t("settings.rules.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -50,7 +51,7 @@ export default function LeadRulesEditor({
       {rules.length === 0 ? (
         <p className="text-sm text-fg-muted">{emptyText}</p>
       ) : (
-        <ul className="flex flex-col gap-2" aria-label="Rules">
+        <ul className="flex flex-col gap-2" aria-label={t("settings.rules.listLabel")}>
           {rules.map((rule) => {
             const describe = RULE_KINDS.find((r) => r.kind === rule.kind)?.describe ?? ((v: string) => v);
             return (
@@ -65,7 +66,7 @@ export default function LeadRulesEditor({
                   disabled={busy || disabled}
                   className="min-h-touch flex-shrink-0 px-2 text-sm text-accent hover:underline disabled:opacity-50"
                 >
-                  Remove
+                  {t("common.remove")}
                 </button>
               </li>
             );
@@ -85,7 +86,7 @@ export default function LeadRulesEditor({
         }}
       >
         <label className="sr-only" htmlFor="lead-rule-kind">
-          Kind of rule
+          {t("settings.rules.kindLabel")}
         </label>
         <select
           id="lead-rule-kind"
@@ -96,18 +97,18 @@ export default function LeadRulesEditor({
         >
           {RULE_KINDS.map((r) => (
             <option key={r.kind} value={r.kind}>
-              {r.label}
+              {t(r.label)}
             </option>
           ))}
         </select>
         <label className="sr-only" htmlFor="lead-rule-value">
-          {spec.label}
+          {t(spec.label)}
         </label>
         <input
           id="lead-rule-value"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={spec.placeholder}
+          placeholder={t(spec.placeholder)}
           maxLength={200}
           disabled={busy || disabled}
           className="min-h-touch min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-[15px]"
@@ -117,7 +118,7 @@ export default function LeadRulesEditor({
           disabled={busy || disabled || !value.trim()}
           className="min-h-touch rounded-lg bg-accent px-4 text-[15px] font-semibold text-white disabled:opacity-50"
         >
-          Add rule
+          {t("settings.rules.add")}
         </button>
       </form>
       {error && <p className="text-sm text-red-500">{error}</p>}

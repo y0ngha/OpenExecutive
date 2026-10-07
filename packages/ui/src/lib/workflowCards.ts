@@ -4,14 +4,16 @@
  * (scripts/workflowCards.test.mjs).
  */
 
-const DAYS: Record<string, string> = {
-  mon: "Monday",
-  tue: "Tuesday",
-  wed: "Wednesday",
-  thu: "Thursday",
-  fri: "Friday",
-  sat: "Saturday",
-  sun: "Sunday",
+import { t, type MessageKey } from "../i18n/index.ts";
+
+const DAYS: Record<string, MessageKey> = {
+  mon: "lib.day.mon",
+  tue: "lib.day.tue",
+  wed: "lib.day.wed",
+  thu: "lib.day.thu",
+  fri: "lib.day.fri",
+  sat: "lib.day.sat",
+  sun: "lib.day.sun",
 };
 
 const TIME = /^\d{1,2}:\d{2}$/;
@@ -26,15 +28,15 @@ export function cadenceLabel(cadence: string | null | undefined): string {
   if (!raw) return "";
   const parts = raw.split("@");
   if (parts[0] === "daily" && parts.length === 2 && TIME.test(parts[1])) {
-    return `Every day at ${parts[1]} UTC`;
+    return t("lib.cadence.daily", { time: parts[1] });
   }
   if (parts[0] === "weekly" && parts.length === 3 && TIME.test(parts[2])) {
     const day = DAYS[parts[1].toLowerCase()];
-    if (day) return `Every ${day} at ${parts[2]} UTC`;
+    if (day) return t("lib.cadence.weekly", { day: t(day), time: parts[2] });
   }
   if (parts[0] === "quarterly" && parts.length === 2) {
     const m = /^(\d{1,2})-(\d{1,2}:\d{2})$/.exec(parts[1]);
-    if (m) return `Quarterly, day ${Number(m[1])} at ${m[2]} UTC`;
+    if (m) return t("lib.cadence.quarterly", { n: Number(m[1]), time: m[2] });
   }
   return raw;
 }

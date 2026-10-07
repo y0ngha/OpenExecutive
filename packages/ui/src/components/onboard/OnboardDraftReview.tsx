@@ -16,6 +16,7 @@ import {
   type OnboardPersonDraft,
   type OnboardTurn,
 } from "@/lib/api";
+import { t } from "@/i18n/index.ts";
 
 interface Props {
   turn: OnboardTurn;
@@ -101,21 +102,21 @@ export default function OnboardDraftReview({
   const blocker = !profile.name.trim()
     ? solo
       ? workspaceRole.role_kind === "owner"
-        ? "Your business needs a name."
-        : "Add the name of the business or organisation you work in."
-      : "Your company needs a name."
+        ? t("chat.review.blocker.businessName")
+        : t("chat.review.blocker.orgName")
+      : t("chat.review.blocker.companyName")
     : namedPeople.length === 0
       ? solo
-        ? "Add your name."
-        : "Add at least one person, and mark which one is you."
+        ? t("chat.review.blocker.addName")
+        : t("chat.review.blocker.addPerson")
       : principals !== 1
-        ? "Mark exactly one person as you."
+        ? t("chat.review.blocker.onePrincipal")
         : duplicateNames
-          ? "Two people have the same name — give them distinct names."
+          ? t("chat.review.blocker.dupPeople")
           : duplicateDepartments
-            ? "Two departments have the same name."
+            ? t("chat.review.blocker.dupDepartments")
             : sessionStatus === "loading" || !ownerLookupDone
-              ? "Loading your sign-in details…"
+              ? t("chat.review.blocker.loading")
               : null;
 
   async function save() {
@@ -134,10 +135,8 @@ export default function OnboardDraftReview({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-lg font-semibold text-fg">Here&rsquo;s what I understood</h1>
-        <p className="text-sm text-fg-muted mt-0.5">
-          Nothing is saved yet. Edit anything that&rsquo;s off, then save.
-        </p>
+        <h1 className="text-lg font-semibold text-fg">{t("chat.review.title")}</h1>
+        <p className="text-sm text-fg-muted mt-0.5">{t("chat.review.lead")}</p>
       </div>
 
       {turn.summary && (
@@ -149,7 +148,7 @@ export default function OnboardDraftReview({
       {turn.confidence_notes.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-5 py-4">
           <p className="text-xs font-medium text-amber-400 uppercase tracking-wide mb-2">
-            I couldn&rsquo;t determine these
+            {t("chat.review.unsure")}
           </p>
           <ul className="flex flex-col gap-1">
             {turn.confidence_notes.map((note, i) => (
@@ -173,25 +172,22 @@ export default function OnboardDraftReview({
 
       {solo ? (
         <div className="bg-surface-elevated border border-line rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-fg">You</h2>
-          <p className="text-xs text-fg-muted mt-1 mb-3">
-            The Executive reports to you. Add clients, partners and anyone else you work
-            with later, on the People page.
-          </p>
+          <h2 className="text-sm font-semibold text-fg">{t("chat.conversation.you")}</h2>
+          <p className="text-xs text-fg-muted mt-1 mb-3">{t("chat.review.youLead")}</p>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               value={me.full_name}
               onChange={(e) => setMe((m) => ({ ...m, full_name: e.target.value }))}
-              placeholder="Your full name"
-              aria-label="Your full name"
+              placeholder={t("chat.review.fullName")}
+              aria-label={t("chat.review.fullName")}
               autoComplete="name"
               className="flex-1 rounded-lg border border-line-strong bg-surface-overlay px-3 py-2 text-sm text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-colors"
             />
             <input
               value={me.role}
               onChange={(e) => setMe((m) => ({ ...m, role: e.target.value }))}
-              placeholder="Your title, e.g. Owner or Director of Operations"
-              aria-label="Your role"
+              placeholder={t("chat.review.titlePlaceholder")}
+              aria-label={t("chat.review.roleLabel")}
               className="flex-1 rounded-lg border border-line-strong bg-surface-overlay px-3 py-2 text-sm text-fg placeholder-fg-subtle focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-colors"
             />
           </div>
@@ -225,20 +221,12 @@ export default function OnboardDraftReview({
       )}
       <div className="bg-surface-elevated border border-line rounded-xl p-5">
         <label htmlFor="owner-email" className="text-sm font-semibold text-fg">
-          Your sign-in email
+          {t("chat.review.emailLabel")}
         </label>
         <p className="text-xs text-fg-muted mt-1 mb-3">
-          {solo ? (
-            "Links you to this login, so your chats and full access work straight away."
-          ) : (
-            <>
-              Links the person marked &ldquo;This is me&rdquo; to this login, so your chats and
-              owner rights work straight away.
-            </>
-          )}{" "}
-          Setting this up for someone else? Enter the Google email they will sign in with.
-          {session?.localLogin &&
-            " Optional on this computer — add one if you set up Google or SSO sign-in later."}
+          {t(solo ? "chat.review.emailSolo" : "chat.review.emailTeam")}{" "}
+          {t("chat.review.emailOther")}
+          {session?.localLogin && ` ${t("chat.review.emailLocal")}`}
         </p>
         <input
           id="owner-email"
@@ -268,14 +256,14 @@ export default function OnboardDraftReview({
           disabled={saving || blocker !== null}
           className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
         >
-          {saving ? "Saving…" : "Save & finish setup"}
+          {saving ? t("common.saving") : t("chat.review.save")}
         </button>
         <button
           onClick={onBackToConversation}
           disabled={saving}
           className="text-xs text-fg-muted hover:text-fg disabled:opacity-40 transition-colors"
         >
-          Not quite — ask me more questions
+          {t("chat.review.askMore")}
         </button>
       </div>
     </div>

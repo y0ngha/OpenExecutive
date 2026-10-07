@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import TimeframePicker, { TimeframeChips, suggestPeriodValue } from "@/components/TimeframePicker";
 import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
+import { t, type MessageKey } from "@/i18n/index.ts";
 import {
   createGoal,
   deleteGoal,
@@ -42,8 +43,15 @@ const GOAL_STATUS_DOT: Record<string, string> = {
   off_track: "bg-rose-500",
 };
 
+const GOAL_STATUS_LABEL: Record<string, MessageKey> = {
+  on_track: "briefing.goal.statusOnTrack",
+  at_risk: "briefing.goal.statusAtRisk",
+  off_track: "briefing.goal.statusOffTrack",
+};
+
 export function goalStatusLabel(status: string): string {
-  return status.replace("_", " ");
+  const key = GOAL_STATUS_LABEL[status];
+  return key ? t(key) : status.replace("_", " ");
 }
 
 export function GoalStatusPill({ status, count }: { status: string; count?: number }) {
@@ -60,9 +68,16 @@ const INPUT_CLS =
   "h-11 px-3 rounded-xl bg-surface-input/60 border border-line text-[15px] text-fg placeholder-fg-subtle focus:outline-none focus:border-accent";
 const LABEL_CLS = "text-sm text-fg-muted flex flex-col gap-1.5";
 
-const GOAL_PLACEHOLDER = "e.g. Close Series A";
-const TARGET_PLACEHOLDER = "How will you know it's done? e.g. $5M raised";
-const CURRENT_PLACEHOLDER = "e.g. $2M committed";
+const GOAL_PLACEHOLDER: MessageKey = "briefing.goal.goalPlaceholder";
+const TARGET_PLACEHOLDER: MessageKey = "briefing.goal.targetPlaceholder";
+const CURRENT_PLACEHOLDER: MessageKey = "briefing.goal.currentPlaceholder";
+
+const PERIOD_LABEL: Record<string, MessageKey> = {
+  week: "briefing.goal.periodWeek",
+  month: "briefing.goal.periodMonth",
+  quarter: "briefing.goal.periodQuarter",
+  year: "briefing.goal.periodYear",
+};
 
 function cls(...parts: (string | false | undefined)[]) {
   return parts.filter(Boolean).join(" ");
@@ -99,14 +114,19 @@ interface GoalRowProps {
 }
 
 export function formatGoalPeriod(g: Goal): string {
-  if (g.period_type === "ongoing") return g.period_value || "Ongoing";
-  return `${g.period_type.charAt(0).toUpperCase() + g.period_type.slice(1)}: ${g.period_value}`;
+  if (g.period_type === "ongoing") return g.period_value || t("briefing.goal.ongoing");
+  const key = PERIOD_LABEL[g.period_type];
+  const type = key ? t(key) : g.period_type.charAt(0).toUpperCase() + g.period_type.slice(1);
+  return t("briefing.goal.period", { type, value: g.period_value });
 }
 
 // "Target: $5M — Current: $2M", either half alone, or "" when neither is set.
 export function formatGoalProgress(g: Pick<Goal, "target" | "current">): string {
-  if (g.target) return `Target: ${g.target}${g.current ? ` — Current: ${g.current}` : ""}`;
-  return g.current ? `Current: ${g.current}` : "";
+  if (g.target)
+    return g.current
+      ? t("briefing.goal.targetAndCurrent", { target: g.target, current: g.current })
+      : t("briefing.goal.targetOnly", { target: g.target });
+  return g.current ? t("briefing.goal.currentOnly", { current: g.current }) : "";
 }
 
 export function GoalRow({ slug, goal, onSaved, onDeleted, onEditingChange }: GoalRowProps) {
@@ -153,14 +173,14 @@ export function GoalRow({ slug, goal, onSaved, onDeleted, onEditingChange }: Goa
   if (!editing) {
     const progress = formatGoalProgress(goal);
     async function remove() {
-      if (!window.confirm("Delete this goal?")) return;
+      if (!window.confirm(t("briefing.goal.deleteConfirm"))) return;
       setDeleting(true);
       setErr(null);
       try {
         await deleteGoal(slug, goal.id!);
         onDeleted(goal.id!);
       } catch (e) {
-        setErr(e instanceof Error ? e.message : "Delete failed");
+        setErr(e instanceof Error ? e.message : t("briefing.goal.deleteFailed"));
         setDeleting(false);
       }
     }
@@ -180,19 +200,24 @@ export function GoalRow({ slug, goal, onSaved, onDeleted, onEditingChange }: Goa
             <span aria-hidden="true">·</span>
             {goal.last_reviewed_at ? (
               <span className={cls(stale && "text-amber-400")}>
-                Last reviewed {formatRelativeTime(goal.last_reviewed_at)}
+                {t("briefing.goal.lastReviewed", { when: formatRelativeTime(goal.last_reviewed_at) })}
               </span>
             ) : (
-              <span className="italic">Never reviewed</span>
+              <span className="italic">{t("briefing.goal.neverReviewed")}</span>
             )}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0 -mr-2 -mt-1.5">
           <OverflowMenu
-            label={`Actions for goal: ${goal.key_result}`}
+            label={t("briefing.goal.actionsFor", { name: goal.key_result })}
             items={[
-              { label: "Edit goal", onSelect: () => setEditingAndNotify(true) },
-              { label: deleting ? "Deleting…" : "Delete goal", danger: true, disabled: deleting, onSelect: () => void remove() },
+              { label: t("briefing.goal.edit"), onSelect: () => setEditingAndNotify(true) },
+              {
+                label: deleting ? t("briefing.goal.deleting") : t("briefing.goal.delete"),
+                danger: true,
+                disabled: deleting,
+                onSelect: () => void remove(),
+              },
             ]}
           />
           {err && <span className="text-xs text-rose-500">{err}</span>}
@@ -231,7 +256,7 @@ export function GoalRow({ slug, goal, onSaved, onDeleted, onEditingChange }: Goa
       onSaved(updated);
       setEditingAndNotify(false);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Save failed");
+      setErr(e instanceof Error ? e.message : t("briefing.goal.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -242,13 +267,13 @@ export function GoalRow({ slug, goal, onSaved, onDeleted, onEditingChange }: Goa
   return (
     <div className="py-4 border-b border-line last:border-0 space-y-3">
       <label className={LABEL_CLS}>
-        Goal
+        {t("briefing.goal.goalLabel")}
         <input
           value={form.key_result}
           onChange={(e) => setForm((f) => ({ ...f, key_result: e.target.value }))}
           onKeyDown={onKeyDown}
           className={INPUT_CLS}
-          placeholder={GOAL_PLACEHOLDER}
+          placeholder={t(GOAL_PLACEHOLDER)}
         />
       </label>
       <TimeframePicker
@@ -258,7 +283,7 @@ export function GoalRow({ slug, goal, onSaved, onDeleted, onEditingChange }: Goa
         size="compact"
       />
       <label className={LABEL_CLS}>
-        Status
+        {t("briefing.goal.statusLabel")}
         <select
           value={form.status}
           onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as GoalStatus }))}
@@ -266,38 +291,38 @@ export function GoalRow({ slug, goal, onSaved, onDeleted, onEditingChange }: Goa
         >
           {GOAL_STATUS_OPTS.map((s) => (
             <option key={s} value={s}>
-              {s.replace("_", " ")}
+              {goalStatusLabel(s)}
             </option>
           ))}
         </select>
       </label>
       <label className={LABEL_CLS}>
-        Target (optional)
+        {t("briefing.goal.targetLabel")}
         <input
           value={form.target}
           onChange={(e) => setForm((f) => ({ ...f, target: e.target.value }))}
           onKeyDown={onKeyDown}
           className={INPUT_CLS}
-          placeholder={TARGET_PLACEHOLDER}
+          placeholder={t(TARGET_PLACEHOLDER)}
         />
       </label>
       <label className={LABEL_CLS}>
-        Where it stands now (optional)
+        {t("briefing.goal.currentLabel")}
         <input
           value={form.current}
           onChange={(e) => setForm((f) => ({ ...f, current: e.target.value }))}
           onKeyDown={onKeyDown}
           className={INPUT_CLS}
-          placeholder={CURRENT_PLACEHOLDER}
+          placeholder={t(CURRENT_PLACEHOLDER)}
         />
       </label>
       {err && <p className="text-sm text-rose-500">{err}</p>}
       <div className="flex gap-2">
         <Button variant="primary" disabled={!canSave} onClick={save}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("common.saving") : t("common.save")}
         </Button>
         <Button disabled={saving} onClick={cancel}>
-          Cancel
+          {t("common.cancel")}
         </Button>
       </div>
     </div>
@@ -322,7 +347,7 @@ interface AddGoalFormProps {
 // One thing to type — the goal. The timeframe is a chip (this quarter by
 // default), target and current are optional, and a new goal starts on track
 // until the department's check-in grades it.
-export function AddGoalForm({ slug, areas, areaLabel = "Area", onCreated, onCancel }: AddGoalFormProps) {
+export function AddGoalForm({ slug, areas, areaLabel, onCreated, onCancel }: AddGoalFormProps) {
   const [areaSlug, setAreaSlug] = useState(slug);
   const [form, setForm] = useState<{
     period_type: PeriodType;
@@ -363,7 +388,7 @@ export function AddGoalForm({ slug, areas, areaLabel = "Area", onCreated, onCanc
       });
       onCreated(goal);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Create failed");
+      setErr(e instanceof Error ? e.message : t("briefing.goal.createFailed"));
     } finally {
       setSaving(false);
     }
@@ -373,9 +398,9 @@ export function AddGoalForm({ slug, areas, areaLabel = "Area", onCreated, onCanc
 
   return (
     <div className="py-5 space-y-4">
-      <div className="text-base font-semibold text-fg">New goal</div>
+      <div className="text-base font-semibold text-fg">{t("briefing.goal.newGoal")}</div>
       <label className={LABEL_CLS}>
-        What&apos;s the goal?
+        {t("briefing.goal.whatsTheGoal")}
         <input
           ref={firstRef}
           value={form.key_result}
@@ -383,12 +408,12 @@ export function AddGoalForm({ slug, areas, areaLabel = "Area", onCreated, onCanc
           onKeyDown={onKeyDown}
           maxLength={512}
           className={INPUT_CLS}
-          placeholder={GOAL_PLACEHOLDER}
+          placeholder={t(GOAL_PLACEHOLDER)}
         />
       </label>
       {areas && areas.length > 1 && (
         <label className={LABEL_CLS}>
-          {areaLabel}
+          {areaLabel ?? t("briefing.goals.area")}
           <select
             value={areaSlug}
             onChange={(e) => setAreaSlug(e.target.value)}
@@ -408,35 +433,35 @@ export function AddGoalForm({ slug, areas, areaLabel = "Area", onCreated, onCanc
       />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className={LABEL_CLS}>
-          Target (optional)
+          {t("briefing.goal.targetLabel")}
           <input
             value={form.target}
             onChange={(e) => setForm((f) => ({ ...f, target: e.target.value }))}
             onKeyDown={onKeyDown}
             maxLength={512}
             className={INPUT_CLS}
-            placeholder={TARGET_PLACEHOLDER}
+            placeholder={t(TARGET_PLACEHOLDER)}
           />
         </label>
         <label className={LABEL_CLS}>
-          Where it stands now (optional)
+          {t("briefing.goal.currentLabel")}
           <input
             value={form.current}
             onChange={(e) => setForm((f) => ({ ...f, current: e.target.value }))}
             onKeyDown={onKeyDown}
             maxLength={512}
             className={INPUT_CLS}
-            placeholder={CURRENT_PLACEHOLDER}
+            placeholder={t(CURRENT_PLACEHOLDER)}
           />
         </label>
       </div>
       {err && <p className="text-sm text-rose-500">{err}</p>}
       <div className="flex gap-2">
         <Button variant="primary" disabled={!canSubmit} onClick={submit}>
-          {saving ? "Adding…" : "Add goal"}
+          {saving ? t("briefing.goal.adding") : t("briefing.goals.addGoal")}
         </Button>
         <Button disabled={saving} onClick={onCancel}>
-          Cancel
+          {t("common.cancel")}
         </Button>
       </div>
     </div>

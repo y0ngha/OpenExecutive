@@ -114,6 +114,37 @@ STATUS_MESSAGES: dict[str, str] = {
     "error": "Couldn't reach your mailbox just now. Try again in a moment.",
 }
 
+# STATUS_MESSAGES in Korean, for the web UI under OE_LANGUAGE=KOREAN.
+_STATUS_MESSAGES_KO: dict[str, str] = {
+    "connected": "연결됐어요.",
+    "not_configured": (
+        "메일함이 연결되지 않았어요. 본인 계정으로 scripts/connect-own-gmail.py(Gmail)나 "
+        "scripts/connect-own-outlook.py(Outlook)를 실행하세요(방법은 설정 → 나 대신 작성에 나와요)."
+    ),
+    "needs_reconnect": (
+        "저장된 로그인 정보로 더는 메일함에 접근할 수 없어요. scripts/connect-own-gmail.py나 "
+        "scripts/connect-own-outlook.py로 다시 연결하세요."
+    ),
+    "mismatch": (
+        "연결된 메일함이 구성원 정보에 있는 주소와 달라요. 그 계정을 연결하거나, "
+        "구성원 페이지에서 이메일을 고치세요."
+    ),
+    "no_email": "구성원 정보에 이메일 주소가 없어요. 먼저 구성원 페이지에서 추가하세요.",
+    "shared_mailbox": (
+        "내 주소가 Executive의 메일함이라서 그 메일함으로는 나 대신 쓸 수 없어요. "
+        "먼저 Executive에게 따로 Google 계정을 만들어 주세요."
+    ),
+    "error": "지금은 메일함에 연결하지 못했어요. 잠시 후 다시 시도하세요.",
+}
+
+
+def status_message(status: str) -> str:
+    """``STATUS_MESSAGES[status]``, in OE_LANGUAGE, for the web UI."""
+    from openexecutive.utils.i18n import is_korean
+
+    return (_STATUS_MESSAGES_KO if is_korean() else STATUS_MESSAGES)[status]
+
+
 # Gmail ids are short hex strings; anything else never reaches a URL path.
 _ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 # A forward's attached files, at most (Gmail's own message limit is 25 MB).

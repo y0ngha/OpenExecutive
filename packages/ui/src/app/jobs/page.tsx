@@ -35,6 +35,8 @@ import {
   runStatusLabel,
 } from "@/lib/runStatus";
 import { cadenceLabel, cardAction, lastRunAt } from "@/lib/workflowCards";
+import { sectionLabel } from "@/components/jobs/sectionLabel";
+import { t, tp, type MessageKey } from "@/i18n/index.ts";
 
 const SECTION_ORDER: WorkflowSection[] = [
   "Board",
@@ -51,14 +53,14 @@ const SECTION_ORDER: WorkflowSection[] = [
 // a user starts by hand. Custom workflows have their own list on the page.
 type SectionFilter = "all" | "system" | WorkflowSection;
 
-const SECTION_CHIP_LABEL: Record<WorkflowSection, string> = {
-  Board: "Board",
-  "Capital & Investors": "Capital",
-  "Growth & GTM": "Growth & GTM",
-  Product: "Product",
-  People: "People",
-  "Risk, Legal & Crisis": "Risk & Legal",
-  "Operating Cadence": "Operating",
+const SECTION_CHIP_LABEL: Record<WorkflowSection, MessageKey> = {
+  Board: "jobs.chip.board",
+  "Capital & Investors": "jobs.chip.capital",
+  "Growth & GTM": "jobs.chip.growth",
+  Product: "jobs.chip.product",
+  People: "jobs.chip.people",
+  "Risk, Legal & Crisis": "jobs.chip.risk",
+  "Operating Cadence": "jobs.chip.operating",
 };
 
 function isSectionFilter(v: string | null): v is SectionFilter {
@@ -79,22 +81,22 @@ function inSectionFilter(w: WorkflowMeta, f: SectionFilter): boolean {
 
 // Ready-made workflows shown first in the ready-made panel, each with a plain
 // line on when to use it. The full list sits under them.
-const STARTER_PICKS: { name: string; useFor: string }[] = [
+const STARTER_PICKS: { name: string; useFor: MessageKey }[] = [
   {
     name: "investor_update",
-    useFor: "Send investors a short monthly email: highlights, numbers, asks.",
+    useFor: "jobs.picks.investorUpdate",
   },
   {
     name: "board_prep",
-    useFor: "Get a full board deck drafted before your next meeting.",
+    useFor: "jobs.picks.boardPrep",
   },
   {
     name: "mbr",
-    useFor: "Review last month against plan and flag what needs a decision.",
+    useFor: "jobs.picks.mbr",
   },
   {
     name: "competitive_teardown",
-    useFor: "Size up a competitor and get battle-card material for sales.",
+    useFor: "jobs.picks.competitiveTeardown",
   },
 ];
 
@@ -243,7 +245,7 @@ function JobsPageInner() {
 
   const handleDelete = useCallback(
     async (runId: string) => {
-      if (!confirm("Delete this run?")) return;
+      if (!confirm(t("jobs.list.confirmDeleteRun"))) return;
       await deleteWorkflowRun(runId);
       refresh();
     },
@@ -252,7 +254,7 @@ function JobsPageInner() {
 
   const handleDeleteCustom = useCallback(
     async (name: string) => {
-      if (!confirm(`Delete the custom workflow “${name}”? This cannot be undone.`))
+      if (!confirm(t("jobs.list.confirmDeleteCustom", { name })))
         return;
       await deleteCustomWorkflow(name);
       refresh();
@@ -277,27 +279,27 @@ function JobsPageInner() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold tracking-tight text-fg">
-          {tab === "runs" ? "Runs" : tab === "playbooks" ? "Playbooks" : "Your workflows"}
+          {tab === "runs" ? t("jobs.list.runs") : tab === "playbooks" ? t("jobs.list.playbooks") : t("jobs.list.yourWorkflows")}
         </h2>
         <ViewSwitch
           tab={tab}
-          runsLabel={openRuns > 0 ? `Runs (${openRuns} open)` : `Runs (${runs.length})`}
+          runsLabel={openRuns > 0 ? t("jobs.list.runsOpen", { n: openRuns }) : t("jobs.list.runsCount", { n: runs.length })}
           playbookCount={playbookCount}
-          onChange={(t) =>
+          onChange={(next) =>
             setParam(
-              t === "playbooks"
-                ? { tab: t, status: null, section: null, browse: null }
-                : { tab: t === "catalog" ? null : t }
+              next === "playbooks"
+                ? { tab: next, status: null, section: null, browse: null }
+                : { tab: next === "catalog" ? null : next }
             )
           }
         />
       </div>
 
       {loading && tab !== "playbooks" && (
-        <div className="text-[15px] text-fg-muted">Loading workflows…</div>
+        <div className="text-[15px] text-fg-muted">{t("jobs.list.loading")}</div>
       )}
       {error && (
-        <div className="mb-4 text-[15px] text-red-400">Error: {error}</div>
+        <div className="mb-4 text-[15px] text-red-400">{t("jobs.list.error", { error })}</div>
       )}
 
       {!loading && tab === "catalog" && (
@@ -341,8 +343,8 @@ function JobsPageInner() {
       <SidePanel
         open={browsing && !loading}
         onClose={() => setParam({ browse: null, section: null })}
-        title="Ready-made workflows"
-        subtitle="Templates you can run as they are: fill in a few details and go."
+        title={t("jobs.catalog.title")}
+        subtitle={t("jobs.catalog.subtitle")}
         width="lg"
       >
         <CatalogView
@@ -372,17 +374,20 @@ function ViewSwitch({
   onChange: (t: Tab) => void;
 }) {
   const items: { key: Tab; label: string }[] = [
-    { key: "catalog", label: "Your workflows" },
+    { key: "catalog", label: t("jobs.list.yourWorkflows") },
     { key: "runs", label: runsLabel },
     {
       key: "playbooks",
-      label: playbookCount !== undefined ? `Playbooks (${playbookCount})` : "Playbooks",
+      label:
+        playbookCount !== undefined
+          ? t("jobs.list.playbooksCount", { n: playbookCount })
+          : t("jobs.list.playbooks"),
     },
   ];
   return (
     <div
       role="group"
-      aria-label="Show"
+      aria-label={t("jobs.list.viewAria")}
       className="inline-flex max-w-full overflow-x-auto rounded-xl border border-line bg-surface-elevated p-1"
     >
       {items.map((it) => (
@@ -453,11 +458,10 @@ function YourWorkflows({
     return (
       <div className="rounded-2xl border border-dashed border-line px-5 py-8 text-center">
         <p className="text-[15px] text-fg-muted">
-          No workflows of your own yet. Describe one above, or start from a
-          ready-made one.
+          {t("jobs.list.emptyOwn")}
         </p>
         <button type="button" onClick={onBrowse} className={buttonClass("secondary", "md", "mt-4")}>
-          Browse ready-made
+          {t("jobs.start.browse")}
         </button>
       </div>
     );
@@ -473,22 +477,22 @@ function YourWorkflows({
             <h3 className="text-lg font-semibold leading-snug text-fg">{d.title}</h3>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-fg-muted">
               <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-300">
-                Waiting for your approval
+                {t("jobs.list.waitingApproval")}
               </span>
               <span>
-                Off
-                {tools.size > 0 && ` · ${tools.size} ${tools.size === 1 ? "tool" : "tools"}`}
+                {t("jobs.list.off")}
+                {tools.size > 0 && tp("jobs.list.toolCount", tools.size)}
               </span>
             </div>
             <div className="mt-auto flex items-center gap-2 pt-5">
               <Link href={href} className={buttonClass("primary", "md")}>
-                Review
+                {t("jobs.list.review")}
               </Link>
               <OverflowMenu
-                label={`More for ${d.title}`}
+                label={t("jobs.list.moreFor", { title: d.title })}
                 items={[
-                  { label: "Edit", href: `/jobs/new?edit=${encodeURIComponent(d.name)}` },
-                  { label: "Delete", danger: true, onSelect: () => onDeleteCustom(d.name) },
+                  { label: t("common.edit"), href: `/jobs/new?edit=${encodeURIComponent(d.name)}` },
+                  { label: t("common.delete"), danger: true, onSelect: () => onDeleteCustom(d.name) },
                 ]}
               />
             </div>
@@ -501,13 +505,13 @@ function YourWorkflows({
         const last = lastRunAt(w.name, runs);
         const cadence = cadenceLabel(cadenceByName.get(w.name));
         const meta = [
-          cadence || `${w.steps.length} steps`,
-          last ? `last run ${formatRelativeTime(last)}` : "not run yet",
+          cadence || t("jobs.list.steps", { n: w.steps.length }),
+          last ? t("jobs.list.lastRun", { when: formatRelativeTime(last) }) : t("jobs.list.notRunYet"),
         ].join(" · ");
         const more: OverflowItem[] = [
-          ...(action.kind === "signoff" ? [{ label: "Run again", href }] : []),
-          { label: "Edit", href: `/jobs/new?edit=${encodeURIComponent(w.name)}` },
-          { label: "Delete", danger: true, onSelect: () => onDeleteCustom(w.name) },
+          ...(action.kind === "signoff" ? [{ label: t("jobs.list.runAgain"), href }] : []),
+          { label: t("common.edit"), href: `/jobs/new?edit=${encodeURIComponent(w.name)}` },
+          { label: t("common.delete"), danger: true, onSelect: () => onDeleteCustom(w.name) },
         ];
         return (
           <div key={w.name} className={cardCls}>
@@ -518,7 +522,7 @@ function YourWorkflows({
             </Link>
             {action.kind === "signoff" ? (
               <span className="mt-2 inline-flex w-fit rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-300">
-                Waiting for sign-off
+                {t("jobs.list.waitingSignOff")}
               </span>
             ) : (
               <p className="mt-1.5 text-sm text-fg-muted">{meta}</p>
@@ -532,14 +536,14 @@ function YourWorkflows({
                   href={`/jobs/runs/${encodeURIComponent(action.runId)}`}
                   className={buttonClass("primary", "md")}
                 >
-                  Review
+                  {t("jobs.list.review")}
                 </Link>
               ) : (
                 <Link href={href} className={buttonClass("primary", "md")}>
-                  Run
+                  {t("jobs.list.run")}
                 </Link>
               )}
-              <OverflowMenu label={`More for ${w.title}`} items={more} />
+              <OverflowMenu label={t("jobs.list.moreFor", { title: w.title })} items={more} />
             </div>
           </div>
         );
@@ -560,7 +564,7 @@ function CatalogCard({ workflow: w, useFor }: { workflow: WorkflowMeta; useFor?:
         {useFor ?? w.description}
       </span>
       <span className="mt-1.5 block text-xs text-fg-subtle">
-        {w.steps.length} steps · ~{w.estimated_minutes} min
+        {t("jobs.catalog.cardMeta", { n: w.steps.length, min: w.estimated_minutes })}
       </span>
     </Link>
   );
@@ -596,20 +600,20 @@ function CatalogView({
   const byName = new Map(workflows.map((w) => [w.name, w] as const));
   const picks = STARTER_PICKS.flatMap((p) => {
     const w = byName.get(p.name);
-    return w ? [{ workflow: w, useFor: p.useFor }] : [];
+    return w ? [{ workflow: w, useFor: t(p.useFor) }] : [];
   });
   const matching = workflows.filter((w) =>
     matchesQuery(query, w.title, w.description)
   );
   const known = new Set<string>(SECTION_ORDER);
   const chips: { key: SectionFilter; label: string; count: number }[] = [
-    { key: "all" as SectionFilter, label: "All", count: 0 },
+    { key: "all" as SectionFilter, label: t("jobs.chip.all"), count: 0 },
     ...SECTION_ORDER.map((s) => ({
       key: s as SectionFilter,
-      label: SECTION_CHIP_LABEL[s],
+      label: t(SECTION_CHIP_LABEL[s]),
       count: 0,
     })),
-    { key: "system" as SectionFilter, label: "System", count: 0 },
+    { key: "system" as SectionFilter, label: t("jobs.chip.system"), count: 0 },
   ]
     .map((c) => ({ ...c, count: matching.filter((w) => inSectionFilter(w, c.key)).length }))
     // Keep the active chip even at zero so the selection stays visible.
@@ -637,7 +641,7 @@ function CatalogView({
     <div className="space-y-5">
       {picks.length > 0 && !query && section === "all" && (
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-fg">Good places to start</h3>
+          <h3 className="mb-2 text-sm font-semibold text-fg">{t("jobs.catalog.goodStart")}</h3>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {picks.map(({ workflow, useFor }) => (
               <CatalogCard key={workflow.name} workflow={workflow} useFor={useFor} />
@@ -650,7 +654,7 @@ function CatalogView({
         <SearchInput
           value={query}
           onChange={onQueryChange}
-          placeholder="Search ready-made workflows…"
+          placeholder={t("jobs.catalog.searchPlaceholder")}
         />
         <div className="flex flex-wrap gap-2">
           {chips.map((c) => (
@@ -673,17 +677,17 @@ function CatalogView({
       </div>
 
       {workflows.length === 0 ? (
-        <div className="text-[15px] text-fg-muted">No ready-made workflows available.</div>
+        <div className="text-[15px] text-fg-muted">{t("jobs.catalog.none")}</div>
       ) : visible.length === 0 ? (
         <div className="text-[15px] text-fg-muted">
-          {query ? <>No workflows match &ldquo;{query}&rdquo;.</> : "Nothing here yet."}
+          {query ? t("jobs.catalog.noMatch", { query }) : t("jobs.catalog.nothingYet")}
         </div>
       ) : section === "all" ? (
         <div className="space-y-5">
           {grouped.map((g) => (
             <div key={g.label}>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
-                {g.label}
+                {g.label === "Other" ? t("jobs.catalog.other") : sectionLabel(g.label)}
                 <span className="ml-2 font-normal normal-case tracking-normal">
                   {g.items.length}
                 </span>
@@ -739,12 +743,12 @@ function RunsView({
 
   const emptyMsg =
     status === "active"
-      ? "No active runs."
+      ? t("jobs.runs.emptyActive")
       : status === "awaiting"
-      ? "Nothing waiting on a sign-off."
+      ? t("jobs.runs.emptyAwaiting")
       : status === "done"
-      ? "No completed runs yet."
-      : "No errors.";
+      ? t("jobs.runs.emptyDone")
+      : t("jobs.runs.emptyError");
 
   return (
     <div>
@@ -752,39 +756,39 @@ function RunsView({
         <StatusSegment
           active={status === "active"}
           onClick={() => onStatusChange("active")}
-          label="Active"
+          label={t("jobs.runs.active")}
           count={counts.active}
         />
         <StatusSegment
           active={status === "awaiting"}
           onClick={() => onStatusChange("awaiting")}
-          label="Awaiting sign-off"
+          label={t("jobs.runs.awaiting")}
           count={counts.awaiting}
         />
         <StatusSegment
           active={status === "done"}
           onClick={() => onStatusChange("done")}
-          label="Done"
+          label={t("jobs.runs.done")}
           count={counts.done}
         />
         <StatusSegment
           active={status === "error"}
           onClick={() => onStatusChange("error")}
-          label="Error"
+          label={t("jobs.runs.error")}
           count={counts.error}
         />
         <div className="w-full sm:w-auto sm:ml-auto">
           <SearchInput
             value={query}
             onChange={onQueryChange}
-            placeholder="Search runs…"
+            placeholder={t("jobs.runs.searchPlaceholder")}
           />
         </div>
       </div>
 
       {visible.length === 0 ? (
         <div className="text-[15px] text-fg-muted">
-          {query ? `No runs match “${query}”.` : emptyMsg}
+          {query ? t("jobs.runs.noMatch", { query }) : emptyMsg}
         </div>
       ) : (
         <div className="space-y-6">
@@ -813,7 +817,7 @@ function RunsView({
                     {title}
                   </span>
                   <span className="text-sm text-fg-muted">
-                    {items.length} {items.length === 1 ? "run" : "runs"}
+                    {tp("jobs.runs.count", items.length)}
                   </span>
                 </button>
                 {!isCollapsed && (
@@ -834,9 +838,9 @@ function RunsView({
                           </span>
                         </Link>
                         <OverflowMenu
-                          label={`More for ${r.title}`}
+                          label={t("jobs.list.moreFor", { title: r.title })}
                           items={[
-                            { label: "Delete run", danger: true, onSelect: () => onDelete(r.run_id) },
+                            { label: t("jobs.runs.deleteRun"), danger: true, onSelect: () => onDelete(r.run_id) },
                           ]}
                         />
                       </div>
@@ -847,7 +851,7 @@ function RunsView({
                         onClick={() => onExpand(workflowName)}
                         className="min-h-11 w-full px-4 text-left text-sm font-medium text-accent hover:underline"
                       >
-                        Show {hidden} more
+                        {t("jobs.runs.showMore", { n: hidden })}
                       </button>
                     )}
                   </div>

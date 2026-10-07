@@ -3,6 +3,8 @@
 import Link from "next/link";
 
 import Button from "@/components/ui/Button";
+import { t } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import type { ClientCockpitCard, HandledItem, InFlightItem, ProposalItem } from "@/lib/api";
 import { MEMORY_ACTIONS, briefingMemoryLine } from "@/lib/briefing-memory";
@@ -40,8 +42,7 @@ export function InFlightPanelBody({ inFlight }: { inFlight: InFlightItem[] }) {
   return (
     <>
       <PanelIntro>
-        What the Executive is about to do (scheduled follow-ups &amp; nudges). Nothing here needs your approval —
-        it&apos;s a heads-up.
+        {t("briefing.inFlight.intro")}
       </PanelIntro>
       <div className="divide-y divide-line">
         {inFlight.map((f) => (
@@ -57,7 +58,7 @@ export function InFlightPanelBody({ inFlight }: { inFlight: InFlightItem[] }) {
               {f.department ? <span> · {f.department}</span> : null}
               <span>
                 {" · "}
-                {f.overdue ? <span className={TONE_TEXT.amber}>overdue</span> : formatFuture(f.run_at)}
+                {f.overdue ? <span className={TONE_TEXT.amber}>{t("briefing.inFlight.overdue")}</span> : formatFuture(f.run_at)}
               </span>
             </div>
           </div>
@@ -70,12 +71,14 @@ export function InFlightPanelBody({ inFlight }: { inFlight: InFlightItem[] }) {
 // The In flight tile's sub-line: overdue first, else when the next one runs.
 export function inFlightNext(inFlight: InFlightItem[]): string {
   const overdue = inFlight.filter((f) => f.overdue).length;
-  if (overdue > 0) return `${overdue} overdue`;
+  if (overdue > 0) return t("briefing.home.overdueCount", { n: overdue });
   const next = inFlight
     .map((f) => Date.parse(f.run_at))
-    .filter((t) => !Number.isNaN(t))
+    .filter((ms) => !Number.isNaN(ms))
     .sort((a, b) => a - b)[0];
-  return next == null ? "scheduled" : `next ${formatFuture(new Date(next).toISOString())}`;
+  return next == null
+    ? t("briefing.inFlight.scheduled")
+    : t("briefing.inFlight.next", { when: formatFuture(new Date(next).toISOString()) });
 }
 
 // Multi-client practice mode only: rollup rows for PARKED client slots so
@@ -85,8 +88,7 @@ export function PracticeClientsPanelBody({ clients }: { clients: ClientCockpitCa
   return (
     <>
       <PanelIntro>
-        Your parked client companies. Counts reflect each client&apos;s last save point; switch to a client on the
-        Clients page to work in it.
+        {t("briefing.clients.intro")}
       </PanelIntro>
       <div className="divide-y divide-line">
         {clients.map((c) => {
@@ -150,8 +152,8 @@ function MonitoringRow({
       {onDismiss && (
         <OverflowMenu
           size="sm"
-          label="More actions for this signal"
-          items={[{ label: "Dismiss signal", onSelect: () => onDismiss(proposal) }]}
+          label={t("briefing.monitoring.moreActions")}
+          items={[{ label: t("briefing.monitoring.dismissSignal"), onSelect: () => onDismiss(proposal) }]}
         />
       )}
     </div>
@@ -175,11 +177,10 @@ export function MonitoringPanelBody({
   return (
     <>
       <PanelIntro>
-        Passive signals (watchlist tickers, vendor status, external news) the Executive is tracking. Nothing here
-        needs a decision — tap one to talk it through.
+        {t("briefing.monitoring.intro")}
       </PanelIntro>
       {proposals.length === 0 ? (
-        <p className="py-3 text-[15px] text-fg-muted">No signals right now.</p>
+        <p className="py-3 text-[15px] text-fg-muted">{t("briefing.monitoring.empty")}</p>
       ) : (
         <div className="divide-y divide-line">
           {proposals.map((p) => (
@@ -189,7 +190,7 @@ export function MonitoringPanelBody({
       )}
       {onBulkDismiss && staleIds.length > 0 && (
         <Button variant="secondary" size="sm" className="mt-3" onClick={() => onBulkDismiss(staleIds)}>
-          Dismiss {staleIds.length} older than {MONITORING_DISMISS_OLDER_THAN_DAYS} days
+          {t("briefing.home.dismissOlder", { n: staleIds.length, days: MONITORING_DISMISS_OLDER_THAN_DAYS })}
         </Button>
       )}
     </>
@@ -205,34 +206,34 @@ function handledSentence(h: HandledItem): React.ReactNode {
   const T = <span className="text-fg">{target}</span>;
   const why = h.detail ? <span className="text-fg-subtle"> — {h.detail}</span> : null;
   if (!headline) return h.summary;
+  const nodes = { headline: H, target: T, why };
   switch (h.kind) {
     case "closed":
-      return h.outcome === "dismissed" ? <>Dismissed {H} as stale{why}</> : <>Resolved {H}{why}</>;
+      return h.outcome === "dismissed"
+        ? tRich("briefing.handled.dismissed", nodes)
+        : tRich("briefing.handled.resolved", nodes);
     case "routed":
       if (!target) return h.summary;
-      return h.outcome === "proposed" ? (
-        <>
-          Proposed {H} to {T} <span className="text-fg-subtle">(awaiting their approval)</span>
-        </>
-      ) : (
-        <>
-          Handed {H} to {T}
-        </>
-      );
+      return h.outcome === "proposed"
+        ? tRich("briefing.handled.proposed", {
+            ...nodes,
+            awaiting: <span className="text-fg-subtle">{t("briefing.handled.awaitingApproval")}</span>,
+          })
+        : tRich("briefing.handled.handed", nodes);
     case "nudged":
-      return target ? <>Chased {T} on {H}</> : h.summary;
+      return target ? tRich("briefing.handled.chased", nodes) : h.summary;
     case "escalated":
-      return target ? <>Raised {H} to {T}{why}</> : <>Raised {H}{why}</>;
+      return target ? tRich("briefing.handled.raisedTo", nodes) : tRich("briefing.handled.raised", nodes);
     case "drafted":
-      return target ? <>Drafted {T} from {H}</> : h.summary;
+      return target ? tRich("briefing.handled.drafted", nodes) : h.summary;
     case "merged":
-      return target ? <>Folded {H} into {T}</> : h.summary;
+      return target ? tRich("briefing.handled.folded", nodes) : h.summary;
     case "suggested_workflow":
-      return target ? <>Suggested running {T} on {H}</> : h.summary;
+      return target ? tRich("briefing.handled.suggested", nodes) : h.summary;
     case "watching":
-      return <>Started watching {H}{why}</>;
+      return tRich("briefing.handled.watching", nodes);
     case "stopped_watching":
-      return <>Stopped watching {H}{why}</>;
+      return tRich("briefing.handled.stoppedWatching", nodes);
     default:
       return h.summary;
   }
@@ -279,33 +280,33 @@ function HandledRowView({
         <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-fg-subtle">
           {alsoLine && <span>{alsoLine}</span>}
           {alsoLine && <span aria-hidden="true">·</span>}
-          <span>{ageLabel(h.at)} ago</span>
-          {proofHref && <HandledTrailerLink href={proofHref} label={h.evidence_ref || "evidence"} />}
-          {h.kind === "drafted" && <HandledTrailerLink href="/artifacts" label="read the draft" />}
+          <span>{t("briefing.handled.ago", { age: ageLabel(h.at) })}</span>
+          {proofHref && <HandledTrailerLink href={proofHref} label={h.evidence_ref || t("briefing.handled.evidence")} />}
+          {h.kind === "drafted" && <HandledTrailerLink href="/artifacts" label={t("briefing.handled.readDraft")} />}
           {(h.kind === "watching" || h.kind === "stopped_watching") && (
-            <HandledTrailerLink href="/watchlist" label="watchlist" />
+            <HandledTrailerLink href="/watchlist" label={t("briefing.handled.watchlist")} />
           )}
           {reverted && (
             <>
               <span aria-hidden="true">·</span>
-              <span className={TONE_TEXT.sky}>Reopened</span>
+              <span className={TONE_TEXT.sky}>{t("briefing.handled.reopened")}</span>
             </>
           )}
         </p>
       </div>
       {canUndo && (
         <Button variant="secondary" size="sm" onClick={() => onReopen?.(handledKey(h), h.alert_id as number)}>
-          Undo
+          {t("briefing.handled.undo")}
         </Button>
       )}
       {stillOpen && (
         <Button
           variant="ghost"
           size="sm"
-          title="Jump to it in your queue"
+          title={t("briefing.handled.jumpTitle")}
           onClick={() => onJumpToAlert(h.alert_id as number)}
         >
-          Still open
+          {t("briefing.handled.stillOpen")}
         </Button>
       )}
     </div>
@@ -340,9 +341,7 @@ export function HandledPanelBody({
     <>
       <p className="mb-1 text-[15px] font-medium text-fg">{handledHeadline(rows, reverted)}</p>
       <PanelIntro>
-        Moves I completed on my own since your last delivered brief — routed, chased, escalated, drafted, folded, or
-        closed with cited evidence. Rewrites of open alerts show on the card itself, not here. Undo puts a closed item
-        back in your queue.
+        {t("briefing.handled.intro")}
       </PanelIntro>
       <div className="divide-y divide-line border-t border-line">
         {rows.map((row) => (

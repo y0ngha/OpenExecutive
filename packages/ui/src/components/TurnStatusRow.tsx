@@ -5,6 +5,7 @@ import { CouncilMark } from "./BrandMark";
 import CommitteePhaseIndicator from "./CommitteePhaseIndicator";
 import type { CommitteePhase } from "@/lib/api";
 import type { TurnStatus } from "@/lib/turnStatus";
+import { t } from "@/i18n/index.ts";
 
 // Re-renders once a second while a turn runs and tracks when it started and
 // when its last stream event arrived, for `turnStatus`. Call `start` in the
@@ -29,10 +30,10 @@ export function useTurnClock(isLoading: boolean) {
     msSinceTurnStart: now - startedAt,
     msSinceLastEvent: now - lastEventAt,
     start: () => {
-      const t = Date.now();
-      setStartedAt(t);
-      setLastEventAt(t);
-      setNow(t);
+      const at = Date.now();
+      setStartedAt(at);
+      setLastEventAt(at);
+      setNow(at);
     },
     markEvent: () => {
       setLastEventAt(Date.now());
@@ -52,7 +53,7 @@ export default function TurnStatusRow({
   showMark?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 flex-wrap" aria-label="Thinking">
+    <div className="flex items-center gap-2 flex-wrap" aria-label={t("misc.turnStatus.thinking")}>
       {showMark && <CouncilMark consulting className="w-4 h-4 text-accent" />}
       {committeePhase ? (
         <CommitteePhaseIndicator phase={committeePhase} />

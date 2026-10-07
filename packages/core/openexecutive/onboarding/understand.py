@@ -24,7 +24,13 @@ from openexecutive.agents.onboarding_interviewer import (
 )
 from openexecutive.config import get_settings
 from openexecutive.memory.workspace_settings import ROLE_TEXT_MAX
-from openexecutive.onboarding.interview import InterviewError, InterviewTimeout
+from openexecutive.onboarding.interview import (
+    _UNUSABLE,
+    _UNUSABLE_KO,
+    InterviewError,
+    InterviewTimeout,
+)
+from openexecutive.utils.i18n import localized as _t
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +131,7 @@ def _extract(response: Any) -> dict[str, Any]:
             data = getattr(block, "input", None)
             if isinstance(data, dict):
                 return data
-    raise InterviewError("The setup assistant did not return a usable response.")
+    raise InterviewError(_t(_UNUSABLE, _UNUSABLE_KO))
 
 
 async def understand(text: str) -> Understanding:
@@ -150,14 +156,18 @@ async def understand(text: str) -> Understanding:
             timeout=get_settings().interview_timeout_s,
         )
     except TimeoutError as exc:
-        raise InterviewTimeout("The setup assistant took too long to respond.") from exc
+        raise InterviewTimeout(
+            _t("The setup assistant took too long to respond.", "설정 도우미의 응답이 너무 오래 걸렸어요.")
+        ) from exc
     except Exception as exc:
         logger.error("onboarding understand: provider call failed (%s)", type(exc).__name__)
-        raise InterviewError("The setup assistant is unavailable right now.") from exc
+        raise InterviewError(
+            _t("The setup assistant is unavailable right now.", "지금은 설정 도우미를 쓸 수 없어요.")
+        ) from exc
 
     log_model_usage(response, model=model, actor=ONBOARDING_INTERVIEWER_AGENT_ID)
     try:
         return _tidy(Understanding.model_validate(_coerce(_extract(response))))
     except ValidationError as exc:
         logger.error("onboarding understand: malformed result (%s)", type(exc).__name__)
-        raise InterviewError("The setup assistant did not return a usable response.") from exc
+        raise InterviewError(_t(_UNUSABLE, _UNUSABLE_KO)) from exc

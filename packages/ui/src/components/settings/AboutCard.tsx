@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { t } from "@/i18n/index.ts";
 import { getVersion } from "@/lib/api";
 import { versionNotice, type VersionNotice } from "@/lib/versionNotice";
 
@@ -26,10 +27,10 @@ export default function AboutCard() {
   }, []);
 
   if (failed) {
-    return <p className="text-[15px] text-fg-muted">Couldn&apos;t load the version.</p>;
+    return <p className="text-[15px] text-fg-muted">{t("settings.about.loadFailed")}</p>;
   }
   if (!notice) {
-    return <p className="text-[15px] text-fg-muted">Loading…</p>;
+    return <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>;
   }
   return (
     <div className="space-y-1.5">
@@ -43,7 +44,7 @@ export default function AboutCard() {
             rel="noopener noreferrer"
             className="text-accent hover:underline"
           >
-            What&apos;s new
+            {t("settings.about.whatsNew")}
           </a>
           <span className="text-fg-subtle"> · </span>
           <a
@@ -52,7 +53,7 @@ export default function AboutCard() {
             rel="noopener noreferrer"
             className="text-accent hover:underline"
           >
-            How to upgrade
+            {t("settings.about.howToUpgrade")}
           </a>
         </p>
       )}

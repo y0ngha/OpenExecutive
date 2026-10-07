@@ -8,6 +8,8 @@ import Switch from "@/components/Switch";
 import Button from "@/components/ui/Button";
 import RoleFields from "@/components/workspace/RoleFields";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { t, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import {
   getDecisionClassMode,
   getPeopleViewer,
@@ -27,17 +29,19 @@ import { roleFormErrors, roleFormFrom, roleUpdate, type RoleForm } from "@/lib/p
 // /workspace and then the app-wide WorkspaceProvider is refreshed so the nav
 // and pages follow. The page supplies the title; this is the body.
 
-export const MODE_LABEL: Record<WorkspaceMode, string> = {
-  solo: "Personal",
-  team: "Team",
+const MODE_LABEL: Record<WorkspaceMode, MessageKey> = {
+  solo: "settings.ws.mode.solo",
+  team: "settings.ws.mode.team",
 };
 
+export function modeLabel(mode: WorkspaceMode): string {
+  return t(MODE_LABEL[mode]);
+}
+
 // What changes, shown before the switch is made.
-const SWITCH_EFFECT: Record<WorkspaceMode, string> = {
-  team:
-    "Departments and their daily check-ins come back, and the sidebar shows Departments and People again.",
-  solo:
-    "Department check-ins are paused and the sidebar shows your goals instead of departments. Nothing is deleted: your departments stay, as the areas your goals are grouped by, and switching back brings their check-ins back.",
+const SWITCH_EFFECT: Record<WorkspaceMode, MessageKey> = {
+  team: "settings.ws.switchEffect.team",
+  solo: "settings.ws.switchEffect.solo",
 };
 
 function browserTimeZone(): string | null {
@@ -79,7 +83,7 @@ export default function WorkspaceCard() {
       await refresh();
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the change.");
+      setError(err instanceof Error ? err.message : t("settings.ws.saveFailed"));
       return false;
     } finally {
       setBusy(false);
@@ -97,9 +101,9 @@ export default function WorkspaceCard() {
       )}
 
       <SettingsCard
-        title="Using Open Executive"
+        title={t("settings.ws.usingTitle")}
         titleId="ws-mode-label"
-        description="Just for you, or for you and your team."
+        description={t("settings.ws.usingDescription")}
       >
         <div
           role="radiogroup"
@@ -123,7 +127,7 @@ export default function WorkspaceCard() {
                   selected ? "bg-surface-elevated text-fg shadow-sm" : "text-fg-muted hover:text-fg"
                 }`}
               >
-                {MODE_LABEL[m]}
+                {modeLabel(m)}
               </button>
             );
           })}
@@ -132,8 +136,10 @@ export default function WorkspaceCard() {
         {pendingMode && pendingMode !== mode && (
           <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
             <p className="text-sm text-fg leading-relaxed">
-              Switch to <span className="font-semibold">{MODE_LABEL[pendingMode]}</span>?{" "}
-              {SWITCH_EFFECT[pendingMode]}
+              {tRich("settings.ws.switchQuestion", {
+                mode: <span className="font-semibold">{modeLabel(pendingMode)}</span>,
+              })}{" "}
+              {t(SWITCH_EFFECT[pendingMode])}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button
@@ -143,28 +149,27 @@ export default function WorkspaceCard() {
                   if (await save({ mode: pendingMode })) setPendingMode(null);
                 }}
               >
-                {busy ? "Switching…" : `Switch to ${MODE_LABEL[pendingMode]}`}
+                {busy ? t("settings.ws.switching") : t("settings.ws.switchTo", { mode: modeLabel(pendingMode) })}
               </Button>
               <Button variant="ghost" disabled={busy} onClick={() => setPendingMode(null)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
             </div>
           </div>
         )}
         <p className="mt-4 text-[13px] text-fg-subtle">
-          A persona you customised in Council stays in place in either mode.
+          {t("settings.ws.personaNote")}
         </p>
       </SettingsCard>
 
       {mode === "solo" && <RoleSection />}
 
       <SettingsCard
-        title={<label htmlFor="ws-timezone">Time zone</label>}
+        title={<label htmlFor="ws-timezone">{t("settings.ws.timezoneTitle")}</label>}
         description={
           <>
-            When your morning brief, end-of-day digest and reflection arrive, and how the Executive
-            reads &ldquo;tomorrow at 9&rdquo;.
-            {effectiveTimezone && <> Now: {effectiveTimezone}.</>}
+            {t("settings.ws.timezoneDescription")}
+            {effectiveTimezone && <>{t("settings.ws.timezoneNow", { zone: effectiveTimezone })}</>}
           </>
         }
       >
@@ -175,13 +180,13 @@ export default function WorkspaceCard() {
           onChange={(e) => void save({ timezone: e.target.value || null })}
           className={select}
         >
-          <option value="">Follow server default</option>
+          <option value="">{t("settings.ws.followServer")}</option>
           {browserZone && (
-            <optgroup label="Suggested">
-              <option value={browserZone}>{browserZone} (this browser)</option>
+            <optgroup label={t("settings.ws.suggested")}>
+              <option value={browserZone}>{t("settings.ws.thisBrowser", { zone: browserZone })}</option>
             </optgroup>
           )}
-          <optgroup label="All time zones">
+          <optgroup label={t("settings.ws.allZones")}>
             {zones.map((z) => (
               <option key={z} value={z}>
                 {z}
@@ -196,7 +201,7 @@ export default function WorkspaceCard() {
             onClick={() => void save({ timezone: browserZone })}
             className="mt-2 min-h-touch text-left text-[15px] font-medium text-accent hover:underline cursor-pointer disabled:opacity-50"
           >
-            Use this browser&apos;s time zone ({browserZone})
+            {t("settings.ws.useBrowserZone", { zone: browserZone })}
           </button>
         )}
       </SettingsCard>
@@ -239,7 +244,7 @@ function CompanyDomainsSection() {
     try {
       apply(await updateWorkspace({ company_domains: value }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the domains");
+      setError(e instanceof Error ? e.message : t("settings.ws.domainsSaveFailed"));
     } finally {
       setBusy(false);
     }
@@ -248,15 +253,13 @@ function CompanyDomainsSection() {
   if (domains === null) return null;
   const parsed = draft.split(/[\s,;]+/).map((d) => d.trim().toLowerCase()).filter(Boolean);
   return (
-    <AdvancedFold id="ws-advanced" summary="Company email domains">
+    <AdvancedFold id="ws-advanced" summary={t("settings.ws.domainsTitle")}>
       <SettingsCard
-        title={<label htmlFor="ws-domains">Company email domains</label>}
+        title={<label htmlFor="ws-domains">{t("settings.ws.domainsTitle")}</label>}
         description={
           <>
-            Mail from these domains matches a teammate by the part before the @, so
-            anna+invoices@ reaches the Anna already on your People list. Someone new writing from
-            one is suggested as a teammate — you still confirm them.
-            {!custom && " Taken from your own address until you set them."}
+            {t("settings.ws.domainsDescription")}
+            {!custom && t("settings.ws.domainsDerived")}
           </>
         }
       >
@@ -274,11 +277,11 @@ function CompanyDomainsSection() {
             disabled={busy || parsed.join(",") === domains.join(",")}
             onClick={() => void save(parsed.length ? parsed : null)}
           >
-            Save
+            {t("common.save")}
           </Button>
           {custom && (
             <Button variant="ghost" disabled={busy} onClick={() => void save(null)}>
-              Use my address
+              {t("settings.ws.useMyAddress")}
             </Button>
           )}
         </div>
@@ -318,7 +321,7 @@ function RoleSection() {
       await refresh();
       setSaved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save your role.");
+      setError(err instanceof Error ? err.message : t("settings.ws.roleSaveFailed"));
     } finally {
       setBusy(false);
     }
@@ -326,8 +329,8 @@ function RoleSection() {
 
   return (
     <SettingsCard
-      title="Your role"
-      description="So the Executive's advice fits your job, whatever your role: your own business, a team you lead, or clients you advise."
+      title={t("settings.ws.roleTitle")}
+      description={t("settings.ws.roleDescription")}
     >
       <RoleFields
         value={form}
@@ -350,14 +353,14 @@ function RoleSection() {
           disabled={!dirty || busy || problems.length > 0}
           onClick={() => void save()}
         >
-          {busy ? "Saving…" : "Save role"}
+          {busy ? t("common.saving") : t("settings.ws.saveRole")}
         </Button>
         {dirty && !busy && (
           <Button variant="ghost" onClick={() => setForm(roleFormFrom(role))}>
-            Discard changes
+            {t("settings.ws.discard")}
           </Button>
         )}
-        {saved && !dirty && <span className="text-sm text-fg-muted">Saved.</span>}
+        {saved && !dirty && <span className="text-sm text-fg-muted">{t("settings.ws.saved")}</span>}
       </div>
     </SettingsCard>
   );
@@ -395,7 +398,7 @@ export function MeetingAutonomySwitch() {
   if (state === "error") {
     return (
       <SettingsCard>
-        <p className="text-sm text-fg-muted">Couldn&apos;t load the meeting-booking setting.</p>
+        <p className="text-sm text-fg-muted">{t("settings.ws.meetingsLoadFailed")}</p>
       </SettingsCard>
     );
   }
@@ -408,7 +411,7 @@ export function MeetingAutonomySwitch() {
       const next = await setDecisionClassMode(MEETING_SCHEDULING_CLASS, on ? "propose" : "auto_execute");
       setMode(next.mode);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the setting.");
+      setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -416,13 +419,9 @@ export function MeetingAutonomySwitch() {
 
   return (
     <SettingsCard
-      title="Book meetings without asking"
+      title={t("settings.ws.meetingsTitle")}
       titleId="ws-meetings-label"
-      description={
-        on
-          ? "The Executive books meetings on your calendar on its own."
-          : "Each meeting the Executive wants to book waits for your approval in the briefing."
-      }
+      description={on ? t("settings.ws.meetingsOn") : t("settings.ws.meetingsOff")}
       action={<Switch checked={on} onChange={() => void toggle()} disabled={busy} labelledBy="ws-meetings-label" />}
     >
       {error && <p className="text-sm text-red-500">{error}</p>}

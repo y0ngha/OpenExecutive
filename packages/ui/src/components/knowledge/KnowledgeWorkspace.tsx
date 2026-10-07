@@ -39,11 +39,12 @@ import NewFileForm from "./NewFileForm";
 import QueryPanel from "./QueryPanel";
 import ReferencePanel from "./ReferencePanel";
 import SourceTree, { type FileKind, type Selection } from "./SourceTree";
+import { t } from "@/i18n/index.ts";
 
 // What the phone bar above the playbooks tree names as open.
 function fileLabel(selection: Selection): string | undefined {
   if (selection?.kind === "file") return selection.filename;
-  if (selection?.kind === "new") return "New file";
+  if (selection?.kind === "new") return t("audit.knowledge.newFile");
   return undefined;
 }
 
@@ -113,7 +114,7 @@ export default function KnowledgeWorkspace() {
       setBuiltinFiles(b);
       setFailureFiles(f);
     } catch {
-      setError("Failed to load knowledge index");
+      setError(t("audit.knowledge.loadIndexFailed"));
     }
   }, []);
 
@@ -156,7 +157,7 @@ export default function KnowledgeWorkspace() {
       const stats = await getReviewStats();
       setReviewCount(stats.pending + stats.needs_revision);
     } catch {
-      setError("Failed to update review status");
+      setError(t("audit.knowledge.updateReviewFailed"));
     }
   }
 
@@ -175,7 +176,7 @@ export default function KnowledgeWorkspace() {
         setSelectedContent(data);
         setEditContent(data.content);
       } catch {
-        if (!cancelled) setError("Failed to load file");
+        if (!cancelled) setError(t("audit.knowledge.loadFileFailed"));
       }
     }
     load();
@@ -196,7 +197,7 @@ export default function KnowledgeWorkspace() {
       // The server moves an edited file to needs_revision; reflect that now.
       await loadFileReview(selection);
     } catch {
-      setError("Failed to save file");
+      setError(t("audit.knowledge.saveFileFailed"));
     } finally {
       setIsSaving(false);
     }
@@ -206,7 +207,7 @@ export default function KnowledgeWorkspace() {
     if (selection?.kind !== "file" || !selectedContent) return;
     if (
       !confirm(
-        `Delete "${selectedContent.filename}"? This removes it from the knowledge base.`
+        t("audit.knowledge.confirmDelete", { filename: selectedContent.filename })
       )
     )
       return;
@@ -217,7 +218,7 @@ export default function KnowledgeWorkspace() {
       setSelection({ kind: "playbooks" });
       await loadIndex();
     } catch {
-      setError("Failed to delete file");
+      setError(t("audit.knowledge.deleteFileFailed"));
     }
   }
 
@@ -249,22 +250,21 @@ export default function KnowledgeWorkspace() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">Knowledge</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">{t("audit.knowledge.title")}</h1>
           <p className="mt-1.5 text-[15px] text-fg-muted max-w-2xl">
-            Everything here is read by the Executive when it answers questions about your
-            company.
+            {t("audit.knowledge.intro")}
           </p>
         </div>
 
         <SectionTabs
-          label="Knowledge"
+          label={t("audit.knowledge.title")}
           active={isAdvancedView(view) ? "advanced" : "company"}
-          onChange={(t) => openView(t === "advanced" ? lastAdvanced : "company")}
+          onChange={(tab) => openView(tab === "advanced" ? lastAdvanced : "company")}
           tabs={[
             { id: "company", label: VIEW_LABELS.company, badge: companyCount },
             {
               id: "advanced",
-              label: "Advanced",
+              label: t("audit.knowledge.advanced"),
               // The review count rides on "Advanced" so pending items show
               // from the documents view too.
               badge: !isAdvancedView(view) && reviewCount > 0 ? reviewCount : null,
@@ -314,7 +314,7 @@ export default function KnowledgeWorkspace() {
           {view === "playbooks" && (
             <div className="flex flex-col md:flex-row md:gap-6">
               <PageSideNav
-                label="File"
+                label={t("audit.knowledge.file")}
                 current={fileLabel(selection)}
                 closeKey={JSON.stringify(selection)}
                 className="md:w-64 md:max-h-[calc(100vh-14rem)] md:sticky md:top-0 bg-surface-elevated md:bg-transparent p-4 md:p-0 md:pr-4"
@@ -348,7 +348,7 @@ export default function KnowledgeWorkspace() {
                   />
                 )}
                 {selection?.kind === "file" && !selectedContent && !error && (
-                  <p className="text-[15px] text-fg-muted">Loading…</p>
+                  <p className="text-[15px] text-fg-muted">{t("common.loading")}</p>
                 )}
                 {selection?.kind === "new" && (
                   <NewFileForm
@@ -363,17 +363,16 @@ export default function KnowledgeWorkspace() {
                 )}
                 {selection?.kind === "playbooks" && (
                   <div className="rounded-2xl border border-dashed border-line-strong px-6 py-12 text-center">
-                    <p className="text-base font-semibold text-fg">Built-in playbooks</p>
+                    <p className="text-base font-semibold text-fg">{t("audit.knowledge.builtinPlaybooks")}</p>
                     <p className="mt-1.5 text-[15px] text-fg-muted max-w-md mx-auto">
-                      The frameworks and failure case studies each specialist draws on.
-                      Pick a file to read or edit it, or add your own.
+                      {t("audit.knowledge.builtinIntro")}
                     </p>
                     <Button
                       variant="primary"
                       className="mt-5"
                       onClick={() => setSelection({ kind: "new", fileKind: "builtin" })}
                     >
-                      New playbook
+                      {t("audit.knowledge.newPlaybook")}
                     </Button>
                   </div>
                 )}

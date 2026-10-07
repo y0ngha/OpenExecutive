@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { t } from '@/i18n/index.ts';
 
 interface Props {
   definition: string;
@@ -130,9 +131,9 @@ export default function MermaidDiagram({ definition, id }: Props) {
   if (error) {
     return (
       <div className="rounded-lg bg-surface border border-line px-4 py-3 text-xs text-fg-muted">
-        <span className="font-medium text-fg-muted">Diagram unavailable.</span>{' '}
+        <span className="font-medium text-fg-muted">{t('misc.architecture.diagramUnavailable')}</span>{' '}
         <span className="text-fg-muted">
-          This diagram could not be rendered.
+          {t('misc.architecture.diagramFailed')}
         </span>
       </div>
     );
@@ -144,7 +145,7 @@ export default function MermaidDiagram({ definition, id }: Props) {
         className="rounded-lg bg-surface-elevated border border-line p-6 text-xs text-fg-subtle animate-pulse"
         style={{ minHeight: 200 }}
       >
-        Rendering diagram…
+        {t('misc.architecture.renderingDiagram')}
       </div>
     );
   }

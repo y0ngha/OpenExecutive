@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.ts";
 import type { SessionSummary } from "@/lib/api";
 
 // Where a conversation came from. The backend has no channel column on
@@ -7,11 +8,15 @@ import type { SessionSummary } from "@/lib/api";
 export type SessionChannel = "web" | "slack" | "telegram" | "discord" | "email" | "google_chat";
 
 export const CHANNEL_LABELS: Record<SessionChannel, string> = {
-  web: "Web",
+  get web() {
+    return t("lib.channel.web");
+  },
   slack: "Slack",
   telegram: "Telegram",
   discord: "Discord",
-  email: "Email",
+  get email() {
+    return t("lib.channel.email");
+  },
   google_chat: "Google Chat",
 };
 
@@ -37,7 +42,7 @@ export function sessionChannel(sessionId: string): SessionChannel {
 }
 
 export function sessionTitle(session: SessionSummary): string {
-  return session.title || "Untitled chat";
+  return session.title || t("lib.chat.untitled");
 }
 
 /** The newest `limit` web chats. Input is newest-first (the API sorts by `updated_at DESC`). */

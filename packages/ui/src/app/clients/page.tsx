@@ -8,6 +8,8 @@ import Button, { buttonClass } from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import SectionTabs, { sectionPanelProps } from "@/components/ui/SectionTabs";
 import SidePanel from "@/components/ui/SidePanel";
+import { displayLocale, t, tp } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import {
   activateClient,
   type ClientCockpitCard,
@@ -90,7 +92,7 @@ export default function ClientsPage() {
         setCockpit([]);
       }
     } catch {
-      setToast({ message: "Failed to load clients", kind: "error" });
+      setToast({ message: t("people.clients.loadFailed"), kind: "error" });
     } finally {
       setLoading(false);
     }
@@ -102,8 +104,8 @@ export default function ClientsPage() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 5000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
   }, [toast]);
 
   async function handleCreate() {
@@ -113,15 +115,15 @@ export default function ClientsPage() {
       const created = await createClient(name.trim(), source);
       setToast({
         message: created.active
-          ? `${created.display_name} created from your current company and is now active.`
-          : `${created.display_name} created — activate it to start onboarding.`,
+          ? t("people.clients.createdActive", { name: created.display_name })
+          : t("people.clients.createdInactive", { name: created.display_name }),
         kind: "success",
       });
       setName("");
       setCreateOpen(false);
       await refresh();
     } catch (e: unknown) {
-      setToast({ message: e instanceof Error ? e.message : "Create failed", kind: "error" });
+      setToast({ message: e instanceof Error ? e.message : t("people.dept.createFailed"), kind: "error" });
     } finally {
       setCreating(false);
     }
@@ -151,11 +153,11 @@ export default function ClientsPage() {
         Object.entries(metaForm).filter(([, v]) => v !== "" && v !== undefined),
       ) as ClientMetaPatch;
       await updateClientMeta(editingSlug, patch);
-      setToast({ message: "Engagement details saved.", kind: "success" });
+      setToast({ message: t("people.clients.detailsSaved"), kind: "success" });
       setEditingSlug(null);
       await refresh();
     } catch (e: unknown) {
-      setToast({ message: e instanceof Error ? e.message : "Save failed", kind: "error" });
+      setToast({ message: e instanceof Error ? e.message : t("people.dept.saveFailed"), kind: "error" });
     } finally {
       setSavingMeta(false);
     }
@@ -169,7 +171,7 @@ export default function ClientsPage() {
       setDraft(result);
       setDraftName(result.display_name);
     } catch (e: unknown) {
-      setToast({ message: e instanceof Error ? e.message : "Draft failed", kind: "error" });
+      setToast({ message: e instanceof Error ? e.message : t("people.clients.draftFailed"), kind: "error" });
     } finally {
       setGenerating(false);
     }
@@ -184,10 +186,10 @@ export default function ClientsPage() {
       const created = await createClientFromDraft(displayName, bundle, notes.trim());
       if (activate) {
         await activateClient(created.slug);
-        setToast({ message: `${displayName} created and activated.`, kind: "success" });
+        setToast({ message: t("people.clients.createdActivated", { name: displayName }), kind: "success" });
       } else {
         setToast({
-          message: `${displayName} created — activate it to start the engagement.`,
+          message: t("people.clients.createdStartEngagement", { name: displayName }),
           kind: "success",
         });
       }
@@ -197,7 +199,7 @@ export default function ClientsPage() {
       setCreateOpen(false);
       await refresh();
     } catch (e: unknown) {
-      setToast({ message: e instanceof Error ? e.message : "Create failed", kind: "error" });
+      setToast({ message: e instanceof Error ? e.message : t("people.dept.createFailed"), kind: "error" });
     } finally {
       setCreatingDraft(false);
     }
@@ -209,13 +211,13 @@ export default function ClientsPage() {
       const result = await activateClient(slug);
       setToast({
         message: result.mcp_config_changed
-          ? `Switched to ${slug}. MCP tool config changed — it applies on the next API restart.`
-          : `Switched to ${slug}.`,
+          ? t("people.clients.switchedMcp", { slug })
+          : t("people.clients.switched", { slug }),
         kind: "success",
       });
       await refresh();
     } catch (e: unknown) {
-      setToast({ message: e instanceof Error ? e.message : "Switch failed", kind: "error" });
+      setToast({ message: e instanceof Error ? e.message : t("people.clients.switchFailed"), kind: "error" });
     } finally {
       setBusySlug(null);
     }
@@ -225,10 +227,10 @@ export default function ClientsPage() {
     setBusySlug(status.active);
     try {
       const result = await saveActiveClient();
-      setToast({ message: `Saved ${result.slug} to its slot.`, kind: "success" });
+      setToast({ message: t("people.clients.savedSlot", { slug: result.slug }), kind: "success" });
       await refresh();
     } catch (e: unknown) {
-      setToast({ message: e instanceof Error ? e.message : "Save failed", kind: "error" });
+      setToast({ message: e instanceof Error ? e.message : t("people.dept.saveFailed"), kind: "error" });
     } finally {
       setBusySlug(null);
     }
@@ -238,10 +240,10 @@ export default function ClientsPage() {
     setBusySlug(slug);
     try {
       await deleteClient(slug);
-      setToast({ message: `Deleted ${slug}.`, kind: "success" });
+      setToast({ message: t("people.clients.deleted", { slug }), kind: "success" });
       await refresh();
     } catch (e: unknown) {
-      setToast({ message: e instanceof Error ? e.message : "Delete failed", kind: "error" });
+      setToast({ message: e instanceof Error ? e.message : t("people.dept.deleteFailed"), kind: "error" });
     } finally {
       setBusySlug(null);
     }
@@ -255,16 +257,13 @@ export default function ClientsPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">Client companies</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">{t("people.clients.title")}</h1>
             <p className="mt-2 text-[15px] text-fg-muted">
-              Run several client companies from one Open Executive — one active at a
-              time. Switching saves the current client&apos;s full state (chat,
-              schedule, documents, MCP tools) to its slot and
-              restores the target.
+              {t("people.clients.intro")}
             </p>
           </div>
           <Button variant="primary" onClick={() => setCreateOpen(true)} className="flex-shrink-0 self-start">
-            New client
+            {t("people.clients.newClient")}
           </Button>
         </div>
 
@@ -283,25 +282,22 @@ export default function ClientsPage() {
 
         {status.rotation_in_progress && (
           <div className="mt-5 rounded-xl border border-line bg-surface-elevated px-4 py-3 text-[15px] text-fg-muted">
-            Overnight rotation is running — the active client will switch
-            briefly while parked clients are refreshed, then return.
+            {t("people.clients.rotation")}
           </div>
         )}
 
         {status.fixture_active && (
           <div className="mt-5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-[15px] text-amber-700 dark:text-amber-400">
-            Demo fixture <strong>{status.fixture_active}</strong> is active —
-            unload it on the Company Simulator page before working with clients.
+            {tRich("people.clients.fixtureActive", { name: <strong>{status.fixture_active}</strong> })}
           </div>
         )}
 
         {/* Practice cockpit — only in multi-client mode (2+ slots) */}
         {cockpit.length >= 2 && (
           <section className="mt-8">
-            <h2 className="text-lg font-semibold text-fg">Practice cockpit</h2>
+            <h2 className="text-lg font-semibold text-fg">{t("people.clients.cockpit")}</h2>
             <p className="mt-1 text-[15px] text-fg-muted">
-              All clients at a glance. Parked clients show their state as of the
-              last save point.
+              {t("people.clients.cockpitIntro")}
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {cockpit.map((c) => (
@@ -320,7 +316,7 @@ export default function ClientsPage() {
                     </div>
                     {c.is_active ? (
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
-                        active
+                        {t("people.clients.active")}
                       </span>
                     ) : (
                       (() => {
@@ -348,7 +344,7 @@ export default function ClientsPage() {
                         href={`/jobs/engagement_value_report?prefill=${encodePrefill({ client_slug: c.slug })}`}
                         className={buttonClass("secondary", "sm")}
                       >
-                        Value report
+                        {t("people.clients.valueReport")}
                       </Link>
                     </div>
                   )}
@@ -360,17 +356,16 @@ export default function ClientsPage() {
 
         {/* List */}
         {loading ? (
-          <p className="mt-8 text-[15px] text-fg-muted">Loading clients…</p>
+          <p className="mt-8 text-[15px] text-fg-muted">{t("people.clients.loading")}</p>
         ) : status.clients.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-line bg-surface-elevated p-8 text-center">
             <p className="text-[15px] text-fg-muted">
-              No clients yet. Create one from your current company to enter
-              multi-client mode — single-company use is unaffected until you do.
+              {t("people.clients.empty")}
             </p>
           </div>
         ) : (
           <section className="mt-8">
-            {cockpit.length >= 2 && <h2 className="text-lg font-semibold text-fg mb-3">All clients</h2>}
+            {cockpit.length >= 2 && <h2 className="text-lg font-semibold text-fg mb-3">{t("people.clients.all")}</h2>}
             <div className="space-y-3">
             {status.clients.map((c) => {
               const isActive = c.slug === status.active;
@@ -392,12 +387,12 @@ export default function ClientsPage() {
                         </h3>
                         {isActive && (
                           <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                            active
+                            {t("people.clients.active")}
                           </span>
                         )}
                         {c.has_mcp_config && (
                           <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-line text-fg-muted">
-                            MCP tools
+                            {t("people.clients.mcpTools")}
                           </span>
                         )}
                       </div>
@@ -406,10 +401,10 @@ export default function ClientsPage() {
                           .filter(Boolean)
                           .join(" · ") || c.slug}
                         {" · "}
-                        {c.doc_count} doc{c.doc_count !== 1 ? "s" : ""}
+                        {tp("people.clients.docCount", c.doc_count)}
                         {c.saved_at
-                          ? ` · saved ${new Date(c.saved_at).toLocaleString()}`
-                          : " · never saved"}
+                          ? t("people.clients.savedAt", { date: new Date(c.saved_at).toLocaleString(displayLocale()) })
+                          : t("people.clients.neverSaved")}
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -418,7 +413,7 @@ export default function ClientsPage() {
                           onClick={() => void handleSave()}
                           disabled={busy || fixtureActive}
                         >
-                          {busy ? "Saving…" : "Save now"}
+                          {busy ? t("common.saving") : t("people.clients.saveNow")}
                         </Button>
                       ) : (
                         <Button
@@ -426,21 +421,21 @@ export default function ClientsPage() {
                           onClick={() => void handleActivate(c.slug)}
                           disabled={busy || fixtureActive}
                         >
-                          {busy ? "Switching…" : "Activate"}
+                          {busy ? t("people.teamMode.switching") : t("people.clients.activate")}
                         </Button>
                       )}
                       <OverflowMenu
-                        label={`More actions for ${c.display_name}`}
+                        label={t("people.dept.moreActions", { title: c.display_name })}
                         items={[
-                          { label: "Engagement details", onSelect: () => openMetaEditor(c.slug) },
+                          { label: t("people.clients.engagementDetails"), onSelect: () => openMetaEditor(c.slug) },
                           ...(isActive
                             ? []
                             : [{
-                                label: "Delete client",
+                                label: t("people.clients.delete"),
                                 danger: true,
                                 disabled: busy,
                                 onSelect: () => {
-                                  if (window.confirm(`Delete ${c.display_name}? Its saved slot is removed and this cannot be undone.`)) {
+                                  if (window.confirm(t("people.clients.deleteConfirm", { name: c.display_name }))) {
                                     void handleDelete(c.slug);
                                   }
                                 },
@@ -457,10 +452,7 @@ export default function ClientsPage() {
         )}
 
         <p className="mt-8 text-sm text-fg-muted leading-relaxed">
-          Only the active client is live — its scheduled actions fire and its
-          documents are indexed; parked clients sleep in their slots. Your
-          original company is preserved automatically the first time you
-          switch, and can be restored from the Company Simulator page.
+          {t("people.clients.footer")}
         </p>
       </div>
 
@@ -470,7 +462,7 @@ export default function ClientsPage() {
         onClose={() => {
           if (!creating && !generating && !creatingDraft) setCreateOpen(false);
         }}
-        title="New client"
+        title={t("people.clients.newClient")}
         width="lg"
       >
         {toast?.kind === "error" && (
@@ -481,10 +473,10 @@ export default function ClientsPage() {
         <div className="mb-5">
           <SectionTabs
             idBase={createTabsId}
-            label="How to create the client"
+            label={t("people.clients.howToCreate")}
             tabs={[
-              { id: "company", label: "From a company" },
-              { id: "notes", label: "From intake notes" },
+              { id: "company", label: t("people.clients.fromCompany") },
+              { id: "notes", label: t("people.clients.fromNotes") },
             ]}
             active={createWay}
             onChange={setCreateWay}
@@ -494,50 +486,45 @@ export default function ClientsPage() {
           {createWay === "company" ? (
             <div className="space-y-4">
               <label className={LABEL_CLS}>
-                Client company name
+                {t("people.clients.companyName")}
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && name.trim() && !creating && !fixtureActive) void handleCreate();
                   }}
-                  placeholder="Client company name"
+                  placeholder={t("people.clients.companyName")}
                   className={FIELD_CLS}
                 />
               </label>
               <label className={LABEL_CLS}>
-                Start from
+                {t("people.clients.startFrom")}
                 <select
                   value={source}
                   onChange={(e) => setSource(e.target.value as "current" | "blank")}
                   className={FIELD_CLS}
                 >
-                  <option value="current">From current company</option>
-                  <option value="blank">Blank (onboard fresh)</option>
+                  <option value="current">{t("people.clients.fromCurrent")}</option>
+                  <option value="blank">{t("people.clients.blank")}</option>
                 </select>
               </label>
               <p className="text-sm text-fg-muted">
                 {source === "current"
-                  ? "Captures the live company into the new client slot and makes it the active client."
-                  : "Creates an empty client. Activate it, then run company onboarding and upload its documents."}
+                  ? t("people.clients.fromCurrentHint")
+                  : t("people.clients.blankHint")}
               </p>
               <Button
                 variant="primary"
                 onClick={() => void handleCreate()}
                 disabled={creating || !name.trim() || fixtureActive}
               >
-                {creating ? "Creating…" : "Create"}
+                {creating ? t("people.dept.creating") : t("people.dept.create")}
               </Button>
             </div>
           ) : (
             <div>
               <p className="text-[15px] text-fg-muted">
-                Paste real intake material — call notes, a brief, website copy — or
-                attach PDFs, Word, Excel, or CSV files, and the AI drafts the
-                client&apos;s profile, org, starter documents, and known history.
-                Attachments are also saved as company documents. It extracts only
-                what the material says: unknowns stay blank and become open
-                questions, and no contact details are ever imported.
+                {t("people.clients.notesIntro")}
               </p>
 
               {!draft ? (
@@ -546,14 +533,14 @@ export default function ClientsPage() {
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={7}
-                    aria-label="Intake notes"
-                    placeholder="e.g. Notes from the kickoff call with Meridian Solar: 80-person commercial solar installer in Texas, CEO Dana Reyes, struggling with project-margin visibility…"
+                    aria-label={t("people.clients.intakeNotes")}
+                    placeholder={t("people.clients.notesPlaceholder")}
                     className={`mt-4 ${INPUT_CLS} py-2.5`}
                   />
 
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <label className={`${buttonClass("secondary", "md")} cursor-pointer focus-within:ring-2 focus-within:ring-accent/60`}>
-                      Attach files
+                      {t("people.clients.attachFiles")}
                       <input
                         type="file"
                         multiple
@@ -567,7 +554,7 @@ export default function ClientsPage() {
                       />
                     </label>
                     <span className="text-sm text-fg-muted">
-                      PDF, Word, Excel, CSV, or text
+                      {t("people.clients.fileTypes")}
                     </span>
                   </div>
 
@@ -584,7 +571,7 @@ export default function ClientsPage() {
                             onClick={() =>
                               setAttachments((prev) => prev.filter((_, j) => j !== i))
                             }
-                            aria-label={`Remove ${f.name}`}
+                            aria-label={t("people.clients.removeFile", { name: f.name })}
                             className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-lg text-lg text-fg-muted hover:text-fg hover:bg-surface-overlay"
                           >
                             ×
@@ -604,13 +591,13 @@ export default function ClientsPage() {
                     }
                     className="mt-4"
                   >
-                    {generating ? "Drafting…" : "Draft client"}
+                    {generating ? t("people.clients.drafting") : t("people.clients.draftClient")}
                   </Button>
                 </>
               ) : (
                 <div className="mt-4">
                   <label className={LABEL_CLS}>
-                    Client name
+                    {t("people.clients.clientName")}
                     <input
                       value={draftName}
                       onChange={(e) => setDraftName(e.target.value)}
@@ -618,19 +605,23 @@ export default function ClientsPage() {
                     />
                   </label>
                   <p className="mt-2 text-sm text-fg-muted">
-                    {draft.bundle.people.length} people · {draft.bundle.departments.length} departments · {draft.bundle.docs.length} docs
+                    {t("people.clients.draftCounts", {
+                      people: draft.bundle.people.length,
+                      departments: draft.bundle.departments.length,
+                      docs: draft.bundle.docs.length,
+                    })}
                   </p>
                   {draft.bundle.people.length > 0 && (
                     <p className="mt-2 text-sm text-fg-muted">
-                      Roster:{" "}
+                      {t("people.clients.roster")}{" "}
                       {draft.bundle.people
-                        .map((p) => `${p.full_name}${p.is_principal ? " (principal)" : ""}`)
+                        .map((p) => `${p.full_name}${p.is_principal ? t("people.clients.principalSuffix") : ""}`)
                         .join(", ")}
                     </p>
                   )}
                   {draft.bundle.docs.length > 0 && (
                     <p className="mt-1 text-sm text-fg-muted">
-                      Docs: {draft.bundle.docs.map((d) => d.filename).join(", ")}
+                      {t("people.clients.docs", { list: draft.bundle.docs.map((d) => d.filename).join(", ") })}
                     </p>
                   )}
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -639,20 +630,20 @@ export default function ClientsPage() {
                       onClick={() => void handleCreateFromDraft(true)}
                       disabled={creatingDraft || !draftName.trim()}
                     >
-                      {creatingDraft ? "Creating…" : "Create & activate"}
+                      {creatingDraft ? t("people.dept.creating") : t("people.clients.createActivate")}
                     </Button>
                     <Button
                       onClick={() => void handleCreateFromDraft(false)}
                       disabled={creatingDraft || !draftName.trim()}
                     >
-                      {creatingDraft ? "Creating…" : "Create client"}
+                      {creatingDraft ? t("people.dept.creating") : t("people.clients.createClient")}
                     </Button>
                     <Button
                       variant="ghost"
                       onClick={() => setDraft(null)}
                       disabled={creatingDraft}
                     >
-                      ← Edit notes
+                      {t("people.clients.editNotes")}
                     </Button>
                   </div>
                 </div>
@@ -668,15 +659,15 @@ export default function ClientsPage() {
         onClose={() => {
           if (!savingMeta) setEditingSlug(null);
         }}
-        title="Engagement details"
+        title={t("people.clients.engagementDetails")}
         subtitle={editingClient?.display_name}
         footer={
           <div className="flex gap-2">
             <Button variant="primary" onClick={() => void handleSaveMeta()} disabled={savingMeta} className="flex-1 sm:flex-none">
-              {savingMeta ? "Saving…" : "Save details"}
+              {savingMeta ? t("common.saving") : t("people.clients.saveDetails")}
             </Button>
             <Button onClick={() => setEditingSlug(null)} disabled={savingMeta}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         }
@@ -688,29 +679,29 @@ export default function ClientsPage() {
         )}
         <div className="space-y-4">
           <label className={LABEL_CLS}>
-            Your role
+            {t("people.clients.yourRole")}
             <input
               value={metaForm.role ?? ""}
               onChange={(e) => setMetaForm({ ...metaForm, role: e.target.value })}
-              placeholder="Your role (e.g. Fractional CFO)"
+              placeholder={t("people.clients.yourRolePlaceholder")}
               className={FIELD_CLS}
             />
           </label>
           <label className={LABEL_CLS}>
-            Status
+            {t("people.clients.status")}
             <select
               value={metaForm.status ?? "active"}
               onChange={(e) => setMetaForm({ ...metaForm, status: e.target.value })}
               className={FIELD_CLS}
             >
-              <option value="active">active</option>
-              <option value="paused">paused</option>
-              <option value="winding_down">winding down</option>
-              <option value="completed">completed</option>
+              <option value="active">{t("people.clients.active")}</option>
+              <option value="paused">{t("people.clients.paused")}</option>
+              <option value="winding_down">{t("people.clients.windingDown")}</option>
+              <option value="completed">{t("people.clients.completed")}</option>
             </select>
           </label>
           <label className={LABEL_CLS}>
-            Renewal
+            {t("people.clients.renewal")}
             <input
               type="date"
               value={metaForm.renewal_date ?? ""}
@@ -721,31 +712,31 @@ export default function ClientsPage() {
             />
           </label>
           <label className={LABEL_CLS}>
-            Retainer
+            {t("people.clients.retainer")}
             <input
               value={metaForm.retainer ?? ""}
               onChange={(e) => setMetaForm({ ...metaForm, retainer: e.target.value })}
-              placeholder="Retainer (display only)"
+              placeholder={t("people.clients.retainerPlaceholder")}
               className={FIELD_CLS}
             />
           </label>
           <label className={LABEL_CLS}>
-            Primary contact
+            {t("people.clients.primaryContact")}
             <input
               value={metaForm.primary_contact ?? ""}
               onChange={(e) =>
                 setMetaForm({ ...metaForm, primary_contact: e.target.value })
               }
-              placeholder="Primary contact"
+              placeholder={t("people.clients.primaryContact")}
               className={FIELD_CLS}
             />
           </label>
           <label className={LABEL_CLS}>
-            Notes
+            {t("people.clients.notes")}
             <input
               value={metaForm.notes ?? ""}
               onChange={(e) => setMetaForm({ ...metaForm, notes: e.target.value })}
-              placeholder="Notes"
+              placeholder={t("people.clients.notes")}
               className={FIELD_CLS}
             />
           </label>

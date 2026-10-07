@@ -10,8 +10,17 @@ import {
   WorkflowStepDef,
   runWorkflow,
 } from "@/lib/api";
+import { t, type MessageKey } from "@/i18n/index.ts";
 
 type StepState = "pending" | "running" | "done" | "skipped" | "paused";
+
+const STATE_LABEL: Record<StepState, MessageKey> = {
+  pending: "jobs.runner.statePending",
+  running: "jobs.runner.stateRunning",
+  done: "jobs.runner.stateDone",
+  skipped: "jobs.runner.stateSkipped",
+  paused: "jobs.runner.statePaused",
+};
 
 interface StepStatus {
   def: WorkflowStepDef;
@@ -112,7 +121,7 @@ export default function WorkflowRunner({
       return;
     }
     if (evt.type === "error") {
-      setError(evt.message ?? "Workflow failed");
+      setError(evt.message ?? t("jobs.runner.failed"));
       return;
     }
   }
@@ -122,13 +131,13 @@ export default function WorkflowRunner({
       {!started && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface-elevated p-5 shadow-sm">
           <Button variant="primary" onClick={handleStart} className="px-7">
-            Run workflow
+            {t("jobs.runner.run")}
           </Button>
           <Button variant="ghost" onClick={onCancel}>
-            Back to the details
+            {t("jobs.runner.backToDetails")}
           </Button>
           <span className="text-sm text-fg-muted sm:ml-auto">
-            ~{workflow.estimated_minutes} min · {workflow.steps.length} steps
+            {t("jobs.runner.estimate", { min: workflow.estimated_minutes, n: workflow.steps.length })}
           </span>
         </div>
       )}
@@ -136,20 +145,20 @@ export default function WorkflowRunner({
       {started && (
         <div className="rounded-2xl border border-line bg-surface-elevated p-5 shadow-sm sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-fg">Progress</h3>
+            <h3 className="text-lg font-semibold text-fg">{t("jobs.runner.progress")}</h3>
             {streaming && (
               <span className="text-xs text-amber-400 flex items-center gap-1.5">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                Running
+                {t("jobs.runner.running")}
               </span>
             )}
             {!streaming && !error && paused && (
-              <span className="text-xs text-amber-400">Paused</span>
+              <span className="text-xs text-amber-400">{t("jobs.runner.paused")}</span>
             )}
             {!streaming && !error && !paused && runId && (
-              <span className="text-xs text-emerald-400">Complete</span>
+              <span className="text-xs text-emerald-400">{t("jobs.runner.complete")}</span>
             )}
-            {error && <span className="text-xs text-red-400">Failed</span>}
+            {error && <span className="text-xs text-red-400">{t("jobs.runner.failedBadge")}</span>}
           </div>
           <ol className="space-y-3">
             {steps.map((s, i) => (
@@ -161,7 +170,7 @@ export default function WorkflowRunner({
                       {s.def.title}
                     </div>
                     <div className="text-[10px] text-fg-muted uppercase tracking-wide">
-                      {s.state}
+                      {t(STATE_LABEL[s.state])}
                     </div>
                   </div>
                   <div className="text-sm text-fg-muted mt-0.5">
@@ -183,7 +192,7 @@ export default function WorkflowRunner({
           )}
           {error && (
             <div className="mt-4 text-sm text-red-400 bg-red-500/5 border border-red-500/20 rounded-md p-3">
-              <div className="font-medium mb-1">Workflow failed</div>
+              <div className="font-medium mb-1">{t("jobs.runner.failed")}</div>
               <div className="text-xs">{error}</div>
             </div>
           )}
@@ -206,21 +215,24 @@ function PausedNotice({
   const reached = delivery === "sent" || delivery === "self";
   return (
     <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-300 space-y-2">
-      <div className="font-medium">Paused for sign-off</div>
+      <div className="font-medium">{t("jobs.runner.pausedForSignOff")}</div>
       {event.question && (
         <div className="text-fg">&ldquo;{event.question}&rdquo;</div>
       )}
       <div className="text-xs space-y-1">
         <div>
           {reached
-            ? `Sent to person ${event.person_id} — waiting on their reply.`
-            : `Person ${event.person_id} has NOT been asked yet (${delivery ?? "unknown"}).`}
+            ? t("jobs.runner.sentTo", { id: String(event.person_id) })
+            : t("jobs.runner.notAsked", {
+                id: String(event.person_id),
+                delivery: delivery ?? t("jobs.runner.deliveryUnknown"),
+              })}
         </div>
         {event.resumable ? (
-          <div>The run continues by itself once they answer.</div>
+          <div>{t("jobs.runner.resumable")}</div>
         ) : (
           <div>
-            Their answer is recorded, but this run stops at the gate.
+            {t("jobs.runner.notResumable")}
           </div>
         )}
       </div>
@@ -229,7 +241,7 @@ function PausedNotice({
           href={`/jobs/runs/${encodeURIComponent(runId)}`}
           className="inline-block text-sm font-medium text-accent hover:underline"
         >
-          Follow this run →
+          {t("jobs.runner.follow")}
         </Link>
       )}
     </div>

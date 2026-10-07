@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import Button from "@/components/ui/Button";
 import InfoTip from "@/components/InfoTip";
+import { t } from "@/i18n/index.ts";
 import {
   closeOpenLoop,
   deleteInitiative,
@@ -44,7 +45,7 @@ export function useActiveProjects(enabled: boolean) {
         if (!cancelled) setProjects(all.filter((i) => i.status === "active"));
       })
       .catch(() => {
-        if (!cancelled) setError("Couldn't load your projects.");
+        if (!cancelled) setError(t("briefing.projects.loadFailed"));
       });
     return () => {
       cancelled = true;
@@ -68,7 +69,7 @@ export function ProjectsPanelBody({ state }: { state: ReturnType<typeof useActiv
       else await deleteInitiative(project.id);
       setProjects((prev) => (prev ?? []).filter((p) => p.id !== project.id));
     } catch {
-      setError(how === "done" ? "Couldn't mark it done — try again." : "Couldn't drop it — try again.");
+      setError(how === "done" ? t("briefing.solo.markDoneFailed") : t("briefing.projects.dropFailed"));
     } finally {
       setBusyId(null);
       setConfirmDrop(null);
@@ -78,15 +79,14 @@ export function ProjectsPanelBody({ state }: { state: ReturnType<typeof useActiv
   return (
     <>
       <PanelIntro>
-        The projects you&apos;re running that the Executive is keeping track of. Mention a new one in chat and it
-        appears here.
+        {t("briefing.projects.intro")}
       </PanelIntro>
       {error && <p className={`mb-2 text-sm ${TONE_TEXT.rose}`}>{error}</p>}
       {projects === null ? (
-        !error && <p className="py-2 text-[15px] text-fg-muted">Loading…</p>
+        !error && <p className="py-2 text-[15px] text-fg-muted">{t("common.loading")}</p>
       ) : projects.length === 0 ? (
         <p className="py-2 text-[15px] text-fg-muted">
-          No active projects. Tell the Executive about one you&apos;re running and it will keep track of it here.
+          {t("briefing.projects.empty")}
         </p>
       ) : (
         <div className="divide-y divide-line">
@@ -104,10 +104,10 @@ export function ProjectsPanelBody({ state }: { state: ReturnType<typeof useActiv
                 {confirmDrop !== p.id && (
                   <div className="flex flex-shrink-0 items-center gap-1.5">
                     <Button size="sm" variant="secondary" onClick={() => void close(p, "done")} disabled={busyId !== null}>
-                      Done
+                      {t("common.done")}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setConfirmDrop(p.id)} disabled={busyId !== null}>
-                      Drop
+                      {t("briefing.projects.drop")}
                     </Button>
                   </div>
                 )}
@@ -115,14 +115,14 @@ export function ProjectsPanelBody({ state }: { state: ReturnType<typeof useActiv
               {confirmDrop === p.id && (
                 <div role="alert" className="mt-2 rounded-xl border border-rose-500/30 bg-rose-500/5 px-3 py-2.5">
                   <p className="text-sm text-fg">
-                    Drop &ldquo;{p.title}&rdquo;? The Executive stops tracking it, and it is removed from Pulse.
+                    {t("briefing.projects.dropConfirm", { title: p.title })}
                   </p>
                   <div className="mt-2 flex gap-2">
                     <Button size="sm" variant="danger" onClick={() => void close(p, "drop")} disabled={busyId !== null}>
-                      {busyId === p.id ? "Dropping…" : "Drop it"}
+                      {busyId === p.id ? t("briefing.projects.dropping") : t("briefing.projects.dropIt")}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setConfirmDrop(null)} disabled={busyId !== null}>
-                      Cancel
+                      {t("common.cancel")}
                     </Button>
                   </div>
                 </div>
@@ -152,7 +152,7 @@ export function useOpenLoops(principalId: number | null) {
         if (!cancelled) setLoops(all);
       })
       .catch(() => {
-        if (!cancelled) setError("Couldn't load what's due.");
+        if (!cancelled) setError(t("briefing.due.loadFailed"));
       });
     return () => {
       cancelled = true;
@@ -173,7 +173,7 @@ export function DueSoonPanelBody({ state }: { state: ReturnType<typeof useOpenLo
       await closeOpenLoop(loopId, "done");
       setLoops((prev) => (prev ?? []).filter((l) => l.loop_id !== loopId));
     } catch {
-      setError("Couldn't mark it done — try again.");
+      setError(t("briefing.solo.markDoneFailed"));
     } finally {
       setBusyId(null);
     }
@@ -182,17 +182,15 @@ export function DueSoonPanelBody({ state }: { state: ReturnType<typeof useOpenLo
   return (
     <>
       <PanelIntro>
-        What you&apos;ve promised by a date, and what others have asked of you, due in the next week. Tell the
-        Executive &ldquo;I&apos;ll send it by Friday&rdquo; and it shows up here; the Executive reminds you when
-        it&apos;s due.
+        {t("briefing.due.intro")}
       </PanelIntro>
       {error && <p className={`mb-2 text-sm ${TONE_TEXT.rose}`}>{error}</p>}
       {view === null ? (
-        !error && <p className="py-2 text-[15px] text-fg-muted">Loading…</p>
+        !error && <p className="py-2 text-[15px] text-fg-muted">{t("common.loading")}</p>
       ) : view.items.length === 0 ? (
         <p className="py-2 text-[15px] text-fg-muted">
-          Nothing due this week.
-          {view.later > 0 && ` ${view.later} due later.`}
+          {t("briefing.due.empty")}
+          {view.later > 0 && t("briefing.due.laterSuffix", { n: view.later })}
         </p>
       ) : (
         <>
@@ -211,12 +209,12 @@ export function DueSoonPanelBody({ state }: { state: ReturnType<typeof useOpenLo
                   onClick={() => void markDone(item.loop.loop_id)}
                   disabled={busyId !== null}
                 >
-                  {busyId === item.loop.loop_id ? "Closing…" : "Done"}
+                  {busyId === item.loop.loop_id ? t("briefing.due.closing") : t("common.done")}
                 </Button>
               </div>
             ))}
           </div>
-          {view.later > 0 && <p className="pt-2 text-sm text-fg-muted">{view.later} more due later.</p>}
+          {view.later > 0 && <p className="pt-2 text-sm text-fg-muted">{t("briefing.due.moreLater", { n: view.later })}</p>}
         </>
       )}
     </>
@@ -250,9 +248,7 @@ export function WeeklyReviewPanelBody({ review }: { review: WeeklyReviewSummary 
   return (
     <>
       <PanelIntro>
-        Once a week the Executive looks back on your week — your goals by area, what&apos;s due, projects that went
-        quiet and the decisions you made — and picks next week&apos;s top three. It&apos;s also sent to you when a
-        chat app or email is connected.
+        {t("briefing.review.intro")}
       </PanelIntro>
       {meta && <p className="mb-3 text-sm text-fg-muted">{meta}</p>}
       {excerpt.heading && (
@@ -278,7 +274,7 @@ export function WeeklyReviewPanelBody({ review }: { review: WeeklyReviewSummary 
         href={`/jobs/runs/${encodeURIComponent(review.run_id)}`}
         className="mt-4 inline-block text-sm font-medium text-accent hover:underline"
       >
-        Read the review →
+        {t("briefing.review.read")}
       </Link>
     </>
   );
@@ -306,11 +302,9 @@ export function TopThreeList({ ownerName, id }: { ownerName: string; id?: string
   return (
     <section id={id}>
       <div className="mb-3 flex items-center gap-1.5">
-        <h2 className="text-lg font-semibold text-fg">Top three today</h2>
+        <h2 className="text-lg font-semibold text-fg">{t("briefing.top3.title")}</h2>
         <InfoTip align="left">
-          The three things to focus on today, picked from what&apos;s overdue or due, goals that are slipping and
-          your active projects — the same three your morning brief opens with. When the Executive can read your
-          calendar, each gets a free slot in today&apos;s working hours.
+          {t("briefing.top3.tip")}
         </InfoTip>
       </div>
       <ol className="divide-y divide-line rounded-2xl border border-line bg-surface-elevated px-4 sm:px-5">

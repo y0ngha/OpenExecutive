@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import Icon from "@/components/Icon";
 import { buttonClass } from "@/components/ui/Button";
+import { displayLocale, t, tp, type PluralKey } from "@/i18n/index.ts";
 
 const PAGE_SIZE = 100;
 
@@ -32,7 +33,7 @@ function typePillClass(t: string): string {
 function formatTs(ts: string): string {
   try {
     const d = new Date(ts);
-    return d.toLocaleString();
+    return d.toLocaleString(displayLocale());
   } catch {
     return ts;
   }
@@ -41,10 +42,6 @@ function formatTs(ts: string): string {
 // Human-relative phrase like "2m ago" / "3h ago" / "5d ago". Picks the
 // largest unit whose magnitude is ≥1 so the result is one word + "ago".
 // Intl.RelativeTimeFormat handles locale + pluralization for us.
-const RELATIVE_FORMATTER = new Intl.RelativeTimeFormat(undefined, {
-  numeric: "auto",
-  style: "narrow",
-});
 const RELATIVE_DIVISIONS: { amount: number; name: Intl.RelativeTimeFormatUnit }[] = [
   { amount: 60, name: "seconds" },
   { amount: 60, name: "minutes" },
@@ -56,10 +53,14 @@ const RELATIVE_DIVISIONS: { amount: number; name: Intl.RelativeTimeFormatUnit }[
 ];
 function formatRelative(ts: string): string {
   try {
+    const formatter = new Intl.RelativeTimeFormat(displayLocale(), {
+      numeric: "auto",
+      style: "narrow",
+    });
     let duration = (new Date(ts).getTime() - Date.now()) / 1000;
     for (const div of RELATIVE_DIVISIONS) {
       if (Math.abs(duration) < div.amount) {
-        return RELATIVE_FORMATTER.format(Math.round(duration), div.name);
+        return formatter.format(Math.round(duration), div.name);
       }
       duration /= div.amount;
     }
@@ -76,15 +77,15 @@ function formatSpan(firstTs: string, lastTs: string): string {
     const first = new Date(firstTs).getTime();
     const last = new Date(lastTs).getTime();
     const ms = Math.abs(last - first);
-    if (ms < 1000) return `${ms}ms`;
+    if (ms < 1000) return t("audit.span.ms", { ms });
     const s = Math.floor(ms / 1000);
-    if (s < 60) return `${s}s`;
+    if (s < 60) return t("audit.span.s", { s });
     const m = Math.floor(s / 60);
     const remS = s % 60;
-    if (m < 60) return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
+    if (m < 60) return remS > 0 ? t("audit.span.ms2", { m, s: remS }) : t("audit.span.m", { m });
     const h = Math.floor(m / 60);
     const remM = m % 60;
-    return remM > 0 ? `${h}h ${remM}m` : `${h}h`;
+    return remM > 0 ? t("audit.span.hm", { h, m: remM }) : t("audit.span.h", { h });
   } catch {
     return "—";
   }
@@ -131,30 +132,29 @@ function summarizeShape(items: AuditEvent[]): { type: string; count: number }[] 
     });
 }
 
-// Friendly short label for the shape-summary badges. Matches what an
-// engineer would say out loud ("4 specialists" rather than
-// "4 specialist_consults"). Falls back to the raw event_type when no
-// alias is defined so new event types still render correctly.
-const SHAPE_LABEL: Record<string, { singular: string; plural: string }> = {
-  integration_inbound: { singular: "inbound", plural: "inbound" },
-  memory_snapshot: { singular: "memory", plural: "memory" },
-  chat_turn: { singular: "turn", plural: "turns" },
-  knowledge_retrieval: { singular: "knowledge", plural: "knowledge" },
-  specialist_consult: { singular: "specialist", plural: "specialists" },
-  tool_invocation: { singular: "tool", plural: "tools" },
-  cache_event: { singular: "cache", plural: "cache" },
-  scheduled_action: { singular: "scheduled", plural: "scheduled" },
-  alert: { singular: "alert", plural: "alerts" },
+// Friendly short noun for the shape-summary badges (the count renders
+// beside it). Matches what an engineer would say out loud ("4 specialists"
+// rather than "4 specialist_consults"). Falls back to the raw event_type
+// when no alias is defined so new event types still render correctly.
+const SHAPE_LABEL: Record<string, PluralKey> = {
+  integration_inbound: "audit.shape.inbound",
+  memory_snapshot: "audit.shape.memory",
+  chat_turn: "audit.shape.turn",
+  knowledge_retrieval: "audit.shape.knowledge",
+  specialist_consult: "audit.shape.specialist",
+  tool_invocation: "audit.shape.tool",
+  cache_event: "audit.shape.cache",
+  scheduled_action: "audit.shape.scheduled",
+  alert: "audit.shape.alert",
 };
-function shapeLabel(type: string, count: number): string {
-  const alias = SHAPE_LABEL[type];
-  if (!alias) return `${count} ${type}`;
-  return `${count} ${count === 1 ? alias.singular : alias.plural}`;
+function shapeNoun(type: string, count: number): string {
+  const key = SHAPE_LABEL[type];
+  return key ? tp(key, count) : type;
 }
 
 function formatTimeOnly(ts: string): string {
   try {
-    return new Date(ts).toLocaleTimeString();
+    return new Date(ts).toLocaleTimeString(displayLocale());
   } catch {
     return ts;
   }
@@ -221,7 +221,7 @@ function AuditPageInner() {
       setTotal(res.total);
       setEventTypes(res.event_types);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(e instanceof Error ? e.message : t("audit.log.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -267,7 +267,7 @@ function AuditPageInner() {
       })
       .catch((e) => {
         if (cancelled) return;
-        setDetailError(e instanceof Error ? e.message : "Failed to load detail");
+        setDetailError(e instanceof Error ? e.message : t("audit.log.loadDetailFailed"));
       })
       .finally(() => {
         if (!cancelled) setDetailLoadingId(null);
@@ -395,7 +395,7 @@ function AuditPageInner() {
                   focusSession(evt.session_id ?? "");
                 }}
                 className="text-indigo-300 hover:text-indigo-200 underline-offset-2 hover:underline"
-                title={`Filter by session ${evt.session_id}`}
+                title={t("audit.log.filterBySession", { id: evt.session_id })}
               >
                 {evt.session_id.slice(0, 8)}
               </button>
@@ -414,23 +414,23 @@ function AuditPageInner() {
                 <div>ts: <span className="text-fg font-mono">{evt.ts}</span></div>
               </div>
               <div className="text-[10px] uppercase tracking-wide text-fg-muted mb-1">
-                Details (summary)
+                {t("audit.log.detailsSummary")}
               </div>
               <pre className="text-xs text-fg bg-black/40 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words">
 {JSON.stringify(evt.details, null, 2)}
               </pre>
               {detailLoadingId === evt.id && !details[evt.id] && (
-                <div className="mt-3 text-xs text-fg-muted">Loading full payload…</div>
+                <div className="mt-3 text-xs text-fg-muted">{t("audit.log.loadingPayload")}</div>
               )}
               {detailError && expandedId === evt.id && !details[evt.id] && (
                 <div className="mt-3 text-xs text-rose-300">
-                  Failed to load full payload: {detailError}
+                  {t("audit.log.payloadFailed", { error: detailError })}
                 </div>
               )}
               {details[evt.id]?.full && (
                 <>
                   <div className="text-[10px] uppercase tracking-wide text-fg-muted mt-4 mb-1">
-                    Full payload
+                    {t("audit.log.fullPayload")}
                   </div>
                   <pre className="text-xs text-fg bg-black/40 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words max-h-[60vh]">
 {JSON.stringify(details[evt.id].full, null, 2)}
@@ -453,23 +453,23 @@ function AuditPageInner() {
             className="-ml-2 inline-flex min-h-touch items-center gap-1.5 rounded-lg px-2 text-[15px] text-fg-muted hover:text-fg hover:bg-surface-overlay transition-colors"
           >
             <Icon name="arrow-left" size="w-4 h-4" />
-            Settings
+            {t("audit.log.settings")}
           </Link>
           <div className="mt-2 mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">Audit log</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">{t("audit.log.title")}</h1>
               <p className="mt-1 text-[15px] text-fg-muted">
-                Each chat, each question passed to an expert, each tool used and each scheduled job, newest first.
+                {t("audit.log.intro")}
               </p>
             </div>
             <Link href="/audit/usage" className={buttonClass("secondary", "sm")}>
-              Token usage
+              {t("audit.log.tokenUsage")}
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
             <input
               type="search"
-              placeholder="Search summary…"
+              placeholder={t("audit.log.searchPlaceholder")}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="md:col-span-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-line text-sm focus:outline-none focus:border-indigo-500 placeholder-fg-subtle"
@@ -479,16 +479,16 @@ function AuditPageInner() {
               onChange={(e) => setEventType(e.target.value)}
               className="px-3 py-1.5 rounded-lg bg-surface-elevated border border-line text-sm focus:outline-none focus:border-indigo-500"
             >
-              <option value="">All event types</option>
-              {eventTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              <option value="">{t("audit.log.allEventTypes")}</option>
+              {eventTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
                 </option>
               ))}
             </select>
             <input
               type="text"
-              placeholder="Session id"
+              placeholder={t("audit.log.sessionIdPlaceholder")}
               value={sessionId}
               onChange={(e) => setSessionId(e.target.value)}
               className="px-3 py-1.5 rounded-lg bg-surface-elevated border border-line text-sm focus:outline-none focus:border-indigo-500 placeholder-fg-subtle"
@@ -503,13 +503,13 @@ function AuditPageInner() {
               }}
               className="px-3 py-1.5 rounded-lg bg-surface-overlay hover:bg-surface-input text-sm border border-line-strong"
             >
-              Clear filters
+              {t("audit.log.clearFilters")}
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
             <label className="text-xs text-fg-muted flex flex-col gap-1">
-              From
+              {t("audit.log.from")}
               <input
                 type="datetime-local"
                 value={since}
@@ -518,7 +518,7 @@ function AuditPageInner() {
               />
             </label>
             <label className="text-xs text-fg-muted flex flex-col gap-1">
-              Until
+              {t("audit.log.until")}
               <input
                 type="datetime-local"
                 value={until}
@@ -527,7 +527,7 @@ function AuditPageInner() {
               />
             </label>
             <div className="text-xs text-fg-muted self-end pb-1">
-              {loading ? "Loading…" : `${total.toLocaleString()} events`}
+              {loading ? t("common.loading") : t("audit.log.eventCount", { n: total.toLocaleString(displayLocale()) })}
             </div>
             {/* Segmented view switcher — communicates "these are distinct
                 surfaces" rather than the checkbox's "annotation on top".
@@ -535,7 +535,7 @@ function AuditPageInner() {
                 grouped card list. */}
             <div
               role="tablist"
-              aria-label="View mode"
+              aria-label={t("audit.log.viewMode")}
               className="self-end pb-1 inline-flex rounded-lg bg-surface-elevated border border-line p-0.5 text-xs"
             >
               <button
@@ -550,7 +550,7 @@ function AuditPageInner() {
                     : "text-fg-muted hover:text-fg",
                 ].join(" ")}
               >
-                Events
+                {t("audit.log.events")}
               </button>
               <button
                 type="button"
@@ -564,7 +564,7 @@ function AuditPageInner() {
                     : "text-fg-muted hover:text-fg",
                 ].join(" ")}
               >
-                Sessions
+                {t("audit.log.sessions")}
               </button>
             </div>
           </div>
@@ -582,13 +582,13 @@ function AuditPageInner() {
             <div className="flex flex-col gap-3">
               {sessionCards.length === 0 && !loading && (
                 <div className="rounded-xl border border-line bg-surface-elevated/30 px-4 py-8 text-center text-sm text-fg-muted">
-                  No sessions match these filters.{" "}
+                  {t("audit.log.noSessions")}{" "}
                   <button
                     type="button"
                     onClick={() => setGroupBySession(false)}
                     className="text-indigo-300 hover:text-indigo-200 underline-offset-2 hover:underline"
                   >
-                    Switch to Events view
+                    {t("audit.log.switchToEvents")}
                   </button>
                 </div>
               )}
@@ -615,19 +615,21 @@ function AuditPageInner() {
                         className={`inline-block w-2 h-2 rounded-full ${dotClass} flex-shrink-0`}
                         aria-hidden
                       />
-                      <span className="text-fg-muted">{g.channel ?? "—"}</span>
+                      <span className="text-fg-muted">
+                        {g.key === "unattributed" ? t("audit.log.unattributed") : g.channel ?? "—"}
+                      </span>
                       <span className="text-fg-subtle">·</span>
                       {g.sessionId ? (
                         <button
                           type="button"
                           onClick={() => focusSession(g.sessionId ?? "")}
                           className="font-mono text-indigo-300 hover:text-indigo-200 underline-offset-2 hover:underline truncate max-w-[40ch]"
-                          title={`Filter by ${g.sessionId}`}
+                          title={t("audit.log.filterBy", { id: g.sessionId })}
                         >
                           {g.sessionId}
                         </button>
                       ) : (
-                        <span className="font-mono text-fg-muted italic">unattributed</span>
+                        <span className="font-mono text-fg-muted italic">{t("audit.log.unattributed")}</span>
                       )}
                       <span className="text-fg-subtle">·</span>
                       <span
@@ -639,16 +641,18 @@ function AuditPageInner() {
                       {g.firstTs !== g.lastTs && (
                         <>
                           <span className="text-fg-subtle">·</span>
-                          <span className="text-fg-muted">span {formatSpan(g.firstTs, g.lastTs)}</span>
+                          <span className="text-fg-muted">
+                            {t("audit.log.span", { span: formatSpan(g.firstTs, g.lastTs) })}
+                          </span>
                         </>
                       )}
                       {g.sessionId && (
                         <Link
                           href={`/audit/session/${encodeURIComponent(g.sessionId)}`}
                           className="ml-auto text-indigo-300 hover:text-indigo-200 underline-offset-2 hover:underline whitespace-nowrap"
-                          title="Open the session flow chart"
+                          title={t("audit.log.openFlowTitle")}
                         >
-                          Open flow chart →
+                          {t("audit.log.openFlow")}
                         </Link>
                       )}
                     </div>
@@ -664,7 +668,7 @@ function AuditPageInner() {
                           title={`${count} × ${type}`}
                         >
                           <span className="tabular-nums">{count}</span>
-                          <span className="opacity-80">{shapeLabel(type, count).replace(/^\d+\s+/, "")}</span>
+                          <span className="opacity-80">{shapeNoun(type, count)}</span>
                         </span>
                       ))}
                     </div>
@@ -702,23 +706,23 @@ function AuditPageInner() {
                                   <div>ts: <span className="text-fg font-mono">{evt.ts}</span></div>
                                 </div>
                                 <div className="text-[10px] uppercase tracking-wide text-fg-muted mb-1">
-                                  Details (summary)
+                                  {t("audit.log.detailsSummary")}
                                 </div>
                                 <pre className="text-xs text-fg bg-black/40 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words">
 {JSON.stringify(evt.details, null, 2)}
                                 </pre>
                                 {detailLoadingId === evt.id && !details[evt.id] && (
-                                  <div className="mt-3 text-xs text-fg-muted">Loading full payload…</div>
+                                  <div className="mt-3 text-xs text-fg-muted">{t("audit.log.loadingPayload")}</div>
                                 )}
                                 {detailError && expandedId === evt.id && !details[evt.id] && (
                                   <div className="mt-3 text-xs text-rose-300">
-                                    Failed to load full payload: {detailError}
+                                    {t("audit.log.payloadFailed", { error: detailError })}
                                   </div>
                                 )}
                                 {details[evt.id]?.full && (
                                   <>
                                     <div className="text-[10px] uppercase tracking-wide text-fg-muted mt-4 mb-1">
-                                      Full payload
+                                      {t("audit.log.fullPayload")}
                                     </div>
                                     <pre className="text-xs text-fg bg-black/40 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words max-h-[60vh]">
 {JSON.stringify(details[evt.id].full, null, 2)}
@@ -737,7 +741,7 @@ function AuditPageInner() {
                             onClick={() => toggleSessionCollapsed(g.key)}
                             className="w-full text-left px-3 py-1.5 text-fg-muted hover:text-fg hover:bg-surface-elevated/60"
                           >
-                            + {hiddenCount} earlier event{hiddenCount === 1 ? "" : "s"}
+                            {tp("audit.log.earlierEvents", hiddenCount)}
                           </button>
                         </li>
                       )}
@@ -748,7 +752,7 @@ function AuditPageInner() {
                             onClick={() => toggleSessionCollapsed(g.key)}
                             className="w-full text-left px-3 py-1.5 text-fg-muted hover:text-fg hover:bg-surface-elevated/60"
                           >
-                            ▴ Collapse
+                            {t("audit.log.collapse")}
                           </button>
                         </li>
                       )}
@@ -763,18 +767,18 @@ function AuditPageInner() {
               <table className="w-full text-sm">
                 <thead className="bg-surface-elevated/60 text-fg-muted text-xs uppercase">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium">Time</th>
-                    <th className="px-3 py-2 text-left font-medium">Type</th>
-                    <th className="px-3 py-2 text-left font-medium">Actor</th>
-                    <th className="px-3 py-2 text-left font-medium">Summary</th>
-                    <th className="px-3 py-2 text-left font-medium">Session</th>
+                    <th className="px-3 py-2 text-left font-medium">{t("audit.log.col.time")}</th>
+                    <th className="px-3 py-2 text-left font-medium">{t("audit.log.col.type")}</th>
+                    <th className="px-3 py-2 text-left font-medium">{t("audit.log.col.actor")}</th>
+                    <th className="px-3 py-2 text-left font-medium">{t("audit.log.col.summary")}</th>
+                    <th className="px-3 py-2 text-left font-medium">{t("audit.log.col.session")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.length === 0 && !loading && (
                     <tr>
                       <td colSpan={5} className="px-3 py-8 text-center text-fg-muted">
-                        No audit events match these filters.
+                        {t("audit.log.noEvents")}
                       </td>
                     </tr>
                   )}
@@ -786,8 +790,10 @@ function AuditPageInner() {
 
           <div className="flex items-center justify-between mt-4 text-sm">
             <div className="text-fg-muted">
-              Page {Math.floor(offset / PAGE_SIZE) + 1} of{" "}
-              {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+              {t("audit.log.page", {
+                page: Math.floor(offset / PAGE_SIZE) + 1,
+                total: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+              })}
             </div>
             <div className="flex gap-2">
               <button
@@ -795,14 +801,14 @@ function AuditPageInner() {
                 onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
                 className="px-3 py-1.5 rounded-lg bg-surface-overlay hover:bg-surface-input disabled:opacity-40 disabled:cursor-not-allowed border border-line-strong"
               >
-                ← Prev
+                {t("audit.log.prev")}
               </button>
               <button
                 disabled={!hasNext}
                 onClick={() => setOffset(offset + PAGE_SIZE)}
                 className="px-3 py-1.5 rounded-lg bg-surface-overlay hover:bg-surface-input disabled:opacity-40 disabled:cursor-not-allowed border border-line-strong"
               >
-                Next →
+                {t("audit.log.next")}
               </button>
             </div>
           </div>

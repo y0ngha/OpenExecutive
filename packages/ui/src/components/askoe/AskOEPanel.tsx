@@ -8,9 +8,10 @@ import TurnStatusRow, { useTurnClock } from "@/components/TurnStatusRow";
 import { useAskOE } from "@/components/askoe/AskOEContext";
 import { answerSourcesFrom, type AnswerSources } from "@/lib/answerSources";
 import type { ActionTaken, FormPatch } from "@/lib/api";
-import { FALLBACK_ACTIVITY_LABEL, setMessageFeedback, streamChat } from "@/lib/api";
+import { fallbackActivityLabel, setMessageFeedback, streamChat } from "@/lib/api";
 import { turnStatus } from "@/lib/turnStatus";
 import { isAbortError, useStoppableTurn } from "@/lib/use-stoppable-turn";
+import { t, tp } from "@/i18n/index.ts";
 
 // One proposal card per form_patch event: what was applied/skipped, the
 // Executive's rationale, and an Undo that restores the pre-patch values.
@@ -48,9 +49,7 @@ function PatchCard({
   if (card.stale) {
     return (
       <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-        <p className="font-medium mb-1">
-          Suggested values arrived, but the form is no longer on screen.
-        </p>
+        <p className="font-medium mb-1">{t("chat.askoe.stale")}</p>
         <pre className="whitespace-pre-wrap break-all text-[11px] text-amber-200/80">
           {JSON.stringify(card.patch.fields, null, 2)}
         </pre>
@@ -62,8 +61,8 @@ function PatchCard({
       <div className="flex items-start justify-between gap-2">
         <p className="font-medium">
           {card.undone
-            ? "Suggestions undone."
-            : `Filled ${card.applied.length} field${card.applied.length === 1 ? "" : "s"} in the form — review and save.`}
+            ? t("chat.askoe.undone")
+            : tp("chat.askoe.filled", card.applied.length)}
         </p>
         {!card.undone && card.applied.length > 0 && (
           <button
@@ -71,7 +70,7 @@ function PatchCard({
             onClick={onUndo}
             className="flex-shrink-0 text-[11px] text-indigo-300 hover:text-indigo-100 underline"
           >
-            Undo
+            {t("chat.askoe.undo")}
           </button>
         )}
       </div>
@@ -80,7 +79,7 @@ function PatchCard({
       )}
       {card.skipped.length > 0 && (
         <p className="mt-1 text-amber-200/80">
-          Skipped (not recognized): {card.skipped.join(", ")}
+          {t("chat.askoe.skipped", { fields: card.skipped.join(", ") })}
         </p>
       )}
       {card.patch.rationale && (
@@ -185,7 +184,7 @@ export default function AskOEPanel() {
           } else if (item.type === "sources") {
             sources = answerSourcesFrom(item);
           } else if (item.type === "error") {
-            setError(item.message ?? "Something went wrong.");
+            setError(item.message ?? t("common.error"));
           } else if (item.type === "stopped") {
             // The server is winding the turn down itself and will close with
             // `done`; stand the abort fallback down so it can.
@@ -210,7 +209,7 @@ export default function AskOEPanel() {
           // Our own safety-net abort. A stop is not an error.
           wasStopped = true;
         } else {
-          setError(e instanceof Error ? e.message : "Request failed.");
+          setError(e instanceof Error ? e.message : t("chat.askoe.requestFailed"));
         }
       } finally {
         // Don't append an empty assistant turn when the request failed
@@ -251,7 +250,7 @@ export default function AskOEPanel() {
       apply(value);
       setMessageFeedback(sessionId, target.messageId, value).catch(() => {
         apply(previous);
-        setError("Couldn't save your rating.");
+        setError(t("chat.askoe.ratingFailed"));
       });
     },
     [messages, sessionId]
@@ -302,12 +301,12 @@ export default function AskOEPanel() {
     inCommittee: false,
     msSinceTurnStart: turnClock.msSinceTurnStart,
     msSinceLastEvent: turnClock.msSinceLastEvent,
-    fallbackLabel: FALLBACK_ACTIVITY_LABEL,
+    fallbackLabel: fallbackActivityLabel(),
   });
 
   const emptyPrompts = [
-    "What does this page do?",
-    ...(ctx.formMeta ? ["Fill this form in for me: "] : []),
+    t("chat.askoe.promptPage"),
+    ...(ctx.formMeta ? [t("chat.askoe.promptFill")] : []),
   ];
 
   return (
@@ -331,8 +330,8 @@ export default function AskOEPanel() {
             <button
               type="button"
               onClick={newChat}
-              title="New conversation"
-              aria-label="New conversation"
+              title={t("chat.askoe.newConversation")}
+              aria-label={t("chat.askoe.newConversation")}
               className="min-h-touch min-w-touch flex items-center justify-center text-fg-muted hover:text-fg rounded-lg hover:bg-surface-overlay transition-colors"
             >
               <Icon name="plus" size="w-4 h-4" />
@@ -340,8 +339,8 @@ export default function AskOEPanel() {
             <button
               type="button"
               onClick={() => ctx.setOpen(false)}
-              title="Close (Ctrl/Cmd + .)"
-              aria-label="Close Ask OE"
+              title={t("chat.askoe.closeTitle")}
+              aria-label={t("chat.askoe.closeLabel")}
               className="min-h-touch min-w-touch flex items-center justify-center text-fg-muted hover:text-fg rounded-lg hover:bg-surface-overlay transition-colors"
             >
               <Icon name="close" size="w-4 h-4" />
@@ -352,11 +351,7 @@ export default function AskOEPanel() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
           {messages.length === 0 && !streaming && (
             <div className="text-sm text-fg-muted space-y-3">
-              <p>
-                Ask about this page
-                {ctx.formMeta ? " — or describe what you want and I'll fill the form for you to review" : ""}
-                .
-              </p>
+              <p>{t(ctx.formMeta ? "chat.askoe.emptyIntroForm" : "chat.askoe.emptyIntro")}</p>
               <div className="flex flex-col gap-1.5">
                 {emptyPrompts.map((p) => (
                   <button
@@ -430,9 +425,7 @@ export default function AskOEPanel() {
                 }
               }}
               placeholder={
-                ctx.formMeta
-                  ? "Describe what you want — I'll fill the form…"
-                  : "Ask about this page…"
+                t(ctx.formMeta ? "chat.askoe.placeholderForm" : "chat.askoe.placeholder")
               }
               className="flex-1 px-3 py-2 text-sm rounded-lg bg-surface-input border border-line text-fg placeholder:text-fg-subtle resize-none focus:outline-none focus:border-indigo-500"
             />
@@ -441,8 +434,8 @@ export default function AskOEPanel() {
                 type="button"
                 disabled={isStopping}
                 onClick={() => void stop()}
-                aria-label="Stop the executive"
-                title="Stop — whatever has been written so far is kept"
+                aria-label={t("chat.composer.stopLabel")}
+                title={t("chat.composer.stopTitle")}
                 className="min-h-touch min-w-touch flex items-center justify-center rounded-lg bg-surface-overlay border border-line-strong text-fg hover:border-fg-muted disabled:opacity-40 transition-colors"
               >
                 <Icon name="stop" size="w-3.5 h-3.5" fill="currentColor" />
@@ -452,7 +445,7 @@ export default function AskOEPanel() {
                 type="button"
                 disabled={!input.trim()}
                 onClick={() => void send(input)}
-                aria-label="Send"
+                aria-label={t("chat.send")}
                 className="min-h-touch min-w-touch flex items-center justify-center rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition-colors"
               >
                 <Icon name="arrow-send" size="w-4 h-4" />

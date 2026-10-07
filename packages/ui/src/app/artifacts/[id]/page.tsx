@@ -15,16 +15,18 @@ import {
 import ArtifactViewer from "@/components/ArtifactViewer";
 import Button, { buttonClass } from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
+import { displayLocale, t } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 
 // Seed for "Revise in chat": opens a fresh chat with the id pre-filled so the
 // Executive can get_artifact → draft_artifact(supersedes=…).
 function reviseHref(art: ArtifactDetail): string {
-  const draft = `Revise artifact ${art.id} ("${art.title}"): `;
+  const draft = t("audit.artifact.reviseDraft", { id: art.id, title: art.title });
   return `/?new=1&draft=${encodeURIComponent(draft)}`;
 }
 
 function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleString(displayLocale());
 }
 
 export default function ArtifactDetailPage() {
@@ -85,7 +87,7 @@ export default function ArtifactDetailPage() {
     if (!art) return;
     if (
       !confirm(
-        `Permanently delete "${art.title}"? This removes it everywhere and cannot be undone.`
+        t("audit.artifacts.confirmDelete", { title: art.title })
       )
     )
       return;
@@ -102,9 +104,9 @@ export default function ArtifactDetailPage() {
   if (error) {
     return (
       <div className="flex flex-col h-full bg-surface text-fg items-center justify-center">
-        <div className="text-sm text-red-400 mb-4">Error: {error}</div>
+        <div className="text-sm text-red-400 mb-4">{t("audit.errorPrefix", { error })}</div>
         <Link href="/artifacts" className="text-sm text-fg-muted hover:text-fg">
-          ← Back to documents
+          {t("audit.artifact.backToDocuments")}
         </Link>
       </div>
     );
@@ -113,7 +115,7 @@ export default function ArtifactDetailPage() {
   if (!art) {
     return (
       <div className="flex flex-col h-full bg-surface text-fg-muted items-center justify-center text-sm">
-        Loading…
+        {t("common.loading")}
       </div>
     );
   }
@@ -123,7 +125,7 @@ export default function ArtifactDetailPage() {
       <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
           <Link href="/artifacts" className="text-sm text-fg-muted hover:text-fg">
-            ← Documents
+            {t("audit.artifact.documentsCrumb")}
           </Link>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
@@ -131,48 +133,54 @@ export default function ArtifactDetailPage() {
                 {art.title}
               </h1>
               <div className="text-sm text-fg-muted">
-                {art.format_label} · {art.source_label} · created{" "}
-                {formatTimestamp(art.created_at)}
-                {art.archived_at && " · archived"}
+                {t("audit.artifact.meta", {
+                  format: art.format_label,
+                  source: art.source_label,
+                  time: formatTimestamp(art.created_at),
+                })}
+                {art.archived_at && t("audit.artifact.archivedSuffix")}
               </div>
               {art.supersedes_id && (
                 <div className="text-sm text-fg-muted mt-1">
-                  Replaces an{" "}
-                  <Link
-                    href={`/artifacts/${encodeURIComponent(art.supersedes_id)}`}
-                    className="text-accent hover:underline"
-                  >
-                    earlier version
-                  </Link>
+                  {tRich("audit.artifact.replaces", {
+                    link: (
+                      <Link
+                        href={`/artifacts/${encodeURIComponent(art.supersedes_id)}`}
+                        className="text-accent hover:underline"
+                      >
+                        {t("audit.artifact.earlierVersion")}
+                      </Link>
+                    ),
+                  })}
                 </div>
               )}
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Link href={reviseHref(art)} className={buttonClass("primary", "md")}>
-                Revise in chat
+                {t("audit.artifact.reviseInChat")}
               </Link>
-              <Button onClick={handleCopy}>{copied ? "Copied!" : "Copy"}</Button>
+              <Button onClick={handleCopy}>{copied ? t("audit.artifact.copiedBang") : t("common.copy")}</Button>
               {art.downloads.length > 0 && (
                 <OverflowMenu
-                  trigger="Download"
-                  label="Download"
+                  trigger={t("audit.artifact.download")}
+                  label={t("audit.artifact.download")}
                   items={art.downloads.map((target, i) => ({
-                    label: `As .${ARTIFACT_EXTENSIONS[target]}`,
+                    label: t("audit.artifact.downloadAs", { ext: String(ARTIFACT_EXTENSIONS[target]) }),
                     onSelect: () =>
                       download(artifactDownloadUrl(art.id, i === 0 ? undefined : target)),
                   }))}
                 />
               )}
               <OverflowMenu
-                label="More actions"
+                label={t("audit.artifact.moreActions")}
                 items={[
                   {
-                    label: art.archived_at ? "Restore" : "Archive",
+                    label: art.archived_at ? t("audit.artifacts.restore") : t("audit.artifacts.archive"),
                     disabled: busy,
                     onSelect: () => void handleToggleArchive(),
                   },
                   {
-                    label: "Delete permanently",
+                    label: t("audit.artifacts.deletePermanently"),
                     danger: true,
                     disabled: busy,
                     onSelect: () => void handleDelete(),
@@ -185,7 +193,7 @@ export default function ArtifactDetailPage() {
           {art.rationale && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 px-5 py-4">
               <div className="text-sm font-semibold text-amber-600 dark:text-amber-300 mb-1">
-                Why this is worth your time
+                {t("audit.artifact.whyWorth")}
               </div>
               <div className="text-[15px] text-fg">{art.rationale}</div>
             </div>

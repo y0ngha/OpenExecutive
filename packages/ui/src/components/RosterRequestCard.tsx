@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import SidePanel from "@/components/ui/SidePanel";
+import { t, tp } from "@/i18n/index.ts";
 import {
   approveRosterRequest,
   declineRosterRequest,
@@ -21,8 +22,8 @@ import {
   type RosterRequestCard as RosterRequest,
 } from "@/lib/api";
 
+// Brand names; "email" is translated where it is read.
 const CHANNEL_LABEL: Record<string, string> = {
-  email: "Email",
   slack: "Slack",
   discord: "Discord",
   telegram: "Telegram",
@@ -53,7 +54,8 @@ export default function RosterRequestCard({
   // The answer (add new / link to someone listed) is given in a side panel.
   const [panelOpen, setPanelOpen] = useState(false);
 
-  const channel = CHANNEL_LABEL[request.channel] ?? request.channel;
+  const channel =
+    request.channel === "email" ? t("briefing.roster.email") : (CHANNEL_LABEL[request.channel] ?? request.channel);
   const isChat = request.channel !== "email";
 
   // The picker's list, fetched the first time "someone already on the list"
@@ -76,7 +78,7 @@ export default function RosterRequestCard({
       await action();
       onResolved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setBusy(false);
     }
@@ -97,7 +99,9 @@ export default function RosterRequestCard({
   }
 
   const ignore = () => void run(() => declineRosterRequest(request.id));
-  const title = request.display_name ? `Who is ${request.display_name}?` : "Someone new wrote in";
+  const title = request.display_name
+    ? t("briefing.roster.whoIs", { name: request.display_name })
+    : t("briefing.roster.someoneNew");
   const fieldClass =
     "min-h-[44px] rounded-xl border border-line bg-surface px-3 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50";
 
@@ -114,31 +118,31 @@ export default function RosterRequestCard({
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <span className="inline-flex items-center rounded-lg bg-surface-overlay px-2 py-0.5 text-[13px] font-medium text-fg-muted">
-          {request.message_count} waiting
+          {t("briefing.roster.waitingCount", { n: request.message_count })}
         </span>
         {request.on_company_domain && (
           <span className="inline-flex items-center rounded-lg bg-emerald-500/15 px-2 py-0.5 text-[13px] font-medium text-emerald-700 dark:text-emerald-300">
-            your domain
+            {t("briefing.roster.yourDomain")}
           </span>
         )}
       </div>
       {error && !panelOpen && <p className="mt-2 text-sm text-rose-600 dark:text-rose-300">{error}</p>}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button variant="primary" onClick={() => setPanelOpen(true)} disabled={busy}>
-          Add them
+          {t("briefing.roster.addThem")}
         </Button>
         <OverflowMenu
-          label="More actions for this request"
+          label={t("briefing.roster.moreActions")}
           items={[
             {
-              label: "Someone already on the list",
+              label: t("briefing.roster.existing"),
               onSelect: () => {
                 setMode("link");
                 setPanelOpen(true);
               },
               disabled: busy,
             },
-            { label: "Ignore", onSelect: ignore, disabled: busy },
+            { label: t("briefing.roster.ignore"), onSelect: ignore, disabled: busy },
           ]}
         />
       </div>
@@ -153,21 +157,18 @@ export default function RosterRequestCard({
         footer={
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={ignore} disabled={busy}>
-              Ignore
+              {t("briefing.roster.ignore")}
             </Button>
             <Button variant="primary" onClick={approve} disabled={busy || !canAdd}>
-              {mode === "new" ? "Add them" : "That's them"}
+              {mode === "new" ? t("briefing.roster.addThem") : t("briefing.roster.thatsThem")}
             </Button>
           </div>
         }
       >
         <p className="mb-3 text-sm leading-relaxed text-fg-muted">
-          Not on your People list.{" "}
-          {request.ack_sent
-            ? "They were told their message arrived and is waiting for you."
-            : "They haven't been answered."}{" "}
-          The name is the one they gave — not verified. Once they are added, their {request.message_count}{" "}
-          waiting message{request.message_count === 1 ? " is" : "s are"} answered.
+          {t("briefing.roster.notListed")}{" "}
+          {request.ack_sent ? t("briefing.roster.ackSent") : t("briefing.roster.notAnswered")}{" "}
+          {tp("briefing.roster.onceAdded", request.message_count)}
         </p>
 
         {request.previews.length > 0 && (
@@ -180,14 +181,14 @@ export default function RosterRequestCard({
           </div>
         )}
 
-        <div className="mb-4 flex flex-col gap-2" role="radiogroup" aria-label="Who they are">
+        <div className="mb-4 flex flex-col gap-2" role="radiogroup" aria-label={t("briefing.roster.whoTheyAre")}>
           <label className="flex min-h-[44px] items-center gap-2.5 rounded-xl border border-line px-3 text-[15px] text-fg">
             <input type="radio" checked={mode === "new"} onChange={() => setMode("new")} disabled={busy} />
-            Add as a new person
+            {t("briefing.roster.addNew")}
           </label>
           <label className="flex min-h-[44px] items-center gap-2.5 rounded-xl border border-line px-3 text-[15px] text-fg">
             <input type="radio" checked={mode === "link"} onChange={() => setMode("link")} disabled={busy} />
-            Someone already on the list
+            {t("briefing.roster.existing")}
           </label>
         </div>
 
@@ -197,8 +198,8 @@ export default function RosterRequestCard({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Their name"
-              aria-label="Their name"
+              placeholder={t("briefing.roster.theirName")}
+              aria-label={t("briefing.roster.theirName")}
               maxLength={200}
               disabled={busy}
               className={fieldClass}
@@ -207,12 +208,12 @@ export default function RosterRequestCard({
               value={kind}
               onChange={(e) => setKind(e.target.value as PersonKind | "")}
               disabled={busy}
-              aria-label="Team or contact"
+              aria-label={t("briefing.roster.teamOrContactLabel")}
               className={fieldClass}
             >
-              <option value="">Team or contact?</option>
-              <option value="team">Team — can sign in and message you</option>
-              <option value="contact">Contact — emailed only when you ask</option>
+              <option value="">{t("briefing.roster.teamOrContact")}</option>
+              <option value="team">{t("briefing.roster.kindTeam")}</option>
+              <option value="contact">{t("briefing.roster.kindContact")}</option>
             </select>
           </div>
         ) : (
@@ -221,14 +222,14 @@ export default function RosterRequestCard({
               value={linkId}
               onChange={(e) => setLinkId(e.target.value === "" ? "" : Number(e.target.value))}
               disabled={busy || people === null}
-              aria-label="Who they are"
+              aria-label={t("briefing.roster.whoTheyAre")}
               className={fieldClass}
             >
-              <option value="">{people === null ? "Loading…" : "Choose who they are"}</option>
+              <option value="">{people === null ? t("common.loading") : t("briefing.roster.choose")}</option>
               {(people ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.full_name}
-                  {p.kind === "contact" ? " (contact)" : ""}
+                  {p.kind === "contact" ? t("briefing.roster.contactSuffix") : ""}
                 </option>
               ))}
             </select>
@@ -240,7 +241,7 @@ export default function RosterRequestCard({
                   onChange={(e) => setReplace(e.target.checked)}
                   disabled={busy}
                 />
-                Replace their current {channel} account
+                {t("briefing.roster.replaceAccount", { channel })}
               </label>
             )}
           </div>

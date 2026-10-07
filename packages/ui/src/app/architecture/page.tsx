@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import DynamicSection from '@/components/architecture/DynamicSection';
 import PageSideNav from '@/components/shell/PageSideNav';
+import { t, type MessageKey } from '@/i18n/index.ts';
 
 // The section nav is hardcoded so the sidebar renders instantly without
 // waiting for the backend. IDs must match the SECTIONS registry in
@@ -45,18 +46,18 @@ interface SectionMeta {
 }
 
 function DiagramLegend() {
-  const items: { label: string; color: string; border: string }[] = [
-    { label: 'Entry / Client', color: '#1e3a8a', border: '#60a5fa' },
-    { label: 'Compute / Agent', color: '#312e81', border: '#a5b4fc' },
-    { label: 'Storage', color: '#365314', border: '#a3e635' },
-    { label: 'Cached', color: '#713f12', border: '#facc15' },
-    { label: 'External', color: '#3f3f46', border: '#a1a1aa' },
-    { label: 'Hot / Not cached', color: '#7f1d1d', border: '#fca5a5' },
+  const items: { label: MessageKey; color: string; border: string }[] = [
+    { label: 'misc.architecture.legend.entry', color: '#1e3a8a', border: '#60a5fa' },
+    { label: 'misc.architecture.legend.compute', color: '#312e81', border: '#a5b4fc' },
+    { label: 'misc.architecture.legend.storage', color: '#365314', border: '#a3e635' },
+    { label: 'misc.architecture.legend.cached', color: '#713f12', border: '#facc15' },
+    { label: 'misc.architecture.legend.external', color: '#3f3f46', border: '#a1a1aa' },
+    { label: 'misc.architecture.legend.hot', color: '#7f1d1d', border: '#fca5a5' },
   ];
   return (
     <div className="rounded-lg bg-surface border border-line px-4 py-3">
       <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle mb-2">
-        Diagram legend
+        {t('misc.architecture.legendTitle')}
       </p>
       <div className="flex flex-wrap gap-x-4 gap-y-2">
         {items.map((it) => (
@@ -65,7 +66,7 @@ function DiagramLegend() {
               className="inline-block w-3 h-3 rounded-sm"
               style={{ background: it.color, border: `1.5px solid ${it.border}` }}
             />
-            <span className="text-fg-muted">{it.label}</span>
+            <span className="text-fg-muted">{t(it.label)}</span>
           </div>
         ))}
       </div>
@@ -111,14 +112,14 @@ export default function ArchitecturePage() {
   return (
     <div className="flex flex-col md:flex-row flex-1 min-h-0 bg-surface text-fg overflow-hidden">
       <PageSideNav
-        label="Section"
+        label={t('misc.architecture.section')}
         current={SECTIONS.find((s) => s.id === activeSection)?.label}
         closeKey={activeSection}
         className="md:w-52 bg-surface-elevated"
       >
         <div className="px-3 py-4">
           <p className="px-2 text-[10px] font-semibold uppercase tracking-widest text-fg-subtle mb-2">
-            Architecture
+            {t('misc.architecture.navTitle')}
           </p>
           <nav className="space-y-0.5">
             {SECTIONS.map(({ id, label }) => {
@@ -151,14 +152,14 @@ export default function ArchitecturePage() {
 
         <div className="mt-auto px-4 py-4 border-t border-line space-y-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle mb-2">
-            Reference
+            {t('misc.architecture.reference')}
           </p>
           <div className="flex justify-between text-xs">
-            <span className="text-fg-subtle">Sections</span>
+            <span className="text-fg-subtle">{t('misc.architecture.sections')}</span>
             <span className="text-fg-muted font-mono">{freshCount} / {totalCount}</span>
           </div>
           <p className="text-[10px] text-fg-subtle leading-relaxed">
-            A map of how the running system is built — components, data flow, and the invariants that hold it together.
+            {t('misc.architecture.navBlurb')}
           </p>
         </div>
       </PageSideNav>
@@ -167,9 +168,9 @@ export default function ArchitecturePage() {
         <div className="max-w-4xl mx-auto px-4 py-6 sm:px-8 sm:py-10 space-y-12 sm:space-y-20">
           <div className="space-y-4">
             <div>
-              <h1 className="text-2xl font-bold text-fg">Open Executive — Architecture</h1>
+              <h1 className="text-2xl font-bold text-fg">{t('misc.architecture.title')}</h1>
               <p className="mt-2 text-sm text-fg-muted">
-                A reference map of how Open Executive is built — the components, data flow, and invariants of the running system, from the Executive orchestrator and its specialist council to the knowledge, memory, scheduling, and integration layers.
+                {t('misc.architecture.intro')}
               </p>
             </div>
             <DiagramLegend />

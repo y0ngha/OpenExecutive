@@ -1,13 +1,14 @@
 import type { ReviewStatus } from "@/lib/api";
+import { t, type MessageKey } from "@/i18n/index.ts";
 
 // Shared by the review queue and the Knowledge base file view so both label a
 // file's review state the same way.
 
-const STATUS_LABELS: Record<ReviewStatus, string> = {
-  pending: "Pending",
-  approved: "Approved",
-  rejected: "Rejected",
-  needs_revision: "Needs revision",
+const STATUS_LABELS: Record<ReviewStatus, MessageKey> = {
+  pending: "misc.reviewStatus.pending",
+  approved: "misc.reviewStatus.approved",
+  rejected: "misc.reviewStatus.rejected",
+  needs_revision: "misc.reviewStatus.needsRevision",
 };
 
 // Status is a coloured dot plus a word.
@@ -38,7 +39,7 @@ export default function ReviewStatusPill({
       className="inline-flex items-center gap-1.5 text-sm font-medium text-fg-muted"
       title={
         trusted
-          ? "Ships with Open Executive. Available to the Executive, but nobody here has reviewed it."
+          ? t("misc.reviewStatus.trustedTitle")
           : undefined
       }
     >
@@ -46,7 +47,7 @@ export default function ReviewStatusPill({
         aria-hidden
         className={`h-2 w-2 rounded-full ${trusted ? TRUSTED_DEFAULT_DOT : STATUS_DOT[status]}`}
       />
-      {trusted ? "Default" : STATUS_LABELS[status]}
+      {trusted ? t("misc.reviewStatus.default") : t(STATUS_LABELS[status])}
     </span>
   );
 }

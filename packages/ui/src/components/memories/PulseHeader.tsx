@@ -12,6 +12,8 @@ import {
   type WorkspaceMode,
 } from "@/lib/api";
 import Icon from "@/components/Icon";
+import { t, tp } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import {
   deriveVitals,
@@ -112,7 +114,7 @@ export function PulseSummary({ pulse }: { pulse: PulseData }) {
   const moreId = useId();
 
   return (
-    <section aria-label="At a glance" className="space-y-3">
+    <section aria-label={t("people.pulse.atAGlance")} className="space-y-3">
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {loading || !stats
           ? Array.from({ length: 3 }).map((_, i) => (
@@ -138,7 +140,7 @@ export function PulseSummary({ pulse }: { pulse: PulseData }) {
           size="w-4 h-4"
           className={`transition-transform ${open ? "rotate-90" : ""}`}
         />
-        {open ? "Fewer stats" : "More stats"}
+        {open ? t("people.pulse.fewerStats") : t("people.pulse.moreStats")}
       </button>
 
       {open && (
@@ -152,7 +154,7 @@ export function PulseSummary({ pulse }: { pulse: PulseData }) {
           </div>
           <div className="border-t border-line pt-5">
             <h3 className="text-sm font-semibold text-fg mb-3">
-              Heartbeat, last {HEATMAP_DAYS} days
+              {t("people.pulse.heartbeatLastDays", { n: HEATMAP_DAYS })}
             </h3>
             {loading || !data ? <VitalsSkeleton /> : <Vitals days={data.heatmap} />}
           </div>
@@ -170,8 +172,8 @@ export function HeartbeatCard({ pulse }: { pulse: PulseData }) {
     <section className="rounded-2xl border border-line bg-surface-elevated p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <h2 className="text-base font-semibold text-fg">Heartbeat</h2>
-          <span className="text-sm text-fg-subtle">last {HEATMAP_DAYS} days</span>
+          <h2 className="text-base font-semibold text-fg">{t("people.pulse.heartbeat")}</h2>
+          <span className="text-sm text-fg-subtle">{t("people.pulse.lastDays", { n: HEATMAP_DAYS })}</span>
         </div>
         <LivePulse />
       </div>
@@ -181,11 +183,15 @@ export function HeartbeatCard({ pulse }: { pulse: PulseData }) {
         </div>
         {vitals && data && (
           <p className="text-[15px] text-fg-muted leading-relaxed">
-            <span className="text-fg font-semibold">{plural(vitals.total, "beat")}</span> on{" "}
-            {vitals.activeDays} of {data.heatmap.length} days.
+            {tRich("people.pulse.beatsOnDays", {
+              beats: <span className="text-fg font-semibold">{tp("people.unit.beat", vitals.total)}</span>,
+              active: vitals.activeDays,
+              total: data.heatmap.length,
+            })}
             <br />
-            Current streak:{" "}
-            <span className="text-fg font-semibold">{plural(vitals.currentStreak.days, "day")}</span>
+            {tRich("people.pulse.currentStreakLine", {
+              days: <span className="text-fg font-semibold">{tp("people.unit.day", vitals.currentStreak.days)}</span>,
+            })}
           </p>
         )}
       </div>
@@ -218,28 +224,28 @@ function deriveStats(
     return a.run_at.localeCompare(best.run_at) < 0 ? a : best;
   }, null);
   const nextBeat = soonest
-    ? { value: formatNextBeat(soonest.run_at) || "soon", hint: metaFor(soonest).label }
-    : { value: "—", hint: "nothing scheduled" };
+    ? { value: formatNextBeat(soonest.run_at) || t("people.pulse.soon"), hint: metaFor(soonest).label }
+    : { value: "—", hint: t("people.pulse.nothingScheduled") };
 
   // The heatmap is oldest → newest, so the last entry is today.
   const beatsToday = heatmap.length > 0 ? heatmap[heatmap.length - 1].count : 0;
 
   // The three episodic lists the Memory tabs show.
-  const memories: Stat = { label: "Memories", value: memoriesTotal, hint: "decisions, initiatives, advice" };
+  const memories: Stat = { label: t("people.pulse.memories"), value: memoriesTotal, hint: t("people.pulse.memoriesHint") };
 
   return {
     headline: [
-      { label: "Beats today", value: beatsToday, tone: "emerald", hint: "actions fired" },
-      { label: "Next beat", value: nextBeat.value, tone: "accent", hint: nextBeat.hint },
+      { label: t("people.pulse.beatsToday"), value: beatsToday, tone: "emerald", hint: t("people.pulse.actionsFired") },
+      { label: t("people.pulse.nextBeat"), value: nextBeat.value, tone: "accent", hint: nextBeat.hint },
       memories,
     ],
     more: [
-      { label: "Daily rhythms", value: groups.daily.length },
+      { label: t("people.pulse.dailyRhythms"), value: groups.daily.length },
       // Solo has no department check-ins; the projects it tracks take the slot.
       mode === "solo"
-        ? { label: "Projects", value: activeProjects, hint: "active" }
-        : { label: "Dept check-ins", value: groups.departments.length },
-      { label: "Follow-ups", value: followups },
+        ? { label: t("people.pulse.projects"), value: activeProjects, hint: t("people.pulse.active") }
+        : { label: t("people.pulse.deptCheckIns"), value: groups.departments.length },
+      { label: t("people.pulse.followUps"), value: followups },
     ],
   };
 }
@@ -257,10 +263,6 @@ const TREND_TONE: Record<TrendDirection, StatTone> = {
   new: "emerald",
   none: "default",
 };
-
-function plural(n: number, one: string, many: string = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
 
 function Vital({
   label,
@@ -293,36 +295,36 @@ function Vitals({ days }: { days: DailyActivityCount[] }) {
   return (
     <div className={VITALS_GRID}>
       <Vital
-        label="Current streak"
-        value={plural(v.currentStreak.days, "day")}
+        label={t("people.pulse.currentStreak")}
+        value={tp("people.unit.day", v.currentStreak.days)}
         hint={
           v.currentStreak.days === 0
-            ? "no active days lately"
+            ? t("people.pulse.noActiveDays")
             : v.currentStreak.throughToday
-              ? "through today"
-              : "through yesterday"
+              ? t("people.pulse.throughToday")
+              : t("people.pulse.throughYesterday")
         }
         tone="emerald"
       />
-      <Vital label="Longest streak" value={plural(v.longestStreak, "day")} />
+      <Vital label={t("people.pulse.longestStreak")} value={tp("people.unit.day", v.longestStreak)} />
       <Vital
-        label={`${days.length}-day total`}
-        value={plural(v.total, "beat")}
-        hint={`on ${v.activeDays} of ${days.length} days`}
+        label={t("people.pulse.dayTotal", { n: days.length })}
+        value={tp("people.unit.beat", v.total)}
+        hint={t("people.pulse.onActiveDays", { active: v.activeDays, total: days.length })}
       />
       <Vital
-        label="Avg per active day"
+        label={t("people.pulse.avgPerActiveDay")}
         value={v.avgPerActiveDay === null ? "—" : v.avgPerActiveDay.toFixed(1)}
       />
       <Vital
-        label="Busiest day"
+        label={t("people.pulse.busiestDay")}
         value={v.busiestDay ? formatVitalDate(v.busiestDay.date) : "—"}
-        hint={v.busiestDay ? plural(v.busiestDay.count, "action") : undefined}
+        hint={v.busiestDay ? tp("people.unit.action", v.busiestDay.count) : undefined}
       />
       <Vital
-        label={`Last ${trend.windowDays} vs prior`}
+        label={t("people.pulse.lastVsPrior", { n: trend.windowDays })}
         value={formatTrend(trend)}
-        hint={trend.windowDays > 0 ? `${trend.current} vs ${trend.prior}` : undefined}
+        hint={trend.windowDays > 0 ? t("people.pulse.vs", { current: trend.current, prior: trend.prior }) : undefined}
         tone={TREND_TONE[trend.direction]}
       />
     </div>
@@ -400,7 +402,7 @@ function Heatmap({ days }: { days: DailyActivityCount[] }) {
       <div
         className="flex gap-1 overflow-x-auto pb-1"
         role="img"
-        aria-label={`Activity heatmap: ${total} actions over the last ${days.length} days`}
+        aria-label={t("people.pulse.heatmapLabel", { total, n: days.length })}
       >
         {weeks.map((week, wi) => (
           <div key={wi} className="flex flex-col gap-1">
@@ -411,8 +413,8 @@ function Heatmap({ days }: { days: DailyActivityCount[] }) {
                 <div
                   key={di}
                   className={`h-3.5 w-3.5 rounded-[4px] ${LEVEL_BG[intensity(cell.count)]}`}
-                  title={`${cell.date}: ${cell.count} ${cell.count === 1 ? "action" : "actions"}`}
-                  aria-label={`${cell.date}: ${cell.count} ${cell.count === 1 ? "action" : "actions"}`}
+                  title={`${cell.date}: ${tp("people.unit.action", cell.count)}`}
+                  aria-label={`${cell.date}: ${tp("people.unit.action", cell.count)}`}
                 />
               ),
             )}
@@ -422,11 +424,11 @@ function Heatmap({ days }: { days: DailyActivityCount[] }) {
 
       {/* Legend */}
       <div className="flex items-center justify-end gap-1.5 mt-2 text-xs text-fg-subtle">
-        <span>less</span>
+        <span>{t("people.pulse.less")}</span>
         {LEVEL_BG.map((bg, i) => (
           <span key={i} className={`h-3 w-3 rounded-[3px] ${bg}`} aria-hidden="true" />
         ))}
-        <span>more</span>
+        <span>{t("people.pulse.more")}</span>
       </div>
     </div>
   );

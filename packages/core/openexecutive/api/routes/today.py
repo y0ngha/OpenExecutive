@@ -1963,9 +1963,9 @@ class BriefDeliveryNotice(BaseModel):
 
 def _brief_delivery_notice() -> BriefDeliveryNotice | None:
     from openexecutive.briefing.brief_state import (
-        DELIVERY_PROBLEMS,
         brief_name,
         current_problem,
+        delivery_problem,
         last_delivery_outcome,
     )
     from openexecutive.config import get_settings
@@ -1981,7 +1981,7 @@ def _brief_delivery_notice() -> BriefDeliveryNotice | None:
     reason = current_problem(last, has_owner=principal is not None, can_deliver=bool(plan))
     if reason is None:
         return None
-    problem, fix = DELIVERY_PROBLEMS[reason]
+    problem, fix = delivery_problem(reason)
     return BriefDeliveryNotice(
         brief=brief_name(last.kind),
         at=last.at.isoformat(),

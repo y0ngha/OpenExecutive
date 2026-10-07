@@ -7,7 +7,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { useExecutiveStatus } from "@/components/executive/ExecutiveStatusContext";
 import Icon from "@/components/Icon";
 import { HANDLE_IT_MODES } from "@/components/settings/HandleItCard";
-import { MODE_LABEL } from "@/components/settings/WorkspaceCard";
+import { modeLabel } from "@/components/settings/WorkspaceCard";
 import {
   ADVANCED_ITEMS,
   SETTINGS_PAGES,
@@ -16,6 +16,7 @@ import {
   type SettingsPageId,
 } from "@/components/shell/navConfig";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { t } from "@/i18n/index.ts";
 import {
   getAgentDetail,
   getDelegation,
@@ -76,9 +77,9 @@ export default function SettingsPage() {
   return (
     <main className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10 pb-16">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">Settings</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">{t("settings.hub.title")}</h1>
         <p className="mt-2 text-[15px] text-fg-muted">
-          How the Executive runs, who it runs for, and the tools for looking under the hood.
+          {t("settings.hub.description")}
         </p>
         {/* Phones: one compact list (a card with a row per page) so every page
             fits on one screen. Wider: a grid of tiles. */}
@@ -172,7 +173,7 @@ function useTileStatuses(): {
         const notice = versionNotice(v);
         setVersion(
           notice.update
-            ? { text: `${notice.running} · update available`, tone: "warn" }
+            ? { text: t("settings.hub.updateAvailable", { running: notice.running }), tone: "warn" }
             : { text: notice.running, tone: "none" },
         );
       })
@@ -184,49 +185,49 @@ function useTileStatuses(): {
 
   if (run) {
     const state: TileStatus = unknown
-      ? { text: "Status unknown", tone: "none" }
+      ? { text: t("settings.hub.statusUnknown"), tone: "none" }
       : run.paused
-        ? { text: "Paused", tone: "warn" }
-        : { text: "Running", tone: "ok" };
-    byPage.executive = { ...state, text: voice ? `${state.text} · ${voice} voice` : state.text };
+        ? { text: t("settings.runSwitch.paused"), tone: "warn" }
+        : { text: t("settings.runSwitch.running"), tone: "ok" };
+    byPage.executive = { ...state, text: voice ? t("settings.hub.stateWithVoice", { state: state.text, voice }) : state.text };
   } else if (voice) {
-    byPage.executive = { text: `${voice} voice`, tone: "none" };
+    byPage.executive = { text: t("settings.hub.voice", { voice }), tone: "none" };
   }
 
   if (delegation && delegation !== "error") {
     byPage["act-as-me"] =
       delegation.gmail.status === "connected"
         ? {
-            text: delegation.enabled ? "Mailbox connected · drafts on" : "Mailbox connected",
+            text: delegation.enabled ? t("settings.hub.mailboxDraftsOn") : t("settings.hub.mailboxConnected"),
             tone: "ok",
           }
-        : { text: "Mailbox not connected", tone: "warn" };
+        : { text: t("settings.hub.mailboxNotConnected"), tone: "warn" };
     const handleIt = delegation.handle_it;
     if (handleIt?.enabled) {
-      const mode = HANDLE_IT_MODES.find((m) => m.mode === handleIt.mode)?.label ?? "On";
+      const mode = t(HANDLE_IT_MODES.find((m) => m.mode === handleIt.mode)?.label ?? "common.on");
       // Short enough for one line on a phone: the dial step is what matters.
-      byPage["act-as-me"] = { text: `Handles: ${mode}`, tone: "ok" };
+      byPage["act-as-me"] = { text: t("settings.hub.handles", { mode }), tone: "ok" };
     }
   }
 
   if (history && history !== "error") {
     const days = history.company_retention_days;
     byPage.memory = {
-      text: `Notes ${history.reply_notes ? "on" : "off"} · ${
-        days === null ? "kept until forgotten" : `last ${retentionLabel(days)}`
-      }`,
+      text: t(history.reply_notes ? "settings.hub.notesOn" : "settings.hub.notesOff", {
+        keep: days === null ? t("settings.hub.keptUntilForgotten") : t("settings.hub.lasts", { label: retentionLabel(days) }),
+      }),
       tone: "none",
     };
   }
 
   if (!workspaceLoading) {
     byPage.workspace = {
-      text: [MODE_LABEL[mode], effectiveTimezone].filter(Boolean).join(" · "),
+      text: [modeLabel(mode), effectiveTimezone].filter(Boolean).join(" · "),
       tone: "none",
     };
   }
 
-  byPage.advanced = { text: `${ADVANCED_ITEMS.length} tools for power users`, tone: "none" };
+  byPage.advanced = { text: t("settings.hub.advancedTools", { n: ADVANCED_ITEMS.length }), tone: "none" };
   if (version) byPage.about = version;
 
   return { byPage, actAsMeOffered: delegation !== null, memoryOffered: history !== null };

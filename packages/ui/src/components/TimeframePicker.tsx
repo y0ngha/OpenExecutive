@@ -1,6 +1,7 @@
 "use client";
 
 import type { PeriodType } from "@/lib/api";
+import { t, type MessageKey } from "@/i18n/index.ts";
 
 /**
  * Pair of (period_type dropdown + period_value text input) for editing a Goal's
@@ -12,12 +13,12 @@ import type { PeriodType } from "@/lib/api";
  * to the literal string "Ongoing" so the stored row is well-formed.
  */
 
-const PERIOD_TYPES: { value: PeriodType; label: string; placeholder: string }[] = [
-  { value: "week", label: "Week", placeholder: "Week of May 18" },
-  { value: "month", label: "Month", placeholder: "May 2026" },
-  { value: "quarter", label: "Quarter", placeholder: "Q2 2026" },
-  { value: "year", label: "Year", placeholder: "2026" },
-  { value: "ongoing", label: "Ongoing", placeholder: "Ongoing" },
+const PERIOD_TYPES: { value: PeriodType; label: MessageKey; placeholder: MessageKey }[] = [
+  { value: "week", label: "misc.timeframe.week", placeholder: "misc.timeframe.weekPlaceholder" },
+  { value: "month", label: "misc.timeframe.month", placeholder: "misc.timeframe.monthPlaceholder" },
+  { value: "quarter", label: "misc.timeframe.quarter", placeholder: "misc.timeframe.quarterPlaceholder" },
+  { value: "year", label: "misc.timeframe.year", placeholder: "misc.timeframe.yearPlaceholder" },
+  { value: "ongoing", label: "misc.timeframe.ongoing", placeholder: "misc.timeframe.ongoing" },
 ];
 
 const MONTH_NAMES = [
@@ -63,12 +64,12 @@ export function suggestPeriodValue(periodType: PeriodType, today: Date = new Dat
   }
 }
 
-const CHIP_LABELS: Record<PeriodType, string> = {
-  week: "This week",
-  month: "This month",
-  quarter: "This quarter",
-  year: "This year",
-  ongoing: "Ongoing",
+const CHIP_LABELS: Record<PeriodType, MessageKey> = {
+  week: "misc.timeframe.thisWeek",
+  month: "misc.timeframe.thisMonth",
+  quarter: "misc.timeframe.thisQuarter",
+  year: "misc.timeframe.thisYear",
+  ongoing: "misc.timeframe.ongoing",
 };
 
 /**
@@ -87,7 +88,7 @@ export function TimeframeChips({
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-sm text-fg-muted" id="timeframe-chips-label">
-        Timeframe
+        {t("misc.timeframe.label")}
       </span>
       <div role="radiogroup" aria-labelledby="timeframe-chips-label" className="flex flex-wrap gap-2">
         {PERIOD_TYPES.map((p) => {
@@ -107,7 +108,7 @@ export function TimeframeChips({
                   : "border-line text-fg-muted hover:text-fg hover:border-line-strong")
               }
             >
-              {CHIP_LABELS[p.value]}
+              {t(CHIP_LABELS[p.value])}
             </button>
           );
         })}
@@ -130,8 +131,8 @@ export default function TimeframePicker({
   onChange,
   size = "default",
 }: TimeframePickerProps) {
-  const placeholder =
-    PERIOD_TYPES.find((p) => p.value === periodType)?.placeholder ?? "";
+  const placeholderKey = PERIOD_TYPES.find((p) => p.value === periodType)?.placeholder;
+  const placeholder = placeholderKey ? t(placeholderKey) : "";
   const inputCls =
     size === "compact"
       ? "h-11 px-3 rounded-xl bg-surface-input/60 border border-line text-[15px] text-fg focus:outline-none focus:border-accent"
@@ -140,7 +141,7 @@ export default function TimeframePicker({
   return (
     <div className="grid grid-cols-2 gap-3">
       <label className="text-sm text-fg-muted flex flex-col gap-1.5">
-        Timeframe
+        {t("misc.timeframe.label")}
         <select
           value={periodType}
           onChange={(e) => {
@@ -152,13 +153,13 @@ export default function TimeframePicker({
           className={inputCls}
         >
           {PERIOD_TYPES.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
+            <option key={p.value} value={p.value}>{t(p.label)}</option>
           ))}
         </select>
       </label>
       {periodType !== "ongoing" && (
         <label className="text-sm text-fg-muted flex flex-col gap-1.5">
-          Period
+          {t("misc.timeframe.period")}
           <input
             value={periodValue}
             onChange={(e) => onChange(periodType, e.target.value)}

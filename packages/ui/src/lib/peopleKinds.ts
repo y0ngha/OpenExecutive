@@ -8,6 +8,7 @@
 // Type-only imports, so `npm test` can exercise this under
 // `node --experimental-strip-types` (see scripts/peopleKinds.test.mjs).
 
+import { t } from "../i18n/index.ts";
 import type { Person, PersonKind, WorkspaceMode } from "@/lib/api";
 
 export type PeopleTab = "team" | "contacts";
@@ -80,9 +81,11 @@ export function personCardStatus(
   today: string,
 ): { label: string; tone: CardStatusTone } {
   if (isContact(person)) {
-    return person.email ? { label: "Email on file", tone: "ok" } : { label: "No email", tone: "muted" };
+    return person.email
+      ? { label: t("lib.people.emailOnFile"), tone: "ok" }
+      : { label: t("lib.people.noEmail"), tone: "muted" };
   }
   const leave = person.on_leave_until?.slice(0, 10);
-  if (leave && leave >= today) return { label: `On leave until ${leave}`, tone: "warn" };
-  return { label: `Replies within ${person.response_sla_hours}h`, tone: "ok" };
+  if (leave && leave >= today) return { label: t("lib.people.onLeave", { date: leave }), tone: "warn" };
+  return { label: t("lib.people.repliesWithin", { n: person.response_sla_hours }), tone: "ok" };
 }

@@ -89,12 +89,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from openexecutive.api import caller as api_caller
 from openexecutive.delegation.gmail import (
     BLOCKING_CODES,
-    STATUS_MESSAGES,
     GmailAuthError,
     GmailError,
     credential_provider,
     gmail_for,
     gmail_status,
+    status_message,
 )
 from openexecutive.delegation.settings import (
     can_delegate,
@@ -400,7 +400,7 @@ def _inbox_out(person_id: int) -> InboxOut:
     return InboxOut(
         enabled=watch.enabled,
         status=status,
-        message=inbox.STATUS_MESSAGES.get(status, inbox.STATUS_MESSAGES["ok"]),
+        message=inbox.status_message(status),
         watch_since=watch.watch_since,
         last_poll_at=watch.last_poll_at,
         checking=checking,
@@ -444,7 +444,7 @@ async def _state(person: Person) -> DelegationOut:
         enabled=is_enabled(person.id),
         gmail=GmailConnection(
             status=status,
-            message=STATUS_MESSAGES[status],
+            message=status_message(status),
             email=person.email,
             connect_command=_connect_command(person.email),
             outlook_connect_command=_outlook_connect_command(person.email),
@@ -519,7 +519,7 @@ async def update_delegation(request: Request, body: DelegationUpdate) -> Delegat
     if body.enabled:
         status = await gmail_status(person.email)
         if status != "connected":
-            raise _refuse(409, _BLOCKING_CODES.get(status, "gmail_error"), STATUS_MESSAGES[status])
+            raise _refuse(409, _BLOCKING_CODES.get(status, "gmail_error"), status_message(status))
     before = is_enabled(person_id)
     if not body.enabled:
         # The inbox watcher needs Act as me; off here, it starts from scratch
@@ -593,7 +593,7 @@ async def update_delegation_inbox(request: Request, body: InboxUpdate) -> Delega
             raise _refuse(409, "act_as_me_off", "Turn Act as me on first.")
         status = await gmail_status(person.email)
         if status != "connected":
-            raise _refuse(409, _BLOCKING_CODES.get(status, "gmail_error"), STATUS_MESSAGES[status])
+            raise _refuse(409, _BLOCKING_CODES.get(status, "gmail_error"), status_message(status))
     _set_inbox(person_id, body.enabled)
     return await _state(person)
 
@@ -618,7 +618,7 @@ async def check_delegation_inbox(request: Request) -> InboxOut:
     # The scan marks itself as running on its first step; say so either way.
     out = _inbox_out(person_id)
     return out.model_copy(update={"checking": True, "status": "checking",
-                                  "message": inbox.STATUS_MESSAGES["checking"]})
+                                  "message": inbox.status_message("checking")})
 
 
 @router.get("/delegation/replies", response_model=RepliesOut)
@@ -821,16 +821,16 @@ async def learn_delegation_voice(request: Request) -> VoiceOut:
     person = _caller(request)
     status = await gmail_status(person.email)
     if status != "connected":
-        raise _refuse(409, _BLOCKING_CODES.get(status, "gmail_error"), STATUS_MESSAGES[status])
+        raise _refuse(409, _BLOCKING_CODES.get(status, "gmail_error"), status_message(status))
     try:
         stored = await learn_from_sent_mail(person, gmail_for(person.email or ""))
     except VoiceError as exc:
         raise _refuse(409, exc.code, exc.message) from exc
     except GmailAuthError as exc:
-        raise _refuse(409, "gmail_needs_reconnect", STATUS_MESSAGES["needs_reconnect"]) from exc
+        raise _refuse(409, "gmail_needs_reconnect", status_message("needs_reconnect")) from exc
     except GmailError as exc:
         logger.warning("delegation: learning the voice failed", exc_info=True)
-        raise _refuse(502, "gmail_error", STATUS_MESSAGES["error"]) from exc
+        raise _refuse(502, "gmail_error", status_message("error")) from exc
     return _voice_out(stored)
 
 
@@ -849,14 +849,14 @@ async def refresh_delegation_signature(request: Request) -> VoiceOut:
         )
     status = await gmail_status(person.email)
     if status != "connected":
-        raise _refuse(409, _BLOCKING_CODES.get(status, "gmail_error"), STATUS_MESSAGES[status])
+        raise _refuse(409, _BLOCKING_CODES.get(status, "gmail_error"), status_message(status))
     try:
         signature = await gmail_for(person.email or "").send_as_signature()
     except GmailAuthError as exc:
-        raise _refuse(409, "gmail_needs_reconnect", STATUS_MESSAGES["needs_reconnect"]) from exc
+        raise _refuse(409, "gmail_needs_reconnect", status_message("needs_reconnect")) from exc
     except GmailError as exc:
         logger.warning("delegation: reading the Gmail signature failed", exc_info=True)
-        raise _refuse(502, "gmail_error", STATUS_MESSAGES["error"]) from exc
+        raise _refuse(502, "gmail_error", status_message("error")) from exc
     # Read after the Gmail call, so an edit made meanwhile is kept.
     stored = get_voice(person_id)
     profile, _ = validate_profile(

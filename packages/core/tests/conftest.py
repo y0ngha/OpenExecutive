@@ -14,6 +14,9 @@ os.environ.setdefault("EXEC_EMAIL_ADDRESS", "ceo.test@example.com")
 # full-app test errors at construction — the same trap BACKEND_SHARED_SECRET sets
 # (see CLAUDE.md → Testing). Clear it so the suite matches CI either way.
 os.environ.pop("OE_PUBLIC_DEPLOYMENT", None)
+# Tests assert English text; a KOREAN OE_LANGUAGE from the shell would fail
+# them. Tests that need Korean set it with monkeypatch.
+os.environ.pop("OE_LANGUAGE", None)
 # Same for signed callers: with public keys in the shell, every full-app test
 # that names its caller with x-caller-email is refused with 401.
 os.environ.pop("CALLER_ASSERTION_PUBLIC_KEYS", None)

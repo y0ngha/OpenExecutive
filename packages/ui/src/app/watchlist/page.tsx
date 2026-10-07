@@ -22,6 +22,9 @@ import {
   type WatchlistSignalType,
 } from "@/lib/api";
 import { suggestWatchSlug } from "@/lib/watchSlug";
+import { t, tp, type MessageKey } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
+import { valueLabel } from "./labels";
 
 const fieldCls =
   "w-full px-3.5 py-2.5 text-[15px] rounded-xl bg-surface border border-line text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent/40";
@@ -34,10 +37,10 @@ function isSuggestion(item: WatchlistItem): boolean {
   return item.origin === "research_proposed" && item.mode === "dry_run";
 }
 
-const DECLINE_REASONS: { value: WatchDeclineReason; label: string; hint: string }[] = [
-  { value: "not_relevant", label: "Not relevant", hint: "Never suggest this company/topic again" },
-  { value: "too_noisy", label: "Too noisy", hint: "Keep it, but only high-severity signals" },
-  { value: "wrong_source", label: "Wrong source", hint: "Right topic, drop only this feed/page" },
+const DECLINE_REASONS: { value: WatchDeclineReason; label: MessageKey; hint: MessageKey }[] = [
+  { value: "not_relevant", label: "jobs.watch.notRelevant", hint: "jobs.watch.notRelevantHint" },
+  { value: "too_noisy", label: "jobs.watch.tooNoisy", hint: "jobs.watch.tooNoisyHint" },
+  { value: "wrong_source", label: "jobs.watch.wrongSource", hint: "jobs.watch.wrongSourceHint" },
 ];
 
 // Rationale + provenance stamp the research policy left on the row.
@@ -48,21 +51,13 @@ function policyStamp(item: WatchlistItem): { entity?: string; score?: number; so
 
 const CADENCES: WatchlistCadence[] = ["real_time", "15min", "hourly", "daily", "weekly"];
 const SEVERITIES: WatchlistSeverity[] = ["low", "medium", "high", "urgent"];
-const SIGNAL_TYPES: { value: WatchlistSignalType; label: string; hint: string }[] = [
-  { value: "stock", label: "Stock", hint: "Yahoo Finance ticker — e.g. AAPL" },
-  { value: "rss", label: "RSS / Atom", hint: "Feed URL — e.g. competitor changelog" },
-  { value: "vendor_status", label: "Vendor status", hint: "Statuspage atom/RSS feed URL" },
-  { value: "edgar", label: "SEC EDGAR", hint: "Ticker or CIK — e.g. AAPL or 320193" },
-  {
-    value: "page_watch",
-    label: "Page change",
-    hint: "Public page URL to watch for content changes — e.g. a pricing or careers page",
-  },
-  {
-    value: "query",
-    label: "Web search (billed)",
-    hint: "Standing search query — e.g. Acme Corp layoffs OR restructuring OR funding",
-  },
+const SIGNAL_TYPES: { value: WatchlistSignalType; label: MessageKey; hint: MessageKey }[] = [
+  { value: "stock", label: "jobs.watch.typeStock", hint: "jobs.watch.typeStockHint" },
+  { value: "rss", label: "jobs.watch.typeRss", hint: "jobs.watch.typeRssHint" },
+  { value: "vendor_status", label: "jobs.watch.typeVendor", hint: "jobs.watch.typeVendorHint" },
+  { value: "edgar", label: "jobs.watch.typeEdgar", hint: "jobs.watch.typeEdgarHint" },
+  { value: "page_watch", label: "jobs.watch.typePage", hint: "jobs.watch.typePageHint" },
+  { value: "query", label: "jobs.watch.typeQuery", hint: "jobs.watch.typeQueryHint" },
 ];
 
 // query runs an LLM web search every poll, so it bills per tick — unlike the
@@ -71,9 +66,14 @@ const BILLED_SIGNAL_TYPES: ReadonlySet<string> = new Set(["query"]);
 
 // Pretty group-header label per signal type, derived from the add-modal's
 // SIGNAL_TYPES so the two never drift. Unknown types fall back to the raw value.
-const SIGNAL_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+const SIGNAL_TYPE_LABELS: Record<string, MessageKey> = Object.fromEntries(
   SIGNAL_TYPES.map((s) => [s.value, s.label]),
 );
+
+function signalTypeLabel(type: string): string {
+  const key = SIGNAL_TYPE_LABELS[type];
+  return key ? t(key) : type;
+}
 
 // Group display order: known types in SIGNAL_TYPES order; unknown types sort last.
 const SIGNAL_TYPE_ORDER: string[] = SIGNAL_TYPES.map((s) => s.value);
@@ -87,14 +87,14 @@ function humanizeSlug(slug: string): string {
 // Relative time. Kept inline so the watchlist page is self-contained;
 // Briefing.tsx has its own copy with the same formula.
 function formatRelTime(iso: string | null): string {
-  if (!iso) return "never";
+  if (!iso) return t("jobs.watch.never");
   try {
     const diff = new Date(iso).getTime() - Date.now();
     const abs = Math.abs(diff);
-    if (abs < 60_000) return "now";
-    if (abs < 3_600_000) return `${Math.round(abs / 60_000)}m`;
-    if (abs < 86_400_000) return `${Math.round(abs / 3_600_000)}h`;
-    return `${Math.round(abs / 86_400_000)}d`;
+    if (abs < 60_000) return t("jobs.watch.now");
+    if (abs < 3_600_000) return t("jobs.watch.minutes", { n: Math.round(abs / 60_000) });
+    if (abs < 86_400_000) return t("jobs.watch.hours", { n: Math.round(abs / 3_600_000) });
+    return t("jobs.watch.days", { n: Math.round(abs / 86_400_000) });
   } catch {
     return "—";
   }
@@ -107,11 +107,14 @@ function declineItems(
   busy: boolean,
   onPick: (slug: string, reason: WatchDeclineReason) => void,
 ): OverflowItem[] {
-  return DECLINE_REASONS.map((r) => ({
-    label: `${verb}: ${r.label.toLowerCase()} (${r.hint.charAt(0).toLowerCase()}${r.hint.slice(1)})`,
-    disabled: busy,
-    onSelect: () => onPick(slug, r.value),
-  }));
+  return DECLINE_REASONS.map((r) => {
+    const hint = t(r.hint);
+    return {
+      label: `${verb}: ${t(r.label).toLowerCase()} (${hint.charAt(0).toLowerCase()}${hint.slice(1)})`,
+      disabled: busy,
+      onSelect: () => onPick(slug, r.value),
+    };
+  });
 }
 
 function SuggestionCard({
@@ -136,36 +139,36 @@ function SuggestionCard({
             {humanizeSlug(item.slug)}
           </div>
           <div className="text-sm text-fg-muted truncate" title={item.target}>
-            {SIGNAL_TYPE_LABELS[item.signal_type] ?? item.signal_type} · {item.target}
+            {signalTypeLabel(item.signal_type)} · {item.target}
           </div>
         </div>
         <span className="flex-shrink-0 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-300">
-          Suggested
+          {t("jobs.watch.suggested")}
         </span>
       </div>
       {item.notes && <p className="text-[15px] text-fg mt-2">{item.notes}</p>}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted mt-2">
-        {stamp.entity && <span>about: {stamp.entity}</span>}
+        {stamp.entity && <span>{t("jobs.watch.about", { entity: stamp.entity })}</span>}
         {item.route_to_department && (
-          <span title="This department's head was asked to review it">
-            for: {departmentTitle ?? item.route_to_department}
+          <span title={t("jobs.watch.forTitle")}>
+            {t("jobs.watch.for", { department: departmentTitle ?? item.route_to_department })}
           </span>
         )}
-        <span>suggested {formatRelTime(item.created_at)} ago</span>
-        <span>seen in shadow: {item.fired_count} signal{item.fired_count === 1 ? "" : "s"}</span>
+        <span>{t("jobs.watch.suggestedAgo", { when: formatRelTime(item.created_at) })}</span>
+        <span>{tp("jobs.watch.seenInShadow", item.fired_count)}</span>
         {stamp.source_url && (
           <a href={stamp.source_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-            source ↗
+            {t("jobs.watch.source")}
           </a>
         )}
       </div>
       <div className="mt-auto flex items-center gap-2 pt-4">
         <Button variant="primary" disabled={busy} onClick={() => onApprove(item.slug)}>
-          {busy ? "…" : "Approve"}
+          {busy ? "…" : t("common.approve")}
         </Button>
         <OverflowMenu
-          label={`Decline ${humanizeSlug(item.slug)}`}
-          items={declineItems("Decline", item.slug, busy, onDecline)}
+          label={t("jobs.watch.declineAria", { name: humanizeSlug(item.slug) })}
+          items={declineItems(t("jobs.watch.decline"), item.slug, busy, onDecline)}
         />
       </div>
     </div>
@@ -202,13 +205,13 @@ function WatchCard({
         </div>
         <div className="text-sm text-fg-subtle mt-1.5">
           {item.last_fired_at
-            ? `Last fired ${formatRelTime(item.last_fired_at)} ago`
-            : "Hasn't fired yet"}
-          {isResearch && " · added by the Executive"}
+            ? t("jobs.watch.lastFiredAgo", { when: formatRelTime(item.last_fired_at) })
+            : t("jobs.watch.notFiredYet")}
+          {isResearch && t("jobs.watch.addedByExecutive")}
         </div>
       </Link>
       <div className="relative flex flex-shrink-0 items-center gap-1 pt-1">
-        <span className="sr-only">{item.enabled ? "On" : "Off"}</span>
+        <span className="sr-only">{item.enabled ? t("common.on") : t("common.off")}</span>
         {/* The label pads the small switch out to a 40px tap target. */}
         <label className="inline-flex h-10 w-12 cursor-pointer items-center justify-center">
           <Switch
@@ -219,11 +222,11 @@ function WatchCard({
           />
         </label>
         <OverflowMenu
-          label={`More for ${humanizeSlug(item.slug)}`}
+          label={t("jobs.watch.moreFor", { name: humanizeSlug(item.slug) })}
           items={[
-            { label: "Open details", href },
+            { label: t("jobs.watch.openDetails"), href },
             ...(isResearch && onStopWatching
-              ? declineItems("Stop watching", item.slug, toggleBusy, onStopWatching)
+              ? declineItems(t("jobs.watch.stopWatching"), item.slug, toggleBusy, onStopWatching)
               : []),
           ]}
         />
@@ -267,7 +270,8 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [saving, onClose]);
 
-  const targetHint = SIGNAL_TYPES.find((s) => s.value === signalType)?.hint ?? "";
+  const targetHintKey = SIGNAL_TYPES.find((s) => s.value === signalType)?.hint;
+  const targetHint = targetHintKey ? t(targetHintKey) : "";
   const slugSuggestion = suggestWatchSlug(signalType, target);
 
   async function submit() {
@@ -278,7 +282,7 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
       try {
         parsedTrigger = JSON.parse(trigger);
       } catch {
-        setErr("Trigger must be valid JSON, e.g. {\"abs_change_pct_gte\": 5}");
+        setErr(t("jobs.watch.triggerInvalid"));
         setMoreOpen(true);
         setSaving(false);
         return;
@@ -298,7 +302,7 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
       });
       onCreated(created);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Create failed";
+      const message = e instanceof Error ? e.message : t("jobs.watch.createFailed");
       setErr(message);
       if (/slug|trigger|cadence|severity|mode/i.test(message)) setMoreOpen(true);
     } finally {
@@ -314,14 +318,14 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Add monitor"
+        aria-label={t("jobs.watch.addMonitor")}
         className="bg-surface-elevated border border-line rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto p-5 sm:p-7 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold tracking-tight text-fg mb-5">Add monitor</h2>
+        <h2 className="text-xl font-bold tracking-tight text-fg mb-5">{t("jobs.watch.addMonitor")}</h2>
         <div className="space-y-4">
           <div>
-            <label htmlFor="watch-signal-type" className={labelCls}>Signal type</label>
+            <label htmlFor="watch-signal-type" className={labelCls}>{t("jobs.watch.signalType")}</label>
             <select
               id="watch-signal-type"
               ref={typeRef}
@@ -331,13 +335,13 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
             >
               {SIGNAL_TYPES.map((s) => (
                 <option key={s.value} value={s.value}>
-                  {s.label}
+                  {t(s.label)}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label htmlFor="watch-target" className={labelCls}>Target</label>
+            <label htmlFor="watch-target" className={labelCls}>{t("jobs.watch.target")}</label>
             <input
               id="watch-target"
               value={target}
@@ -348,19 +352,18 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
             <p className="text-sm text-fg-subtle mt-1.5">{targetHint}</p>
             {BILLED_SIGNAL_TYPES.has(signalType) && (
               <p className="text-sm text-amber-600 dark:text-amber-300 mt-1.5">
-                ⚠ Billed: runs an LLM web search on every poll. Prefer a slower
-                cadence (daily / weekly) and a tight query.
+                {t("jobs.watch.billedWarning")}
               </p>
             )}
           </div>
           <div>
-            <label htmlFor="watch-notes" className={labelCls}>Notes</label>
+            <label htmlFor="watch-notes" className={labelCls}>{t("jobs.watch.notes")}</label>
             <input
               id="watch-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               maxLength={500}
-              placeholder="Why watch this?"
+              placeholder={t("jobs.watch.notesPlaceholder")}
               className={fieldCls}
             />
           </div>
@@ -371,14 +374,14 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
             onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}
           >
             <summary className="flex min-h-10 cursor-pointer items-center text-[15px] font-medium text-fg">
-              More options
+              {t("jobs.watch.moreOptions")}
               <span className="ml-2 text-sm font-normal text-fg-subtle">
-                {slug.trim() || slugSuggestion || "name"} · {cadence} · {mode} · {severityFloor}→{severityCeiling}
+                {slug.trim() || slugSuggestion || t("jobs.watch.nameFallback")} · {valueLabel(cadence)} · {valueLabel(mode)} · {valueLabel(severityFloor)}→{valueLabel(severityCeiling)}
               </span>
             </summary>
             <div className="space-y-4 py-3">
               <div>
-                <label htmlFor="watch-slug" className={labelCls}>Slug (kebab-case)</label>
+                <label htmlFor="watch-slug" className={labelCls}>{t("jobs.watch.slugLabel")}</label>
                 <input
                   id="watch-slug"
                   value={slug}
@@ -387,11 +390,13 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
                   className={fieldCls}
                 />
                 <p className="text-sm text-fg-subtle mt-1.5">
-                  Left empty, it is named {slugSuggestion ? <code>{slugSuggestion}</code> : "from the type and target"}.
+                  {tRich("jobs.watch.slugHint", {
+                    name: slugSuggestion ? <code>{slugSuggestion}</code> : t("jobs.watch.slugHintFallback"),
+                  })}
                 </p>
               </div>
               <div>
-                <label htmlFor="watch-trigger" className={labelCls}>Trigger (JSON, optional)</label>
+                <label htmlFor="watch-trigger" className={labelCls}>{t("jobs.watch.triggerLabel")}</label>
                 <textarea
                   id="watch-trigger"
                   value={trigger}
@@ -413,7 +418,7 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="watch-cadence" className={labelCls}>Cadence</label>
+                  <label htmlFor="watch-cadence" className={labelCls}>{t("jobs.builder.cadence")}</label>
                   <select
                     id="watch-cadence"
                     value={cadence}
@@ -422,25 +427,25 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
                   >
                     {CADENCES.map((c) => (
                       <option key={c} value={c}>
-                        {c}
+                        {valueLabel(c)}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="watch-mode" className={labelCls}>Mode</label>
+                  <label htmlFor="watch-mode" className={labelCls}>{t("jobs.watch.mode")}</label>
                   <select
                     id="watch-mode"
                     value={mode}
                     onChange={(e) => setMode(e.target.value as "active" | "dry_run")}
                     className={fieldCls}
                   >
-                    <option value="active">active</option>
-                    <option value="dry_run">dry_run</option>
+                    <option value="active">{valueLabel("active")}</option>
+                    <option value="dry_run">{valueLabel("dry_run")}</option>
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="watch-floor" className={labelCls}>Severity floor</label>
+                  <label htmlFor="watch-floor" className={labelCls}>{t("jobs.watch.severityFloor")}</label>
                   <select
                     id="watch-floor"
                     value={severityFloor}
@@ -449,13 +454,13 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
                   >
                     {SEVERITIES.map((s) => (
                       <option key={s} value={s}>
-                        {s}
+                        {valueLabel(s)}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="watch-ceiling" className={labelCls}>Severity ceiling</label>
+                  <label htmlFor="watch-ceiling" className={labelCls}>{t("jobs.watch.severityCeiling")}</label>
                   <select
                     id="watch-ceiling"
                     value={severityCeiling}
@@ -464,7 +469,7 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
                   >
                     {SEVERITIES.map((s) => (
                       <option key={s} value={s}>
-                        {s}
+                        {valueLabel(s)}
                       </option>
                     ))}
                   </select>
@@ -482,14 +487,14 @@ function AddWatchModal({ onCreated, onClose }: AddModalProps) {
 
         <div className="flex justify-end gap-2 mt-5">
           <Button variant="ghost" disabled={saving} onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             variant="primary"
             disabled={saving || !(slug.trim() || slugSuggestion) || !target.trim()}
             onClick={submit}
           >
-            {saving ? "Adding…" : "Add monitor"}
+            {saving ? t("jobs.watch.adding") : t("jobs.watch.addMonitor")}
           </Button>
         </div>
       </div>
@@ -533,7 +538,7 @@ export default function WatchlistPage() {
     });
     return keys.map((k) => ({
       key: k,
-      label: SIGNAL_TYPE_LABELS[k] ?? k,
+      label: signalTypeLabel(k),
       items: map.get(k)!,
     }));
   }, [items]);
@@ -542,7 +547,7 @@ export default function WatchlistPage() {
     setLoading(true);
     listWatchlist()
       .then(setItems)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+      .catch((e) => setError(e instanceof Error ? e.message : t("jobs.watch.loadFailed")))
       .finally(() => setLoading(false));
   }
 
@@ -570,7 +575,7 @@ export default function WatchlistPage() {
       const updated = await approveWatchSuggestion(slug);
       setItems((prev) => prev.map((it) => (it.slug === slug ? updated : it)));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Approve failed");
+      setError(e instanceof Error ? e.message : t("jobs.watch.approveFailed"));
     } finally {
       markBusy(slug, false);
     }
@@ -587,7 +592,7 @@ export default function WatchlistPage() {
         refresh();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Decline failed");
+      setError(e instanceof Error ? e.message : t("jobs.watch.declineFailed"));
     } finally {
       markBusy(slug, false);
     }
@@ -606,7 +611,7 @@ export default function WatchlistPage() {
         setItems((prev) => prev.filter((it) => it.slug !== slug));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Remove failed");
+      setError(e instanceof Error ? e.message : t("jobs.watch.removeFailed"));
     } finally {
       markBusy(slug, false);
     }
@@ -627,7 +632,7 @@ export default function WatchlistPage() {
       setItems((prev) =>
         prev.map((it) => (it.slug === slug ? { ...it, enabled: !enabled } : it)),
       );
-      setError(e instanceof Error ? e.message : "Toggle failed");
+      setError(e instanceof Error ? e.message : t("jobs.watch.toggleFailed"));
     } finally {
       setBusySlugs((prev) => {
         const next = new Set(prev);
@@ -653,19 +658,18 @@ export default function WatchlistPage() {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
             <div className="max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">
-                What the Executive watches
+                {t("jobs.watch.title")}
               </h1>
               <p className="text-[15px] text-fg-muted mt-2">
-                External conditions the Executive is monitoring. Signals that survive
-                severity + triage become proposals in your briefing.
+                {t("jobs.watch.intro")}
               </p>
             </div>
             <Button variant="primary" className="self-start sm:self-auto flex-shrink-0" onClick={() => setShowAdd(true)}>
-              + Add monitor
+              {t("jobs.watch.addMonitorButton")}
             </Button>
           </div>
 
-          {loading && <p className="text-fg-muted text-[15px]">Loading…</p>}
+          {loading && <p className="text-fg-muted text-[15px]">{t("common.loading")}</p>}
           {error && (
             <div className="px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[15px] mb-4">
               {error}
@@ -673,15 +677,14 @@ export default function WatchlistPage() {
           )}
           {!loading && !error && items.length === 0 && (
             <div className="rounded-2xl border border-dashed border-line p-8 text-center">
-              <p className="text-fg-muted text-[15px] mb-3">Nothing being watched yet.</p>
+              <p className="text-fg-muted text-[15px] mb-3">{t("jobs.watch.empty")}</p>
               <p className="text-sm text-fg-subtle mb-4">
-                Ask the Executive in chat:{" "}
-                <span className="italic">
-                  Watch Apple stock, alert me on 5% moves.
-                </span>
+                {tRich("jobs.watch.emptyHint", {
+                  example: <span className="italic">{t("jobs.watch.emptyHintExample")}</span>,
+                })}
               </p>
               <Button variant="primary" onClick={() => setShowAdd(true)}>
-                Add a monitor →
+                {t("jobs.watch.addMonitorArrow")}
               </Button>
             </div>
           )}
@@ -689,15 +692,13 @@ export default function WatchlistPage() {
           {suggestions.length > 0 && (
             <div className="mb-10">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1">
-                <h2 className="text-xl font-bold tracking-tight text-fg">Suggested by the Executive</h2>
+                <h2 className="text-xl font-bold tracking-tight text-fg">{t("jobs.watch.suggestedTitle")}</h2>
                 <span className="text-[15px] text-fg-muted">
-                  {suggestions.length} waiting for you
+                  {t("jobs.watch.waitingForYou", { n: suggestions.length })}
                 </span>
               </div>
               <p className="text-sm text-fg-subtle mb-4 max-w-3xl">
-                Sources the research council thought worth monitoring but couldn&apos;t tie
-                firmly enough to your company data to add on its own. They poll in
-                shadow mode and never alert until you approve. Declines are remembered.
+                {t("jobs.watch.suggestedIntro")}
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {suggestions.map((item) => (
@@ -737,8 +738,7 @@ export default function WatchlistPage() {
                       {group.label}
                     </span>
                     <span className="text-sm text-fg-muted">
-                      {group.items.length}{" "}
-                      {group.items.length === 1 ? "monitor" : "monitors"}
+                      {tp("jobs.watch.monitorCount", group.items.length)}
                     </span>
                   </button>
                   {!isCollapsed && (

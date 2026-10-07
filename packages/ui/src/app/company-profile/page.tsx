@@ -17,6 +17,8 @@ import { profileWording } from "@/components/shell/navConfig";
 import { buttonClass } from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { t } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import {
   getCompanyProfile,
   updateCompanyProfile,
@@ -141,7 +143,7 @@ export default function CompanyProfilePage() {
             <div className="max-w-3xl bg-accent/10 border border-accent/20 rounded-2xl px-5 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <p className="text-[15px] text-fg">{copy.missing}</p>
               <Link href="/onboard" className={buttonClass("primary", "md", "flex-shrink-0")}>
-                Complete setup
+                {t("misc.companyProfile.completeSetup")}
               </Link>
             </div>
           )}
@@ -154,8 +156,8 @@ export default function CompanyProfilePage() {
                   <p className="text-[15px] text-fg-muted mt-1.5">{[profile.industry, profile.stage].filter(Boolean).join(" · ")}</p>
                 </div>
                 <OverflowMenu
-                  label="More profile actions"
-                  items={[{ label: "Re-run setup", href: "/onboard" }]}
+                  label={t("misc.companyProfile.moreActions")}
+                  items={[{ label: t("misc.companyProfile.rerunSetup"), href: "/onboard" }]}
                 />
               </div>
 
@@ -165,11 +167,14 @@ export default function CompanyProfilePage() {
                   {copy.roleNote && (
                     <>
                       {" "}
-                      {copy.roleNote}{" "}
-                      <Link href="/settings/workspace" className="whitespace-nowrap text-accent hover:underline">
-                        Settings → Workspace
-                      </Link>
-                      .
+                      {tRich("misc.companyProfile.roleNoteLine", {
+                        note: copy.roleNote,
+                        link: (
+                          <Link href="/settings/workspace" className="whitespace-nowrap text-accent hover:underline">
+                            {t("misc.companyProfile.settingsWorkspace")}
+                          </Link>
+                        ),
+                      })}
                     </>
                   )}
                 </p>
