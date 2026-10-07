@@ -269,3 +269,23 @@ def test_rollback_restores_voice_persona_slug(tmp_db: Path) -> None:
     ov = get_override("executive", db_path=tmp_db)
     assert ov is not None
     assert ov.voice_persona_slug == "default"
+
+
+def test_picker_copy_follows_oe_language_but_the_prompt_body_does_not(
+    tmp_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    english = get_persona("default", db_path=tmp_db)
+    assert english is not None and english.display_name == "Direct"
+
+    monkeypatch.setenv("OE_LANGUAGE", "KOREAN")
+    meta = {m.slug: m for m in list_personas(db_path=tmp_db)}
+    assert meta["default"].display_name == "직설형"
+    assert meta["supportive"].description and "Explains" not in meta["supportive"].description
+    korean = get_persona("default", db_path=tmp_db)
+    assert korean is not None
+    assert korean.display_name == "직설형" and "엔지니어" in korean.sample
+    assert korean.body == english.body
+    # Voices without a translation keep their own name.
+    assert meta["tim-cook"].display_name == "Tim Cook (Apple)"
+    # The translations never reach an API response.
+    assert "translations" not in korean.model_dump()

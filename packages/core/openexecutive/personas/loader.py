@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from openexecutive.memory.episodic import DB_PATH, _get_conn
 
@@ -58,6 +58,18 @@ class Persona(BaseModel):
     is_legacy: bool = False
     description: str = ""
     sample: str = ""
+    # Picker copy per OE_LANGUAGE value, from the frontmatter's `korean:`
+    # block. Never sent to the model or the API; see _picker_copy.
+    translations: dict[str, dict[str, str]] = Field(default_factory=dict, exclude=True)
+
+
+def _picker_copy(p: Persona) -> dict[str, str]:
+    """display_name / description / sample in OE_LANGUAGE where the built-in
+    has a translation. The body (the prompt) always stays as written."""
+    from openexecutive.config import get_settings
+
+    base = {"display_name": p.display_name, "description": p.description, "sample": p.sample}
+    return {**base, **p.translations.get(get_settings().oe_language, {})}
 
 
 def _parse_md(path: Path) -> dict[str, Any]:
@@ -87,6 +99,11 @@ def _load_builtins() -> dict[str, Persona]:
             is_legacy=bool(data.get("legacy", False)),
             description=str(data.get("description", "")).strip(),
             sample=str(data.get("sample", "")).strip(),
+            translations={
+                "KOREAN": {k: str(v).strip() for k, v in (data.get("korean") or {}).items()}
+            }
+            if data.get("korean")
+            else {},
         )
     return out
 
@@ -134,14 +151,15 @@ def list_personas(db_path: Path | None = None) -> list[PersonaMeta]:
 
     for slug, builtin in builtins.items():
         seen.add(slug)
+        copy = _picker_copy(builtin)
         result.append(PersonaMeta(
             slug=slug,
-            display_name=db_rows[slug]["display_name"] if slug in db_rows else builtin.display_name,
+            display_name=db_rows[slug]["display_name"] if slug in db_rows else copy["display_name"],
             is_builtin=True,
             is_customized=slug in db_rows,
             is_legacy=builtin.is_legacy,
-            description=builtin.description,
-            sample=builtin.sample,
+            description=copy["description"],
+            sample=copy["sample"],
         ))
 
     for slug, row in db_rows.items():
@@ -175,12 +193,12 @@ def get_persona(slug: str, db_path: Path | None = None) -> Persona | None:
             is_customized=True,
             source_notes=builtin.source_notes if builtin else "",
             is_legacy=builtin.is_legacy if builtin else False,
-            description=builtin.description if builtin else "",
-            sample=builtin.sample if builtin else "",
+            description=_picker_copy(builtin)["description"] if builtin else "",
+            sample=_picker_copy(builtin)["sample"] if builtin else "",
         )
 
     if slug in builtins:
-        return builtins[slug]
+        return builtins[slug].model_copy(update=_picker_copy(builtins[slug]))
 
     return None
 
