@@ -201,27 +201,29 @@ export default function TokenUsagePage() {
           {/* By source */}
           {data?.scripts && data.scripts.scripts > 0 ? (
             <section className="mt-8">
-              <h2 className="text-sm font-medium text-fg mb-2">Done in one go</h2>
+              <h2 className="text-sm font-medium text-fg mb-2">{t("audit.usage.scripts.title")}</h2>
               <p className="text-xs text-fg-muted mb-3">
-                When work repeats over many items, the Executive builds a tool for the job and runs it
-                once, instead of spending a model turn on each item.
+                {t("audit.usage.scripts.hint")}
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCard
-                  label="Jobs done in one go"
+                  label={t("audit.usage.scripts.jobs")}
                   value={fmtInt(data.scripts.scripts)}
-                  hint={`${fmtInt(data.scripts.ok)} worked · ${fmtInt(data.scripts.in_workflows)} in workflows`}
+                  hint={t("audit.usage.scripts.jobsHint", {
+                    ok: fmtInt(data.scripts.ok),
+                    inWorkflows: fmtInt(data.scripts.in_workflows),
+                  })}
                 />
-                <StatCard label="Actions taken" value={fmtInt(data.scripts.calls)} />
+                <StatCard label={t("audit.usage.scripts.actions")} value={fmtInt(data.scripts.calls)} />
                 <StatCard
-                  label="Model turns avoided"
-                  value={`up to ${fmtInt(data.scripts.turns_avoided)}`}
-                  hint="actions that needed no model turn of their own"
+                  label={t("audit.usage.scripts.turnsAvoided")}
+                  value={t("audit.usage.scripts.turnsAvoidedValue", { n: fmtInt(data.scripts.turns_avoided) })}
+                  hint={t("audit.usage.scripts.turnsAvoidedHint")}
                 />
                 <StatCard
-                  label="Time taken"
-                  value={`${(data.scripts.duration_ms / 1000).toFixed(1)}s`}
-                  hint="mostly the tools' own time"
+                  label={t("audit.usage.scripts.time")}
+                  value={t("audit.usage.seconds", { s: (data.scripts.duration_ms / 1000).toFixed(1) })}
+                  hint={t("audit.usage.scripts.timeHint")}
                 />
               </div>
             </section>
@@ -229,31 +231,38 @@ export default function TokenUsagePage() {
 
           {data?.python_jobs && data.python_jobs.jobs > 0 ? (
             <section className="mt-8">
-              <h2 className="text-sm font-medium text-fg mb-2">Work on files</h2>
+              <h2 className="text-sm font-medium text-fg mb-2">{t("audit.usage.python.title")}</h2>
               <p className="text-xs text-fg-muted mb-3">
-                Jobs the Executive ran with Python on files: splitting PDFs, building spreadsheets,
-                documents and charts. Tokens and charges are for the whole turns that ran one.
+                {t("audit.usage.python.hint")}
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCard
-                  label="File jobs"
+                  label={t("audit.usage.python.jobs")}
                   value={fmtInt(data.python_jobs.jobs)}
-                  hint={`${fmtInt(data.python_jobs.ok)} worked · ${fmtInt(data.python_jobs.saved_runs)} with a custom tool`}
+                  hint={t("audit.usage.python.jobsHint", {
+                    ok: fmtInt(data.python_jobs.ok),
+                    saved: fmtInt(data.python_jobs.saved_runs),
+                  })}
                 />
                 <StatCard
-                  label="Charged for those turns"
+                  label={t("audit.usage.python.cost")}
                   value={fmtCost(data.python_jobs.cost_usd)}
-                  hint={`${fmtInt(data.python_jobs.output_tokens)} output tokens over ${fmtInt(data.python_jobs.turns)} turns`}
+                  hint={t("audit.usage.python.costHint", {
+                    output: fmtInt(data.python_jobs.output_tokens),
+                    turns: fmtInt(data.python_jobs.turns),
+                  })}
                 />
                 <StatCard
-                  label="CPU time"
-                  value={`${(data.python_jobs.cpu_ms / 1000).toFixed(1)}s`}
-                  hint={`${(data.python_jobs.duration_ms / 1000).toFixed(1)}s from start to finish`}
+                  label={t("audit.usage.python.cpu")}
+                  value={t("audit.usage.seconds", { s: (data.python_jobs.cpu_ms / 1000).toFixed(1) })}
+                  hint={t("audit.usage.python.cpuHint", {
+                    s: (data.python_jobs.duration_ms / 1000).toFixed(1),
+                  })}
                 />
                 <StatCard
-                  label="Largest job"
+                  label={t("audit.usage.python.largest")}
                   value={`${fmtInt(data.python_jobs.peak_mb_max)} MB`}
-                  hint="peak memory of one job"
+                  hint={t("audit.usage.python.largestHint")}
                 />
               </div>
             </section>

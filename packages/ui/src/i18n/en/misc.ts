@@ -302,6 +302,13 @@ const en = {
   "misc.guide.section.integrations.sub": "Reach the Executive where you already work — Slack, Discord, Telegram, email, Google Chat, MCP.",
   "misc.guide.section.settings.title": "Settings & Advanced",
   "misc.guide.section.settings.sub": "Your Executive, workspace, Act as me, and the Advanced tools outside the day-to-day nav — including this guide.",
+  "misc.debug.scriptDid.one": "Did {n} action in one go",
+  "misc.debug.scriptDid.other": "Did {n} actions in one go",
+  "misc.debug.scriptTried.one": "Tried {n} action in one go",
+  "misc.debug.scriptTried.other": "Tried {n} actions in one go",
+  "misc.debug.seconds": "{s}s",
+  "misc.debug.keptAs": "kept as {name}",
+  "misc.debug.reused": "reused {name}",
 };
 
 export default en;

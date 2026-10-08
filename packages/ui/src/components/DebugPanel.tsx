@@ -136,10 +136,17 @@ function summarize(event: DebugEvent): string {
     case "script_run": {
       const calls = (d.calls as { tool: string }[]) ?? [];
       const made = typeof d.calls_made === "number" ? d.calls_made : calls.length;
-      const n = typeof d.duration_ms === "number" ? `${(d.duration_ms / 1000).toFixed(1)}s` : "";
+      const n =
+        typeof d.duration_ms === "number"
+          ? t("misc.debug.seconds", { s: (d.duration_ms / 1000).toFixed(1) })
+          : "";
       const tools = Array.from(new Set(calls.map((c) => c.tool))).join(", ");
-      const kept = d.kept_as ? ` · kept as ${d.kept_as}` : d.saved_tool ? ` · reused ${d.saved_tool}` : "";
-      return `${d.ok ? "Did" : "Tried"} ${made} action${made !== 1 ? "s" : ""} in one go${tools ? ` · ${tools}` : ""}${n ? ` · ${n}` : ""}${kept}`;
+      const kept = d.kept_as
+        ? ` · ${t("misc.debug.keptAs", { name: String(d.kept_as) })}`
+        : d.saved_tool
+          ? ` · ${t("misc.debug.reused", { name: String(d.saved_tool) })}`
+          : "";
+      return `${tp(d.ok ? "misc.debug.scriptDid" : "misc.debug.scriptTried", made)}${tools ? ` · ${tools}` : ""}${n ? ` · ${n}` : ""}${kept}`;
     }
     case "synthesis_start":
       return tp("misc.debug.synthesizing", d.specialist_count as number);

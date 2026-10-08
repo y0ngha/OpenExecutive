@@ -2410,7 +2410,7 @@ export function startWorkflowDesigner(message: string): Promise<WorkflowDesigner
 
 /** Open the designer on a saved workflow, to change it by conversation. */
 export function editWorkflowWithDesigner(name: string): Promise<WorkflowDesignerTurn> {
-  return _designerPost("edit", { name }, "Could not open that workflow");
+  return _designerPost("edit", { name }, t("lib.api.openWorkflowFailed"));
 }
 
 export function sendWorkflowDesignerMessage(
@@ -5063,13 +5063,13 @@ export async function listSavedTools(
 ): Promise<{ enabled: boolean; tools: SavedTool[] } | null> {
   const res = await fetch(`${API_BASE}/saved-tools`, { signal });
   if (res.status === 403) return null;
-  if (!res.ok) throw await savedToolError(res, "Couldn't load the custom tools.");
+  if (!res.ok) throw await savedToolError(res, t("lib.api.loadCustomToolsFailed"));
   return res.json();
 }
 
 export async function getSavedTool(name: string, signal?: AbortSignal): Promise<SavedToolDetail> {
   const res = await fetch(`${API_BASE}/saved-tools/${encodeURIComponent(name)}`, { signal });
-  if (!res.ok) throw await savedToolError(res, "Couldn't load that tool.");
+  if (!res.ok) throw await savedToolError(res, t("lib.api.loadToolFailed"));
   return res.json();
 }
 
@@ -5093,7 +5093,7 @@ async function updateSavedTool(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),
   });
-  if (!res.ok) throw await savedToolError(res, "Couldn't change that tool.");
+  if (!res.ok) throw await savedToolError(res, t("lib.api.changeToolFailed"));
   return res.json();
 }
 
@@ -5103,6 +5103,6 @@ export async function rollbackSavedTool(name: string, version: number): Promise<
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ version }),
   });
-  if (!res.ok) throw await savedToolError(res, "Couldn't switch the version.");
+  if (!res.ok) throw await savedToolError(res, t("lib.api.switchVersionFailed"));
   return res.json();
 }

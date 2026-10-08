@@ -286,6 +286,7 @@ const ko: Record<keyof typeof en, string> = {
   "chat.deptDraft.authority.proposeOnly": "제안 후 승인",
   "chat.deptDraft.authority.escalate": "사람에게 넘김",
   "chat.deptDraft.authority.autoExecute": "스스로 실행",
+  "chat.message.image": "이미지",
 };
 
 export default ko;

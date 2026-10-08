@@ -2,7 +2,7 @@
 // changes compared with the saved version. Pure (type imports and the
 // relative i18n import only), so the node test runner can load it.
 import type { DynamicStep, DynamicWorkflowDef } from "./api";
-import { t, type MessageKey } from "../i18n/index.ts";
+import { t, tp, type MessageKey } from "../i18n/index.ts";
 
 const DAYS: Record<string, MessageKey> = {
   mon: "jobs.day.mon",
@@ -38,23 +38,26 @@ export interface ChangeLabels {
   tool: (name: string) => string;
 }
 
-const ON_TIMEOUT: Record<string, string> = {
-  escalate: "flags it for you",
-  auto_proceed: "carries on as if approved",
-  fail: "stops the run",
+const ON_TIMEOUT: Record<string, MessageKey> = {
+  escalate: "jobs.changes.onTimeout.escalate",
+  auto_proceed: "jobs.changes.onTimeout.auto_proceed",
+  fail: "jobs.changes.onTimeout.fail",
 };
 
 function list(items: string[]): string {
   if (items.length <= 1) return items.join("");
-  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+  return t("jobs.changes.listAnd", {
+    items: items.slice(0, -1).join(", "),
+    last: items[items.length - 1],
+  });
 }
 
 function stepWho(step: DynamicStep, labels: ChangeLabels): string {
   if (step.kind === "specialist") return labels.specialist(step.specialist);
-  if (step.kind === "approval_gate") return `sign-off from ${labels.person(step.person_id)}`;
-  if (step.kind === "action")
-    return `uses ${step.tools.length} ${step.tools.length === 1 ? "tool" : "tools"}`;
-  return "final write-up";
+  if (step.kind === "approval_gate")
+    return t("jobs.changes.who.signOff", { name: labels.person(step.person_id) });
+  if (step.kind === "action") return tp("jobs.changes.who.uses", step.tools.length);
+  return t("jobs.changes.who.final");
 }
 
 function stepText(step: DynamicStep): string {
@@ -65,18 +68,24 @@ function stepText(step: DynamicStep): string {
 
 // What a sign-off asks for. Anything but approve/reject is a question, not
 // permission: the run carries on whatever the answer, so say so.
-const REPLY_SHAPE: Record<string, string> = {
-  approve_reject: "an approve/reject decision (the run stops unless approved)",
-  free_text: "a written reply (the run continues whatever the answer)",
-  numeric: "a number (the run continues whatever the answer)",
-  document: "a document (the run continues whatever the answer)",
+const REPLY_SHAPE: Record<string, MessageKey> = {
+  approve_reject: "jobs.changes.reply.approve_reject",
+  free_text: "jobs.changes.reply.free_text",
+  numeric: "jobs.changes.reply.numeric",
+  document: "jobs.changes.reply.document",
 };
-const REPLY_SHAPE_SHORT: Record<string, string> = {
-  approve_reject: "an approve/reject decision",
-  free_text: "a written reply",
-  numeric: "a number",
-  document: "a document",
+const REPLY_SHAPE_SHORT: Record<string, MessageKey> = {
+  approve_reject: "jobs.changes.replyShort.approve_reject",
+  free_text: "jobs.changes.replyShort.free_text",
+  numeric: "jobs.changes.replyShort.numeric",
+  document: "jobs.changes.replyShort.document",
 };
+
+/** Text for `shape` from `table`, or the raw shape when it isn't known. */
+function shapeText(table: Record<string, MessageKey>, shape: string): string {
+  const key = table[shape];
+  return key ? t(key) : shape;
+}
 
 // Fields each step kind's sentences cover, and the defaults the server fills
 // in, so a field the model left out reads the same as its default. Any other
@@ -117,47 +126,72 @@ function stepChanges(a: DynamicStep, b: DynamicStep, labels: ChangeLabels): stri
   const name = `“${b.title}”`;
   const defaults = { ...STEP_DEFAULTS.common, ...STEP_DEFAULTS[b.kind] };
   const get = (s: DynamicStep, k: string) => field(s, k, defaults);
-  if (a.title !== b.title) out.push(`Renamed step “${a.title}” to ${name}`);
+  if (a.title !== b.title) out.push(t("jobs.changes.renamedStep", { old: a.title, name }));
   if (a.kind === "specialist" && b.kind === "specialist" && a.specialist !== b.specialist)
-    out.push(`${name} is now handled by ${labels.specialist(b.specialist)} instead of ${labels.specialist(a.specialist)}`);
+    out.push(
+      t("jobs.changes.handledBy", {
+        name,
+        new: labels.specialist(b.specialist),
+        old: labels.specialist(a.specialist),
+      })
+    );
   if (a.kind === "synthesis" && b.kind === "synthesis" && get(a, "specialist") !== get(b, "specialist"))
-    out.push(`${name} is now written by ${labels.specialist(b.specialist)} instead of ${labels.specialist(a.specialist)}`);
+    out.push(
+      t("jobs.changes.writtenBy", {
+        name,
+        new: labels.specialist(b.specialist),
+        old: labels.specialist(a.specialist),
+      })
+    );
   if (a.kind === "approval_gate" && b.kind === "approval_gate") {
     if (a.person_id !== b.person_id)
-      out.push(`${name}: sign-off from ${labels.person(b.person_id)} instead of ${labels.person(a.person_id)}`);
+      out.push(
+        t("jobs.changes.signOffBy", {
+          name,
+          new: labels.person(b.person_id),
+          old: labels.person(a.person_id),
+        })
+      );
     const sa = String(get(a, "expected_reply_shape"));
     const sb = String(get(b, "expected_reply_shape"));
     if (sa !== sb)
-      out.push(`${name} now asks for ${REPLY_SHAPE[sb] ?? sb}, not ${REPLY_SHAPE_SHORT[sa] ?? sa}`);
+      out.push(
+        t("jobs.changes.asksFor", {
+          name,
+          new: shapeText(REPLY_SHAPE, sb),
+          old: shapeText(REPLY_SHAPE_SHORT, sa),
+        })
+      );
     const ha = get(a, "timeout_hours");
     const hb = get(b, "timeout_hours");
-    if (ha !== hb) out.push(`${name}: waits up to ${hb} hours for an answer (was ${ha})`);
+    if (ha !== hb) out.push(t("jobs.changes.timeout", { name, new: String(hb), old: String(ha) }));
     const tb = String(get(b, "on_timeout"));
-    if (get(a, "on_timeout") !== tb) out.push(`${name}: if nobody answers, it now ${ON_TIMEOUT[tb] ?? tb}`);
+    if (get(a, "on_timeout") !== tb)
+      out.push(t("jobs.changes.onTimeout", { name, action: shapeText(ON_TIMEOUT, tb) }));
   }
   if (a.kind === "action" && b.kind === "action") {
-    const added = b.tools.filter((t) => !a.tools.includes(t));
-    const removed = a.tools.filter((t) => !b.tools.includes(t));
-    if (added.length) out.push(`${name} can now use ${list(added.map(labels.tool))}`);
-    if (removed.length) out.push(`${name} no longer uses ${list(removed.map(labels.tool))}`);
+    const added = b.tools.filter((tool) => !a.tools.includes(tool));
+    const removed = a.tools.filter((tool) => !b.tools.includes(tool));
+    if (added.length) out.push(t("jobs.changes.canUse", { name, tools: list(added.map(labels.tool)) }));
+    if (removed.length)
+      out.push(t("jobs.changes.noLongerUses", { name, tools: list(removed.map(labels.tool)) }));
     const ma = get(a, "max_tool_calls");
     const mb = get(b, "max_tool_calls");
-    if (ma !== mb) out.push(`${name} may now use tools up to ${mb} times a run (was ${ma})`);
+    if (ma !== mb) out.push(t("jobs.changes.maxCalls", { name, new: String(mb), old: String(ma) }));
   }
   if (a.kind === "specialist" && b.kind === "specialist") {
     if (get(a, "playbook") !== get(b, "playbook"))
       out.push(
         b.playbook
-          ? `${name} now follows the “${b.playbook}” playbook`
-          : `${name} no longer follows a playbook`
+          ? t("jobs.changes.followsPlaybook", { name, playbook: b.playbook })
+          : t("jobs.changes.noPlaybook", { name })
       );
-    if (get(a, "rag_query") !== get(b, "rag_query"))
-      out.push(`${name} looks up different things in your documents`);
+    if (get(a, "rag_query") !== get(b, "rag_query")) out.push(t("jobs.changes.ragQuery", { name }));
   }
-  if (stepText(a).trim() !== stepText(b).trim()) out.push(`New instructions for ${name}`);
+  if (stepText(a).trim() !== stepText(b).trim()) out.push(t("jobs.changes.newInstructions", { name }));
   if (String(get(a, "description")).trim() !== String(get(b, "description")).trim())
-    out.push(`Updated the description of ${name}`);
-  if (otherFieldsDiffer(a, b, Object.keys(defaults))) out.push(`Changed other settings of ${name}`);
+    out.push(t("jobs.changes.stepDescription", { name }));
+  if (otherFieldsDiffer(a, b, Object.keys(defaults))) out.push(t("jobs.changes.stepOther", { name }));
   return out;
 }
 
@@ -170,7 +204,7 @@ const TOP_LEVEL_FIELDS = [
 /** Plain words for what a sign-off asks for (shown on the review card). */
 export function replyShapeLabel(shape: string | undefined): string | null {
   if (!shape || shape === "approve_reject") return null;
-  return REPLY_SHAPE_SHORT[shape] ?? shape;
+  return shapeText(REPLY_SHAPE_SHORT, shape);
 }
 
 /**
@@ -184,12 +218,19 @@ export function describeChanges(
 ): string[] {
   const out: string[] = [];
 
-  if (before.title !== after.title) out.push(`Renamed “${before.title}” to “${after.title}”`);
+  if (before.title !== after.title)
+    out.push(t("jobs.changes.renamed", { old: before.title, new: after.title }));
   if ((before.description ?? "").trim() !== (after.description ?? "").trim())
-    out.push("Updated the description");
-  if (before.section !== after.section) out.push(`Moved from ${before.section} to ${after.section}`);
+    out.push(t("jobs.changes.description"));
+  if (before.section !== after.section)
+    out.push(t("jobs.changes.moved", { old: before.section, new: after.section }));
   if (before.estimated_minutes !== after.estimated_minutes)
-    out.push(`Expected to take about ${after.estimated_minutes} min (was ${before.estimated_minutes})`);
+    out.push(
+      t("jobs.changes.minutes", {
+        new: String(after.estimated_minutes),
+        old: String(before.estimated_minutes),
+      })
+    );
 
   // Schedule.
   const ca = before.cadence || null;
@@ -197,12 +238,19 @@ export function describeChanges(
   if (ca !== cb) {
     out.push(
       cb
-        ? `Schedule: ${describeCadence(cb)}, sent to ${labels.person(after.cadence_person_id)} (was: ${describeCadence(ca)})`
-        : `Schedule: only when you run it (was: ${describeCadence(ca)})`
+        ? t("jobs.changes.schedule", {
+            new: describeCadence(cb),
+            person: labels.person(after.cadence_person_id),
+            old: describeCadence(ca),
+          })
+        : t("jobs.changes.scheduleOff", { old: describeCadence(ca) })
     );
   } else if (cb && before.cadence_person_id !== after.cadence_person_id) {
     out.push(
-      `Scheduled results go to ${labels.person(after.cadence_person_id)} instead of ${labels.person(before.cadence_person_id)}`
+      t("jobs.changes.recipient", {
+        new: labels.person(after.cadence_person_id),
+        old: labels.person(before.cadence_person_id),
+      })
     );
   }
 
@@ -212,21 +260,30 @@ export function describeChanges(
   for (const f of after.input_fields) {
     const old = fieldsBefore.get(f.name);
     if (!old) {
-      out.push(`Asks for “${f.label}” on each run${f.required === false ? " (optional)" : ""}`);
+      out.push(
+        t(f.required === false ? "jobs.changes.asksInputOptional" : "jobs.changes.asksInput", {
+          label: f.label,
+        })
+      );
       continue;
     }
-    if (old.label !== f.label) out.push(`Input “${old.label}” is now called “${f.label}”`);
+    if (old.label !== f.label)
+      out.push(t("jobs.changes.inputRenamed", { old: old.label, new: f.label }));
     if ((old.required !== false) !== (f.required !== false))
-      out.push(`“${f.label}” is now ${f.required === false ? "optional" : "required"}`);
+      out.push(
+        t(f.required === false ? "jobs.changes.nowOptional" : "jobs.changes.nowRequired", {
+          label: f.label,
+        })
+      );
     if (
       (old.description ?? "").trim() !== (f.description ?? "").trim() ||
       !!old.multiline !== !!f.multiline ||
       otherFieldsDiffer(old, f, ["name", "label", "required", "description", "multiline"])
     )
-      out.push(`Changed how the form asks for “${f.label}”`);
+      out.push(t("jobs.changes.formChanged", { label: f.label }));
   }
   for (const f of before.input_fields)
-    if (!fieldsAfter.has(f.name)) out.push(`No longer asks for “${f.label}”`);
+    if (!fieldsAfter.has(f.name)) out.push(t("jobs.changes.noLongerAsks", { label: f.label }));
 
   // Steps: matched by id, then by title for any the revision re-numbered.
   const unmatched = new Map(before.steps.map((s) => [s.id, s]));
@@ -250,16 +307,17 @@ export function describeChanges(
     }
   }
   pairs.forEach(([old, s], i) => {
-    if (!old) out.push(`Added step ${i + 1}: “${s.title}” (${stepWho(s, labels)})`);
+    if (!old)
+      out.push(t("jobs.changes.addedStep", { n: i + 1, title: s.title, who: stepWho(s, labels) }));
     else out.push(...stepChanges(old, s, labels));
   });
-  for (const old of unmatched.values()) out.push(`Removed step “${old.title}”`);
+  for (const old of unmatched.values()) out.push(t("jobs.changes.removedStep", { title: old.title }));
 
   const kept = pairs.flatMap(([old]) => (old ? [old.id] : []));
   const keptBefore = before.steps.map((s) => s.id).filter((id) => kept.includes(id));
-  if (kept.join("\n") !== keptBefore.join("\n")) out.push("Changed the order of the steps");
+  if (kept.join("\n") !== keptBefore.join("\n")) out.push(t("jobs.changes.reordered"));
 
-  if (otherFieldsDiffer(before, after, TOP_LEVEL_FIELDS)) out.push("Changed other settings");
+  if (otherFieldsDiffer(before, after, TOP_LEVEL_FIELDS)) out.push(t("jobs.changes.other"));
 
   return out;
 }
@@ -269,5 +327,5 @@ export function addedTools(before: DynamicWorkflowDef, after: DynamicWorkflowDef
   const had = new Set(before.steps.flatMap((s) => (s.kind === "action" ? s.tools : [])));
   return Array.from(
     new Set(after.steps.flatMap((s) => (s.kind === "action" ? s.tools : [])))
-  ).filter((t) => !had.has(t));
+  ).filter((tool) => !had.has(tool));
 }

@@ -298,6 +298,7 @@ const en = {
   "chat.deptDraft.authority.proposeOnly": "Proposes, you approve",
   "chat.deptDraft.authority.escalate": "Escalates to you",
   "chat.deptDraft.authority.autoExecute": "Acts on its own",
+  "chat.message.image": "Image",
 };
 
 export default en;

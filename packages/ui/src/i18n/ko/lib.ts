@@ -502,6 +502,11 @@ const ko: Record<keyof typeof en, string> = {
   "lib.api.removeRuleFailed": "규칙을 삭제하지 못했어요.",
   "lib.api.changeTakeLeadAsYouFailed": "나 대신 먼저 나서기 설정을 바꾸지 못했어요.",
   "lib.api.loadRulesFailed": "규칙을 불러오지 못했어요.",
+  "lib.api.openWorkflowFailed": "그 워크플로를 열지 못했어요",
+  "lib.api.loadCustomToolsFailed": "사용자 지정 도구를 불러오지 못했어요.",
+  "lib.api.loadToolFailed": "그 도구를 불러오지 못했어요.",
+  "lib.api.changeToolFailed": "그 도구를 바꾸지 못했어요.",
+  "lib.api.switchVersionFailed": "버전을 바꾸지 못했어요.",
 };
 
 export default ko;

@@ -304,6 +304,13 @@ const ko: Record<keyof typeof en, string> = {
   "misc.guide.section.integrations.sub": "평소 일하는 곳에서 Executive를 만나요. Slack, Discord, Telegram, 이메일, Google Chat, MCP를 지원해요.",
   "misc.guide.section.settings.title": "설정과 고급",
   "misc.guide.section.settings.sub": "내 Executive, 워크스페이스, 나 대신 작성, 그리고 평소 메뉴 밖의 고급 도구를 다뤄요. 이 가이드도 여기 있어요.",
+  "misc.debug.scriptDid.one": "동작 {n}개를 한 번에 처리했어요",
+  "misc.debug.scriptDid.other": "동작 {n}개를 한 번에 처리했어요",
+  "misc.debug.scriptTried.one": "동작 {n}개를 한 번에 시도했어요",
+  "misc.debug.scriptTried.other": "동작 {n}개를 한 번에 시도했어요",
+  "misc.debug.seconds": "{s}초",
+  "misc.debug.keptAs": "보관: {name}",
+  "misc.debug.reused": "재사용: {name}",
 };
 
 export default ko;

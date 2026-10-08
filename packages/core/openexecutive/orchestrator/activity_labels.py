@@ -198,6 +198,12 @@ _LABELS_KO: dict[str, str] = {
     "recall_history": "메모를 확인하는 중…",
     "search_tools": "알맞은 도구를 찾는 중…",
     "load_mcp_server": "도구 서버에 연결하는 중…",
+    "run_python_job": "파일 작업하는 중…",
+    "search_my_email": "메일함을 검색하는 중…",
+    "read_my_email": "메일을 읽는 중…",
+    "read_my_email_attachment": "첨부파일을 읽는 중…",
+    "remind_me": "리마인더를 설정하는 중…",
+    "my_email_awaiting_reply": "답장을 기다리는 메일을 확인하는 중…",
 }
 
 

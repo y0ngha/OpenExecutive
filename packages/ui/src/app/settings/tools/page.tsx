@@ -15,17 +15,19 @@ import {
   type SavedTool,
   type SavedToolDetail,
 } from "@/lib/api";
+import { displayLocale, t, tp } from "@/i18n/index.ts";
 
 // Where a tool was saved or run: "chat", or "workflow:<name>/<step>".
 function originLabel(origin: string): string {
-  if (origin === "chat") return "a chat";
-  if (origin.startsWith("workflow:")) return `workflow ${origin.slice("workflow:".length)}`;
+  if (origin === "chat") return t("settings.tools.origin.chat");
+  if (origin.startsWith("workflow:"))
+    return t("settings.tools.origin.workflow", { name: origin.slice("workflow:".length) });
   return origin;
 }
 
 function when(iso: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(displayLocale());
 }
 
 function ToolDetail({
@@ -40,29 +42,33 @@ function ToolDetail({
   return (
     <div className="mt-4 space-y-5 border-t border-line pt-4">
       <div>
-        <h3 className="text-sm font-semibold text-fg">How it works (version {detail.version})</h3>
+        <h3 className="text-sm font-semibold text-fg">
+          {t("settings.tools.howItWorks", { n: detail.version })}
+        </h3>
         <pre className="mt-2 max-h-80 overflow-auto rounded-xl bg-surface p-3 text-xs leading-relaxed text-fg whitespace-pre-wrap break-words">
           {detail.script}
         </pre>
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-fg">Versions</h3>
+        <h3 className="text-sm font-semibold text-fg">{t("settings.tools.versions")}</h3>
         <ul className="mt-2 space-y-2">
           {detail.versions.map((v) => (
             <li key={v.version} className="flex items-start justify-between gap-3 text-sm">
               <div className="min-w-0">
-                <span className="font-medium text-fg">Version {v.version}</span>
+                <span className="font-medium text-fg">{t("settings.tools.version", { n: v.version })}</span>
                 <span className="text-fg-muted">
-                  {" "}
-                  · {when(v.created_at)} · from {originLabel(v.origin)}
+                  {t("settings.tools.versionMeta", {
+                    when: when(v.created_at),
+                    origin: originLabel(v.origin),
+                  })}
                 </span>
                 <p className="text-fg-muted">{v.description}</p>
               </div>
               {v.version === detail.version ? (
-                <span className="flex-shrink-0 text-xs text-fg-subtle pt-1">In use</span>
+                <span className="flex-shrink-0 text-xs text-fg-subtle pt-1">{t("settings.tools.inUse")}</span>
               ) : (
                 <Button size="sm" disabled={busy} onClick={() => onRollback(v.version)}>
-                  Use this one
+                  {t("settings.tools.useThis")}
                 </Button>
               )}
             </li>
@@ -70,18 +76,22 @@ function ToolDetail({
         </ul>
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-fg">Recent runs</h3>
+        <h3 className="text-sm font-semibold text-fg">{t("settings.tools.recentRuns")}</h3>
         {detail.runs.length === 0 ? (
-          <p className="mt-2 text-sm text-fg-muted">Not run since it was saved.</p>
+          <p className="mt-2 text-sm text-fg-muted">{t("settings.tools.noRuns")}</p>
         ) : (
           <ul className="mt-2 space-y-1 text-sm">
             {detail.runs.map((r, i) => (
               <li key={`${r.at}-${i}`} className="text-fg-muted">
                 <span className={r.ok ? "text-emerald-600" : "text-rose-500"}>
-                  {r.ok ? "Worked" : "Failed"}
-                </span>{" "}
-                · {when(r.at)} · version {r.version} · {r.calls} tool call{r.calls === 1 ? "" : "s"} ·{" "}
-                {(r.duration_ms / 1000).toFixed(1)}s · {originLabel(r.origin)}
+                  {r.ok ? t("settings.tools.worked") : t("settings.tools.failed")}
+                </span>
+                {tp("settings.tools.runMeta", r.calls, {
+                  when: when(r.at),
+                  version: r.version,
+                  secs: (r.duration_ms / 1000).toFixed(1),
+                  origin: originLabel(r.origin),
+                })}
               </li>
             ))}
           </ul>
@@ -116,7 +126,7 @@ function ToolCard({
     try {
       apply(await fn());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : t("settings.tools.genericError"));
     } finally {
       setBusy(false);
     }
@@ -144,18 +154,22 @@ function ToolCard({
       }
     >
       <p className="text-sm text-fg-muted">
-        Version {tool.version} · saved from {originLabel(tool.origin)} · updated {when(tool.updated_at)}
+        {t("settings.tools.summary", {
+          version: tool.version,
+          origin: originLabel(tool.origin),
+          when: when(tool.updated_at),
+        })}
       </p>
       <p className="mt-1 text-sm text-fg-muted">
         {python ? (
-          "Works on files with Python. Runs only when you ask in chat, never in workflows."
+          t("settings.tools.pythonNote")
         ) : (
           <>
-            Uses:{" "}
+            {t("settings.tools.uses")}{" "}
             {tool.uses_tools.length ? (
               <span className="font-mono text-xs">{tool.uses_tools.join(", ")}</span>
             ) : (
-              "no other tools"
+              t("settings.tools.noOtherTools")
             )}
           </>
         )}
@@ -164,14 +178,14 @@ function ToolCard({
         <div className="mt-3 flex items-start justify-between gap-4 rounded-xl border border-line px-3 py-2.5">
           <div className="min-w-0">
             <p id={`${titleId}-workflows`} className="text-sm font-medium text-fg">
-              Use in workflows
+              {t("settings.tools.useInWorkflows")}
             </p>
             <p className="text-xs text-fg-muted">
               {tool.workflow_version == null
-                ? "Off. Workflows can't run this until you turn it on."
+                ? t("settings.tools.workflowsOff")
                 : tool.workflow_version === tool.version
-                  ? `On: workflows run version ${tool.workflow_version}.`
-                  : `Workflows still run version ${tool.workflow_version}, which you turned on.`}
+                  ? t("settings.tools.workflowsOn", { n: tool.workflow_version })
+                  : t("settings.tools.workflowsStill", { n: tool.workflow_version })}
             </p>
             {tool.workflow_version != null && tool.workflow_version !== tool.version && (
               <Button
@@ -180,7 +194,7 @@ function ToolCard({
                 disabled={busy || !tool.enabled}
                 onClick={() => run(() => setSavedToolWorkflows(tool.name, tool.version))}
               >
-                Use version {tool.version} in workflows
+                {t("settings.tools.useVersionInWorkflows", { n: tool.version })}
               </Button>
             )}
           </div>
@@ -194,7 +208,7 @@ function ToolCard({
       )}
       <div className="mt-3">
         <Button size="sm" variant="ghost" onClick={toggleOpen} aria-expanded={open}>
-          {open ? "Hide details" : "Details, versions and runs"}
+          {open ? t("settings.tools.hideDetails") : t("settings.tools.showDetails")}
         </Button>
       </div>
       {error && <p className="mt-2 text-sm text-rose-500">{error}</p>}
@@ -226,7 +240,7 @@ export default function SavedToolsSettingsPage() {
       setState(body ? { kind: "ready", ...body } : { kind: "forbidden" });
     } catch (e) {
       if (signal?.aborted) return;
-      setState({ kind: "error", message: e instanceof Error ? e.message : "Couldn't load." });
+      setState({ kind: "error", message: e instanceof Error ? e.message : t("settings.tools.loadFailed") });
     }
   }, []);
 
@@ -238,18 +252,18 @@ export default function SavedToolsSettingsPage() {
 
   const replace = (next: SavedTool) =>
     setState((s) =>
-      s.kind === "ready" ? { ...s, tools: s.tools.map((t) => (t.name === next.name ? next : t)) } : s,
+      s.kind === "ready" ? { ...s, tools: s.tools.map((tool) => (tool.name === next.name ? next : tool)) } : s,
     );
 
   return (
     <SettingsSubpage
-      title="Custom tools"
-      description="When the Executive needs a tool it doesn't have, it builds one, and keeps the ones it will need again: ones that combine its other tools, and ones that work on files. A custom tool can only do what the conversation or workflow using it is already allowed to do. Turn one off to stop it running, or switch it back to an earlier version."
+      title={t("settings.tools.title")}
+      description={t("settings.tools.description")}
     >
-      {state.kind === "loading" && <p className="text-sm text-fg-muted">Loading…</p>}
+      {state.kind === "loading" && <p className="text-sm text-fg-muted">{t("common.loading")}</p>}
       {state.kind === "forbidden" && (
         <SettingsCard>
-          <p className="text-sm text-fg-muted">Only the account owner can see custom tools.</p>
+          <p className="text-sm text-fg-muted">{t("settings.tools.ownerOnly")}</p>
         </SettingsCard>
       )}
       {state.kind === "error" && (
@@ -262,16 +276,14 @@ export default function SavedToolsSettingsPage() {
           {!state.enabled && (
             <SettingsCard>
               <p className="text-sm text-fg-muted">
-                Custom tools are turned off on this server (SAVED_TOOLS_ENABLED=false): nothing new
-                is kept and none of these run.
+                {t("settings.tools.serverOff")}
               </p>
             </SettingsCard>
           )}
           {state.tools.length === 0 ? (
             <SettingsCard>
               <p className="text-sm text-fg-muted">
-                No custom tools yet. They appear here when the Executive builds a tool for a job it
-                is likely to do again.
+                {t("settings.tools.empty")}
               </p>
             </SettingsCard>
           ) : (

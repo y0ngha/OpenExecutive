@@ -500,6 +500,11 @@ const en = {
   "lib.api.removeRuleFailed": "Couldn't remove the rule.",
   "lib.api.changeTakeLeadAsYouFailed": "Couldn't change Take the lead as you.",
   "lib.api.loadRulesFailed": "Couldn't load your rules.",
+  "lib.api.openWorkflowFailed": "Could not open that workflow",
+  "lib.api.loadCustomToolsFailed": "Couldn't load the custom tools.",
+  "lib.api.loadToolFailed": "Couldn't load that tool.",
+  "lib.api.changeToolFailed": "Couldn't change that tool.",
+  "lib.api.switchVersionFailed": "Couldn't switch the version.",
 };
 
 export default en;

@@ -165,7 +165,7 @@ export default function Message({
                   <img src={src as string} alt={alt ?? ""} />
                 ) : typeof src === "string" && src ? (
                   <a href={src} target="_blank" rel="noopener noreferrer nofollow">
-                    {alt || "Image"} ({hostOf(src)})
+                    {alt || t("chat.message.image")} ({hostOf(src)})
                   </a>
                 ) : null,
             }}
