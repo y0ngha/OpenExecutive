@@ -1,6 +1,7 @@
 import type en from "../en/misc.ts";
 
-const ko: Record<keyof typeof en, string> = {
+// Keys left out show in English (see i18n/index.ts).
+const ko: Partial<Record<keyof typeof en, string>> = {
   "misc.profile.notSet": "미설정",
   "misc.profile.saveFailed": "저장하지 못했어요. 다시 시도해 주세요.",
   "misc.profile.editSection": "{title} 수정",

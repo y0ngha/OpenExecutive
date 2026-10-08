@@ -1,6 +1,7 @@
 import type en from "../en/chat.ts";
 
-const ko: Record<keyof typeof en, string> = {
+// Keys left out show in English (see i18n/index.ts).
+const ko: Partial<Record<keyof typeof en, string>> = {
   "chat.nav.home": "홈",
   "chat.nav.chats": "채팅",
   "chat.nav.work": "업무",

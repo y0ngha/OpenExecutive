@@ -1,6 +1,7 @@
 import type en from "../en/audit.ts";
 
-const ko: Record<keyof typeof en, string> = {
+// Keys left out show in English (see i18n/index.ts).
+const ko: Partial<Record<keyof typeof en, string>> = {
   "audit.artifact.openLink": "{label} 열기 ↗",
   "audit.artifact.link": "링크",
   "audit.artifact.xlsxPreview": "통합 문서 미리보기예요. 모든 행과 Excel 서식을 보려면 내려받으세요.",

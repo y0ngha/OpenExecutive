@@ -1,6 +1,7 @@
 import type en from "../en/people.ts";
 
-const ko: Record<keyof typeof en, string> = {
+// Keys left out show in English (see i18n/index.ts).
+const ko: Partial<Record<keyof typeof en, string>> = {
   "people.time.minutes": "{n}분",
   "people.time.hours": "{n}시간",
   "people.time.days": "{n}일",

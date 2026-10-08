@@ -44,10 +44,46 @@ def test_unknown_language_fails_at_startup(monkeypatch):
         get_settings()
 
 
-def test_localized_follows_oe_language(monkeypatch):
-    from openexecutive.utils.i18n import localized
-
-    monkeypatch.delenv("OE_LANGUAGE", raising=False)
-    assert localized("Working…", "작업 중…") == "Working…"
+def test_language_codes_and_old_names_both_work(monkeypatch):
+    monkeypatch.setenv("OE_LANGUAGE", "ko")
+    assert get_settings().oe_language == "ko"
     monkeypatch.setenv("OE_LANGUAGE", "KOREAN")
-    assert localized("Working…", "작업 중…") == "작업 중…"
+    assert get_settings().oe_language == "ko"
+    monkeypatch.setenv("OE_LANGUAGE", "ENGLISH")
+    assert get_settings().oe_language == "en"
+    monkeypatch.setenv("OE_LANGUAGE", "")
+    assert get_settings().oe_language == "en"
+
+
+def test_every_language_but_english_gets_the_template_with_its_name():
+    from openexecutive.providers.output_language import instruction
+    from openexecutive.utils.i18n import DEFAULT_LANGUAGE, LANGUAGES
+
+    assert instruction(DEFAULT_LANGUAGE) is None
+    assert instruction("xx") is None
+    for code, name in LANGUAGES.items():
+        if code != DEFAULT_LANGUAGE:
+            text = instruction(code)
+            assert text is not None and f"natural {name}" in text
+            # Specialists and searches read English (see internal_call).
+            assert "question for a specialist" in text and "mail" in text
+
+
+async def test_internal_calls_get_no_block(monkeypatch):
+    import asyncio
+
+    from openexecutive.providers.output_language import internal_call
+
+    monkeypatch.setenv("OE_LANGUAGE", "ko")
+    kwargs = {"system": [CACHED], "messages": []}
+    with internal_call():
+        assert apply_output_language(kwargs) is kwargs
+
+        # A task started inside the block (route_parallel's gather) inherits it.
+        async def child():
+            return apply_output_language(kwargs)
+
+        assert await asyncio.gather(child()) == [kwargs]
+    # Outside it again, person-facing calls get the block.
+    assert len(apply_output_language(kwargs)["system"]) == 2
+

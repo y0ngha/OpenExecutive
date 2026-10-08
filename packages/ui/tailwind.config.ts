@@ -43,8 +43,10 @@ const config: Config = {
         DEFAULT: rgbVar("--border-default"),
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-        display: ["var(--font-display)", "var(--font-sans)", "system-ui", "sans-serif"],
+        // --font-script: a face for the locale's script (app/layout.tsx), set
+        // only for locales that need one; the fallback keeps the stack valid.
+        sans: ["var(--font-sans)", "var(--font-script, system-ui)", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-sans)", "var(--font-script, system-ui)", "system-ui", "sans-serif"],
       },
       minHeight: {
         touch: "2.5rem",

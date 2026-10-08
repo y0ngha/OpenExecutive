@@ -37,6 +37,7 @@ from typing import Any, Literal, cast, get_args
 
 from openexecutive.alerts.lifecycle import parse_aware
 from openexecutive.briefing import narrative_cache
+from openexecutive.utils.i18n import MessageTable, tr
 
 logger = logging.getLogger(__name__)
 
@@ -147,84 +148,71 @@ CHANNEL_NAMES: dict[str, str] = {
 }
 # Why a brief didn't reach the owner, and what to do about it, in the user's
 # words.
+_PROBLEM_TEXT = MessageTable("brief.delivery_problem", {
+    "no_owner": "there's no owner on the People list to send it to",
+    "no_channel": "nothing is set up to send it to you",
+    "send_failed": "every way of sending it failed",
+    "not_written": "it couldn't be written",
+})
+_FIX_TEXT = MessageTable("brief.delivery_fix", {
+    "no_owner": "Finish setup so you're on the People list as the owner.",
+    "no_channel": "Connect Gmail, or add your Slack, Telegram or Discord to your People profile.",
+    "send_failed": "The Setup status page shows which connection needs attention.",
+    "not_written": "The Setup status page shows which part needs attention — often the AI model.",
+})
 DELIVERY_PROBLEMS: dict[str, tuple[str, str]] = {
-    "no_owner": (
-        "there's no owner on the People list to send it to",
-        "Finish setup so you're on the People list as the owner.",
-    ),
-    "no_channel": (
-        "nothing is set up to send it to you",
-        "Connect Gmail, or add your Slack, Telegram or Discord to your People profile.",
-    ),
-    "send_failed": (
-        "every way of sending it failed",
-        "The Setup status page shows which connection needs attention.",
-    ),
-    "not_written": (
-        "it couldn't be written",
-        "The Setup status page shows which part needs attention — often the AI model.",
-    ),
+    reason: (_PROBLEM_TEXT.english[reason], _FIX_TEXT.english[reason]) for reason in _PROBLEM_TEXT
 }
 
+# The brief kinds' names; the English is the scheduler's KIND_LABEL.
+_BRIEF_NAMES = MessageTable("brief.name", {
+    "principal_brief_morning": "morning brief",
+    "principal_brief_eod": "end-of-day digest",
+    "principal_weekly_review": "weekly review",
+})
 
-# DELIVERY_PROBLEMS in Korean (OE_LANGUAGE=KOREAN). The problem is a clause
-# the caller ends with a period, as in English.
-_DELIVERY_PROBLEMS_KO: dict[str, tuple[str, str]] = {
-    "no_owner": (
-        "보낼 소유자가 구성원 목록에 없어요",
-        "설정을 마쳐서 구성원 목록에 소유자로 등록하세요.",
-    ),
-    "no_channel": (
-        "보낼 수단이 설정되지 않았어요",
-        "Gmail을 연결하거나, 구성원 프로필에 Slack, Telegram, Discord 중 하나를 추가하세요.",
-    ),
-    "send_failed": (
-        "보내는 방법이 모두 실패했어요",
-        "어느 연결을 손봐야 하는지 설정 상태 페이지에서 확인할 수 있어요.",
-    ),
-    "not_written": (
-        "브리핑을 작성하지 못했어요",
-        "어느 부분을 손봐야 하는지 설정 상태 페이지에서 확인할 수 있어요. AI 모델 문제인 경우가 많아요.",
-    ),
-}
-_BRIEF_NAMES_KO: dict[str, str] = {
-    "principal_brief_morning": "아침 브리핑",
-    "principal_brief_eod": "저녁 요약",
-    "principal_weekly_review": "주간 리뷰",
-}
-
-_CHANNEL_PHRASES_KO: dict[str, str] = {
-    "email": "이메일로",
-    "slack_dm": "Slack으로",
-    "discord_dm": "Discord로",
-    "telegram": "Telegram으로",
-}
+# As in "sent to you by email"; the English names are CHANNEL_NAMES'.
+_CHANNEL_PHRASES = MessageTable("brief.channel_phrase", {
+    "email": "by email",
+    "slack_dm": "on Slack",
+    "discord_dm": "on Discord",
+    "telegram": "on Telegram",
+})
 
 
 def delivery_problem(reason: str) -> tuple[str, str]:
-    """``DELIVERY_PROBLEMS[reason]``, in OE_LANGUAGE."""
-    from openexecutive.utils.i18n import is_korean
-
-    return (_DELIVERY_PROBLEMS_KO if is_korean() else DELIVERY_PROBLEMS)[reason]
+    """``DELIVERY_PROBLEMS[reason]``, in OE_LANGUAGE. The problem is a clause
+    the caller ends with a period."""
+    return _PROBLEM_TEXT[reason], _FIX_TEXT[reason]
 
 
 def brief_name(kind: str) -> str:
     """The brief's name in the app ("morning brief"): the scheduler's own label."""
     from openexecutive.scheduler.action_phrasing import KIND_LABEL
-    from openexecutive.utils.i18n import is_korean
 
-    if is_korean():
-        return _BRIEF_NAMES_KO.get(kind, "브리핑")
-    return KIND_LABEL.get(kind, "brief")
+    if kind in _BRIEF_NAMES:
+        return _BRIEF_NAMES[kind]
+    return KIND_LABEL[kind] if kind in KIND_LABEL else tr("brief.name.other", "brief")
+
+
+_CHANNEL_NAME_TEXT = MessageTable("brief.channel_name", {
+    "email": "email",
+    "slack_dm": "Slack",
+    "discord_dm": "Discord",
+    "telegram": "Telegram",
+})
+
+
+def channel_name(channel: str) -> str:
+    """``CHANNEL_NAMES[channel]``, in OE_LANGUAGE."""
+    return _CHANNEL_NAME_TEXT[channel]
 
 
 def channel_phrase(channel: str) -> str:
     """As in "sent to you by email" or "sent to you on Slack"."""
-    from openexecutive.utils.i18n import is_korean
-
-    if is_korean():
-        return _CHANNEL_PHRASES_KO.get(channel, f"{channel} 채널로")
-    return "by email" if channel == "email" else f"on {CHANNEL_NAMES.get(channel, channel)}"
+    if channel in _CHANNEL_PHRASES:
+        return _CHANNEL_PHRASES[channel]
+    return tr("brief.channel_phrase.other", "on {channel}", channel=CHANNEL_NAMES.get(channel, channel))
 
 
 @dataclass(frozen=True)

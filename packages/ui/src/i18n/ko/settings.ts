@@ -1,6 +1,7 @@
 import type en from "../en/settings.ts";
 
-const ko: Record<keyof typeof en, string> = {
+// Keys left out show in English (see i18n/index.ts).
+const ko: Partial<Record<keyof typeof en, string>> = {
   "settings.actAsMe.title": "나 대신 작성",
   "settings.advanced.title": "고급",
   "settings.advanced.description": "진단, 구성, 참고용 페이지예요. 각각 별도 화면으로 열려요.",

@@ -1,6 +1,7 @@
 import type en from "../en/briefing.ts";
 
-const ko: Record<keyof typeof en, string> = {
+// Keys left out show in English (see i18n/index.ts).
+const ko: Partial<Record<keyof typeof en, string>> = {
   "briefing.home.loadFailed": "불러오지 못했어요",
   "briefing.home.dueSoon": "마감 임박",
   "briefing.home.overdueCount": "{n}개 기한 지남",

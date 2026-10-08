@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Geist } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Noto_Sans_KR } from "next/font/google";
 import { connection } from "next/server";
 import AuthProvider from "@/components/AuthProvider";
 import { ExecutiveStatusProvider } from "@/components/executive/ExecutiveStatusContext";
 import { SessionsProvider } from "@/components/sessions/SessionsContext";
 import AppShell from "@/components/shell/AppShell";
 import { WorkspaceProvider } from "@/components/workspace/WorkspaceContext";
-import { locale, t } from "@/i18n/index.ts";
+import { locale, t, type Locale } from "@/i18n/index.ts";
 import "./globals.css";
 
 // Geist, self-hosted by next/font at build time: no request to Google from
@@ -19,6 +19,16 @@ const bricolage = Bricolage_Grotesque({
   variable: "--font-display",
   display: "swap",
 });
+// Faces for scripts Geist lacks, per locale: the sans stack falls back to
+// --font-script (tailwind.config.ts) for the glyphs Geist doesn't have. Only
+// the deployment's locale gets its class, so an English page never loads
+// them; within one, the browser fetches only the slices a page uses.
+const notoSansKr = Noto_Sans_KR({
+  variable: "--font-script",
+  display: "swap",
+  preload: false,
+});
+const SCRIPT_FONTS: Partial<Record<Locale, string>> = { ko: notoSansKr.variable };
 
 // A function, not a constant, so the text is looked up per request.
 export function generateMetadata(): Metadata {
@@ -47,7 +57,10 @@ export default async function RootLayout({
   // built once and run with either language).
   await connection();
   return (
-    <html lang={locale()} className={`h-full ${geist.variable} ${bricolage.variable}`}>
+    <html
+      lang={locale()}
+      className={`h-full ${geist.variable} ${bricolage.variable} ${SCRIPT_FONTS[locale()] ?? ""}`}
+    >
       <body className="h-full antialiased bg-surface text-fg">
         <AuthProvider>
           <SessionsProvider>

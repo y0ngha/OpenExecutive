@@ -27,7 +27,7 @@ from openexecutive.integrations.attachments import build_attachment_output
 from openexecutive.orchestrator.answer_sources import TurnSources
 from openexecutive.orchestrator.debug_events import DebugCollector
 from openexecutive.orchestrator.turn_inbox import TurnInbox
-from openexecutive.utils.i18n import localized
+from openexecutive.utils.i18n import MessageTable, tr
 from openexecutive.workflows import turn_files
 from openexecutive.workflows.python_job import available as python_job_available
 from openexecutive.workflows.turn_files import bind as bind_turn_files
@@ -1523,9 +1523,8 @@ async def _run_chat_turn(
             logger.exception("chat.turn_failed turn_id=%s", turn_id)
             error = json.dumps({
                 "type": "error",
-                "message": localized(
-                    "An internal error occurred. Please try again.",
-                    "내부 오류가 발생했어요. 다시 시도하세요.",
+                "message": tr(
+                    "chat.turn.internal_error", "An internal error occurred. Please try again."
                 ),
                 "session_id": session.session_id,
             })
@@ -1639,13 +1638,14 @@ async def chat_upload(
     blocks and passed through ``attachment_blocks``.
     """
     if not files:
-        raise HTTPException(status_code=400, detail=localized("No files uploaded", "올린 파일이 없어요."))
+        raise HTTPException(status_code=400, detail=tr("chat.upload.no_files", "No files uploaded"))
     if len(files) > _MAX_FILES_PER_TURN:
         raise HTTPException(
             status_code=400,
-            detail=localized(
-                f"Too many files: limit {_MAX_FILES_PER_TURN} per turn",
-                f"파일이 너무 많아요. 한 번에 {_MAX_FILES_PER_TURN}개까지 올릴 수 있어요.",
+            detail=tr(
+                "chat.upload.too_many_files",
+                "Too many files: limit {limit} per turn",
+                limit=_MAX_FILES_PER_TURN,
             ),
         )
 
@@ -1661,12 +1661,12 @@ async def chat_upload(
         if len(data) > _MAX_BYTES_PER_FILE:
             raise HTTPException(
                 status_code=413,
-                detail=localized(
-                    f"{filename}: file too large — "
-                    f"{len(data) // (1024 * 1024)} MB "
-                    f"(limit {_MAX_BYTES_PER_FILE // (1024 * 1024)} MB)",
-                    f"{filename}: 파일이 너무 커요. {len(data) // (1024 * 1024)}MB"
-                    f"(최대 {_MAX_BYTES_PER_FILE // (1024 * 1024)}MB)",
+                detail=tr(
+                    "chat.upload.file_too_large",
+                    "{filename}: file too large — {size_mb} MB (limit {limit_mb} MB)",
+                    filename=filename,
+                    size_mb=len(data) // (1024 * 1024),
+                    limit_mb=_MAX_BYTES_PER_FILE // (1024 * 1024),
                 ),
             )
         uploads.append((filename, data))
@@ -1711,40 +1711,30 @@ async def chat_upload(
 # Suggested starter prompts for the chat empty-state.
 # ---------------------------------------------------------------------------
 
-_FALLBACK_PROMPTS: list[str] = [
-    "Where did we land on this quarter's priorities?",
-    "Pull the team in on a decision I'm sitting on.",
-    "Let's review the board update before it goes out.",
-    "What's changed since our last sync?",
-]
+_FALLBACK_PROMPT_TEXT = MessageTable("chat.fallback.prompt", {
+    "priorities": "Where did we land on this quarter's priorities?",
+    "decision": "Pull the team in on a decision I'm sitting on.",
+    "board_update": "Let's review the board update before it goes out.",
+    "since_last_sync": "What's changed since our last sync?",
+})
+_FALLBACK_PROMPTS: list[str] = list(_FALLBACK_PROMPT_TEXT.english.values())
 
 # Shown when the LLM can't be reached or no company context exists. Mirrors
 # the historical static subtitle that lived in the UI before this change.
-_FALLBACK_SUBTITLE: str = (
-    "Pick up where we left off — decisions to revisit, drafts to push "
-    "forward, people to pull in."
-)
-
-_FALLBACK_PROMPTS_KO: list[str] = [
-    "이번 분기 우선순위는 어떻게 정리됐나요?",
-    "제가 미루고 있는 결정에 팀 의견을 모아 주세요.",
-    "이사회 보고서를 보내기 전에 같이 검토해요.",
-    "지난번 이후로 무엇이 바뀌었나요?",
-]
-
-_FALLBACK_SUBTITLE_KO: str = (
-    "지난번에 하던 일을 이어서 해요. 다시 볼 결정, 마무리할 초안, 함께할 사람이 있어요."
-)
+_FALLBACK_TEXT = MessageTable("chat.fallback", {
+    "subtitle": (
+        "Pick up where we left off — decisions to revisit, drafts to push "
+        "forward, people to pull in."
+    ),
+})
+_FALLBACK_SUBTITLE: str = _FALLBACK_TEXT.english["subtitle"]
 
 
 def _fallback_payload() -> dict[str, Any]:
     """The static empty-state, in OE_LANGUAGE."""
-    from openexecutive.utils.i18n import is_korean
-
-    korean = is_korean()
     return {
-        "prompts": list(_FALLBACK_PROMPTS_KO if korean else _FALLBACK_PROMPTS),
-        "subtitle": _FALLBACK_SUBTITLE_KO if korean else _FALLBACK_SUBTITLE,
+        "prompts": [_FALLBACK_PROMPT_TEXT[key] for key in _FALLBACK_PROMPT_TEXT],
+        "subtitle": _FALLBACK_TEXT["subtitle"],
         "context_quality": "empty",
     }
 

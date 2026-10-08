@@ -14,18 +14,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from openexecutive.utils.i18n import DEFAULT_LANGUAGE, LANGUAGES, current_language
 from openexecutive.utils.prebuilt_store import PrebuiltDocStore
 
 _STORE = PrebuiltDocStore(Path(__file__).parent / "prebuilt")
-# Translations, one subdirectory per OE_LANGUAGE value that has any. A
-# section missing there falls back to the English file.
-_TRANSLATED = {"KOREAN": PrebuiltDocStore(Path(__file__).parent / "prebuilt" / "ko")}
+# Translations, one subdirectory per language code that has any
+# (prebuilt/ko/). A section missing there falls back to the English file.
+_TRANSLATED = {
+    code: PrebuiltDocStore(Path(__file__).parent / "prebuilt" / code)
+    for code in LANGUAGES
+    if code != DEFAULT_LANGUAGE and (Path(__file__).parent / "prebuilt" / code).is_dir()
+}
 
 
 def _translated() -> PrebuiltDocStore | None:
-    from openexecutive.config import get_settings
-
-    return _TRANSLATED.get(get_settings().oe_language)
+    return _TRANSLATED.get(current_language())
 
 
 def get_prebuilt(section_id: str) -> dict[str, Any] | None:

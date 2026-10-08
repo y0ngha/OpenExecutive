@@ -1,6 +1,7 @@
 import type en from "../en/jobs.ts";
 
-const ko: Record<keyof typeof en, string> = {
+// Keys left out show in English (see i18n/index.ts).
+const ko: Partial<Record<keyof typeof en, string>> = {
   "jobs.common.backToWorkflows": "← 워크플로로 돌아가기",
   "jobs.pending.intro": "이 워크플로는 꺼져 있어요. 하는 일과 쓰는 도구를 확인한 뒤 켜면 실행하거나 일정을 시작할 수 있어요.",
   "jobs.tools.mayChange": "변경 가능",

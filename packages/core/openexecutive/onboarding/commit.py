@@ -22,7 +22,7 @@ import re
 import sqlite3
 from typing import TYPE_CHECKING
 
-from openexecutive.utils.i18n import localized as _t
+from openexecutive.utils.i18n import tr
 from openexecutive.utils.slug import DEPARTMENT_SLUG_FALLBACK, slugify
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -200,9 +200,9 @@ def check_owner_email(raw: str | None, principal_name: str) -> str | None:
         return None
     if len(email) > _OWNER_EMAIL_MAX_LEN or not _OWNER_EMAIL_RE.fullmatch(email):
         raise OwnerEmailError(
-            _t(
+            tr(
+                "onboarding.commit.email_address_look_right",
                 "That email address doesn't look right. Check it and try again.",
-                "이메일 주소가 올바르지 않아 보여요. 확인하고 다시 시도하세요.",
             )
         )
     from openexecutive.people.store import find_person_by_address, list_people
@@ -217,35 +217,35 @@ def check_owner_email(raw: str | None, principal_name: str) -> str | None:
         # Unknown is not "free": saving anyway could give two people one email.
         logger.warning("check_owner_email: lookup failed (%s)", type(exc).__name__)
         raise OwnerEmailError(
-            _t("Could not check that email just now. Try again.", "지금은 그 이메일을 확인하지 못했어요. 다시 시도하세요.")
+            tr(
+                "onboarding.commit.could_check_email_try",
+                "Could not check that email just now. Try again.",
+            )
         ) from exc
     if holder is not None and (own_row is None or holder.id != own_row.id):
         if holder.is_principal:
             raise OwnerEmailError(
-                _t(
-                    "That email is on the current owner's People entry, but setup would update "
-                    "a different one (another name, or two entries share this name). Use the "
+                tr(
+                    "onboarding.commit.email_current_owner_people",
+                    "That email is on the current owner's People entry, but setup would update a "
+                    "different one (another name, or two entries share this name). Use the "
                     "owner's name exactly as on the People page, or leave the email blank.",
-                    "이 이메일은 현재 소유자의 구성원 정보에 있지만, 설정은 다른 정보를 업데이트하게 돼요"
-                    "(이름이 다르거나 같은 이름의 정보가 둘 있어요). 소유자 이름을 구성원 페이지에 있는 "
-                    "그대로 쓰거나 이메일을 비워 두세요.",
                 )
             )
         raise OwnerEmailError(
-            _t(
-                "That email already belongs to someone else on the People page. "
-                "Use the owner's own email, or leave it blank.",
-                "이 이메일은 이미 구성원 페이지에 있는 다른 사람의 이메일이에요. 소유자 본인의 이메일을 쓰거나 비워 두세요.",
+            tr(
+                "onboarding.commit.email_already_belongs_someone",
+                "That email already belongs to someone else on the People page. Use the owner's "
+                "own email, or leave it blank.",
             )
         )
     if own_row is not None and own_row.email and own_row.email.strip().lower() != email:
         raise OwnerEmailError(
-            _t(
-                "The owner's People entry already has a different sign-in email, and setup "
-                "never replaces it. Keep that one here, or sign in with it and change it on "
-                "the People page.",
-                "소유자의 구성원 정보에 이미 다른 로그인 이메일이 있고, 설정은 이를 바꾸지 않아요. "
-                "여기에 그 이메일을 그대로 쓰거나, 그 이메일로 로그인해서 구성원 페이지에서 바꾸세요.",
+            tr(
+                "onboarding.commit.owner_people_entry_already",
+                "The owner's People entry already has a different sign-in email, and setup never "
+                "replaces it. Keep that one here, or sign in with it and change it on the People "
+                "page.",
             )
         )
     return email

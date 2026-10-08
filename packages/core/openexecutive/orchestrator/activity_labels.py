@@ -22,19 +22,14 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from openexecutive.utils.i18n import is_korean
+from openexecutive.utils.i18n import MessageTable, tr
 
 # Shown when a round contains only tools with no entry in `_LABELS`. Going
 # silent is not an option — a round with no label is the exact failure this
 # event exists to fix, and the UI would fall back to its own placeholder.
+# Its translations match the UI's own placeholder (packages/ui
+# lib.api.fallbackActivity).
 FALLBACK_LABEL = "Working…"
-
-SPECIALIST_LABEL = "Consulting specialists…"
-
-# Korean for the two above. The fallback matches the UI's own placeholder
-# (packages/ui lib.api.fallbackActivity).
-_FALLBACK_LABEL_KO = "작업 중…"
-_SPECIALIST_LABEL_KO = "전문가와 상의하는 중…"
 
 # Longest underlying MCP tool name rendered into a label. MCP names are
 # model-authored text on their way to the DOM, so they are capped and stripped
@@ -47,9 +42,9 @@ _MCP_NAME_UNSAFE = re.compile(r"[^A-Za-z0-9_.:\- ]")
 # ellipsis and is short enough for one line next to the dots; the drift test in
 # tests/unit/test_activity_labels.py enforces both, and also enforces that every
 # registered Executive tool appears here.
-_LABELS: dict[str, str] = {
+_LABEL_TEXT = MessageTable("activity", {
     # Specialist fan-out — deliberately generic. See the module docstring.
-    "consult_specialist": SPECIALIST_LABEL,
+    "consult_specialist": "Consulting specialists…",
 
     # Skills
     "search_skills": "Looking through saved skills…",
@@ -138,82 +133,17 @@ _LABELS: dict[str, str] = {
     # MCP gateway. `call_tool` is dynamic and handled in `_label_for`.
     "search_tools": "Looking for the right tool…",
     "load_mcp_server": "Connecting a tool server…",
-}
-
-# `_LABELS` in Korean, for OE_LANGUAGE=KOREAN. Same keys; a test keeps them
-# in step.
-_LABELS_KO: dict[str, str] = {
-    "consult_specialist": _SPECIALIST_LABEL_KO,
-    "search_skills": "저장된 스킬을 살펴보는 중…",
-    "load_skill": "저장된 스킬을 여는 중…",
-    "create_skill": "새 플레이북 초안을 쓰는 중…",
-    "update_skill": "플레이북 변경안을 쓰는 중…",
-    "delete_skill": "플레이북 삭제를 제안하는 중…",
-    "schedule_followup": "후속 조치를 예약하는 중…",
-    "suggest_workflow": "워크플로 제안을 올리는 중…",
-    "send_telegram_message": "Telegram 메시지를 보내는 중…",
-    "send_slack_dm": "Slack DM을 보내는 중…",
-    "send_discord_dm": "Discord DM을 보내는 중…",
-    "message_person": "메시지를 보내는 중…",
-    "lookup_person": "구성원을 찾는 중…",
-    "ack_alert": "제안을 업데이트하는 중…",
-    "find_alerts": "브리핑 보드를 살펴보는 중…",
-    "create_calendar_event": "캘린더에 일정을 넣는 중…",
-    "create_instant_meeting": "회의를 여는 중…",
-    "cancel_calendar_event": "캘린더에서 일정을 빼는 중…",
-    "list_people": "구성원을 찾는 중…",
-    "upsert_person": "구성원 명단을 업데이트하는 중…",
-    "archive_person": "구성원 명단을 업데이트하는 중…",
-    "resolve_roster_request": "구성원 명단을 업데이트하는 중…",
-    "set_department_head": "조직도를 업데이트하는 중…",
-    "ask_about_person": "이 사람에 대해 아는 내용을 확인하는 중…",
-    "list_open_loops": "사람들이 맡은 일을 확인하는 중…",
-    "close_open_loop": "남은 일을 마무리하는 중…",
-    "assign_open_loop": "할 일을 맡기는 중…",
-    "list_department_goals": "부서 목표를 검토하는 중…",
-    "update_department_goal": "부서 목표를 업데이트하는 중…",
-    "create_goal": "목표를 추가하는 중…",
-    "record_decision_outcome": "결정의 결과를 기록하는 중…",
-    "remember_fact": "기억해 두는 중…",
-    "forget_fact": "오래된 정보를 지우는 중…",
-    "update_company_profile": "회사 프로필을 업데이트하는 중…",
-    "send_department_message": "부서 채널에 올리는 중…",
-    "send_company_broadcast": "전사 공지를 보내는 중…",
-    "add_watchlist_entry": "관심 목록에 추가하는 중…",
-    "list_watchlist": "관심 목록을 확인하는 중…",
-    "remove_watchlist_entry": "관심 목록을 업데이트하는 중…",
-    "tune_watchlist_entry": "관심 목록을 조정하는 중…",
-    "run_executive_research": "조사하는 중…",
-    "create_alert": "검토할 항목을 표시하는 중…",
-    "draft_artifact": "문서로 정리하는 중…",
-    "list_artifacts": "이전 작업을 살펴보는 중…",
-    "get_artifact": "문서를 다시 읽는 중…",
-    "read_document": "문서를 읽는 중…",
-    "draft_workflow": "워크플로 초안을 쓰는 중…",
-    "save_workflow": "워크플로를 저장하는 중…",
-    "list_workflows": "쓸 수 있는 워크플로를 확인하는 중…",
-    "run_workflow": "워크플로를 실행하는 중…",
-    "propose_form_values": "양식을 채우는 중…",
-    "ghostwrite_email": "내 말투로 이메일 초안을 쓰는 중…",
-    "recall_history": "메모를 확인하는 중…",
-    "search_tools": "알맞은 도구를 찾는 중…",
-    "load_mcp_server": "도구 서버에 연결하는 중…",
-    "run_python_job": "파일 작업하는 중…",
-    "search_my_email": "메일함을 검색하는 중…",
-    "read_my_email": "메일을 읽는 중…",
-    "read_my_email_attachment": "첨부파일을 읽는 중…",
-    "remind_me": "리마인더를 설정하는 중…",
-    "my_email_awaiting_reply": "답장을 기다리는 메일을 확인하는 중…",
-}
-
+})
+_LABELS: dict[str, str] = _LABEL_TEXT.english
+SPECIALIST_LABEL = _LABELS["consult_specialist"]
 
 def _label(name: str) -> str:
     """The label for a tool in ``_LABELS``, in OE_LANGUAGE."""
-    return (_LABELS_KO if is_korean() else _LABELS)[name]
+    return _LABEL_TEXT[name]
 
 
 def _fallback_label() -> str:
-    return _FALLBACK_LABEL_KO if is_korean() else FALLBACK_LABEL
+    return tr("activity.fallback", "Working…")
 
 
 # One `_THINKING` per iteration means exactly one label per iteration, so a
@@ -289,15 +219,14 @@ def _mcp_label(tool_input: Any) -> tuple[str, str]:
     chip. A static label here would be useless, which matters because MCP is
     the case that made the old indicator wrong most visibly.
     """
-    korean = is_korean()
-    generic = "연결된 도구 사용 중…" if korean else "Using a connected tool…"
+    generic = tr("activity.mcp.generic", "Using a connected tool…")
     raw = tool_input.get("name") if isinstance(tool_input, dict) else None
     if not isinstance(raw, str):
         return generic, "call_tool"
     name = _MCP_NAME_UNSAFE.sub("", raw).strip()[:_MCP_NAME_MAX].strip()
     if not name:
         return generic, "call_tool"
-    return (f"{name} 사용 중…" if korean else f"Using {name}…"), name
+    return tr("activity.mcp.named", "Using {name}…", name=name), name
 
 
 def _label_for(tool_use: dict[str, Any]) -> tuple[str, str]:

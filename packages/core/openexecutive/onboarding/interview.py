@@ -48,7 +48,7 @@ from openexecutive.agents.onboarding_interviewer import (
 from openexecutive.config import get_settings
 from openexecutive.departments.models import AuthorityLevel
 from openexecutive.memory.company_profile import CompanyProfile
-from openexecutive.utils.i18n import localized as _t
+from openexecutive.utils.i18n import MessageTable, fill, tr
 from openexecutive.utils.slug import DEPARTMENT_SLUG_FALLBACK, slugify
 
 logger = logging.getLogger(__name__)
@@ -92,23 +92,28 @@ _CONTINUE_PROMPT = (
     "the profile if you have enough."
 )
 
-OPENING_PROMPT = (
-    "Tell me about your company — what you do, who you sell to, roughly how "
-    "big you are, and what you're focused on this year. Write it however you "
-    "like; I'll ask about anything I'm missing. You can also attach a deck, "
-    "a one-pager, or anything else that describes the business."
-)
 # InterviewError messages reach the user as they are (the routes return
 # str(exc)), so they follow OE_LANGUAGE.
-_UNUSABLE = "The setup assistant did not return a usable response."
-_UNUSABLE_KO = "설정 도우미가 쓸 수 있는 응답을 주지 않았어요."
+_MESSAGES = MessageTable("onboarding.interview", {
+    "opening_prompt": (
+        "Tell me about your company — what you do, who you sell to, roughly how "
+        "big you are, and what you're focused on this year. Write it however you "
+        "like; I'll ask about anything I'm missing. You can also attach a deck, "
+        "a one-pager, or anything else that describes the business."
+    ),
+    "unusable": "The setup assistant did not return a usable response.",
+})
+OPENING_PROMPT = _MESSAGES.english["opening_prompt"]
 
-# OPENING_PROMPT in Korean (OE_LANGUAGE=KOREAN); the route picks one.
-OPENING_PROMPT_KO = (
-    "회사에 대해 알려 주세요. 무슨 일을 하는지, 누구에게 파는지, 규모는 어느 정도인지, "
-    "올해 무엇에 집중하는지요. 편하게 쓰시면 빠진 부분은 제가 물어볼게요. 회사 소개 자료나 "
-    "한 장짜리 요약처럼 사업을 설명하는 파일을 첨부해도 돼요."
-)
+
+def opening_prompt() -> str:
+    """``OPENING_PROMPT``, in OE_LANGUAGE."""
+    return _MESSAGES["opening_prompt"]
+
+
+def unusable_message() -> str:
+    """The InterviewError text for a response with nothing usable in it."""
+    return _MESSAGES["unusable"]
 
 
 class InterviewError(RuntimeError):
@@ -377,6 +382,28 @@ _EMIT_TOOL: dict[str, Any] = {
 TOOLS: list[dict[str, Any]] = sorted([_ASK_TOOL, _EMIT_TOOL], key=lambda t: str(t["name"]))
 
 
+# What validate_draft shows the user for each problem (DraftError.safe).
+_DRAFT_ERRORS = MessageTable("onboarding.draft_error", {
+    "no_company_name": "Your company needs a name.",
+    "no_people": "Add at least one person, and mark which one is you.",
+    "person_without_name": "Every person needs a name.",
+    "duplicate_person": "Two people have the same name — give them distinct names.",
+    "principal_count": "Mark exactly one person as you.",
+    "person_name_too_long": "A person's name is too long (limit {limit} characters).",
+    "person_role_too_long": "A person's role is too long (limit {limit} characters).",
+    "company_name_too_long": "The company name is too long (limit {limit} characters).",
+    "company_mission_too_long": "The company mission is too long (limit {limit} characters).",
+    "company_vision_too_long": "The company vision is too long (limit {limit} characters).",
+    "company_industry_too_long": "The company industry is too long (limit {limit} characters).",
+    "company_stage_too_long": "The company stage is too long (limit {limit} characters).",
+    "department_without_name": "Every department needs a name.",
+    "department_name_too_long": "A department name is too long (limit {limit} characters).",
+    "department_mission_too_long": "A department description is too long (limit {limit} characters).",
+    "head_not_on_team": "A department is led by someone who isn't on the team list.",
+    "duplicate_department": "Two departments have the same name.",
+})
+
+
 def validate_draft(draft: CompanyDraft) -> list[DraftError]:
     """Referential-integrity and bounds errors (empty list = OK).
 
@@ -388,28 +415,20 @@ def validate_draft(draft: CompanyDraft) -> list[DraftError]:
     """
     errors: list[DraftError] = []
 
-    def add(safe: str, detail: str | None = None, *, korean: str = "") -> None:
-        # ``safe`` is shown to the user, so it follows OE_LANGUAGE; ``detail``
-        # goes back to the model and stays English.
-        shown = _t(safe, korean) if korean else safe
-        errors.append(DraftError(safe=shown, detail=detail or safe))
+    def add(key: str, detail: str | None = None, **values: object) -> None:
+        # The shown text follows OE_LANGUAGE; ``detail`` goes back to the
+        # model and stays English.
+        shown = fill(_DRAFT_ERRORS[key], values)
+        errors.append(DraftError(safe=shown, detail=detail or fill(_DRAFT_ERRORS.english[key], values)))
 
     if not draft.profile.name.strip():
-        add("Your company needs a name.", "profile.name is required", korean="회사 이름이 필요해요.")
+        add("no_company_name", "profile.name is required")
     if not draft.people:
-        add(
-            "Add at least one person, and mark which one is you.",
-            "at least one person is required",
-            korean="한 명 이상 추가하고, 그중 누가 본인인지 표시하세요.",
-        )
+        add("no_people", "at least one person is required")
 
     all_names = [p.full_name.strip() for p in draft.people]
     if any(not n for n in all_names):
-        add(
-            "Every person needs a name.",
-            "every person needs a non-empty full_name",
-            korean="모든 사람에게 이름이 필요해요.",
-        )
+        add("person_without_name", "every person needs a non-empty full_name")
     # Case-INSENSITIVE, matching the key save_onboarding_people upserts on.
     # A case-sensitive check let "JANE DOE" and "Jane Doe" both through, and the
     # upsert then collapsed them onto one row — last write wins, which could
@@ -417,74 +436,47 @@ def validate_draft(draft: CompanyDraft) -> list[DraftError]:
     folded = [n.lower() for n in all_names]
     if len(set(folded)) != len(folded):
         dupes = sorted({n for n in all_names if folded.count(n.lower()) > 1})
-        add(
-            "Two people have the same name — give them distinct names.",
-            f"duplicate full_name(s) in roster: {dupes}",
-            korean="이름이 같은 사람이 두 명 있어요. 서로 다른 이름을 붙여 주세요.",
-        )
+        add("duplicate_person", f"duplicate full_name(s) in roster: {dupes}")
 
     principals = [p for p in draft.people if p.is_principal]
     if len(principals) != 1:
         # find_principal_person() backs caller resolution, alert routing, and
         # the scheduler's principal brief. Zero or two is a real breakage.
         add(
-            "Mark exactly one person as you.",
+            "principal_count",
             f"exactly one person must have is_principal=true (got {len(principals)})",
-            korean="본인 표시는 한 사람에게만 해 주세요.",
         )
 
     if any(len(n) > MAX_NAME_CHARS for n in all_names):
-        add(
-            f"A person's name is too long (limit {MAX_NAME_CHARS} characters).",
-            korean=f"사람 이름이 너무 길어요(최대 {MAX_NAME_CHARS}자).",
-        )
+        add("person_name_too_long", limit=MAX_NAME_CHARS)
     if any(len(p.role) > MAX_ROLE_CHARS for p in draft.people):
-        add(
-            f"A person's role is too long (limit {MAX_ROLE_CHARS} characters).",
-            korean=f"사람의 역할이 너무 길어요(최대 {MAX_ROLE_CHARS}자).",
-        )
+        add("person_role_too_long", limit=MAX_ROLE_CHARS)
 
     # The profile lands in the cached system prompt on every Executive turn, so
     # an unbounded field here is a permanent per-request cost.
-    for label, label_ko, value in (
-        ("name", "이름", draft.profile.name),
-        ("mission", "미션", draft.profile.mission),
-        ("vision", "비전", draft.profile.vision),
-        ("industry", "업종", draft.profile.industry),
-        ("stage", "단계", draft.profile.stage),
+    for field_name, value in (
+        ("name", draft.profile.name),
+        ("mission", draft.profile.mission),
+        ("vision", draft.profile.vision),
+        ("industry", draft.profile.industry),
+        ("stage", draft.profile.stage),
     ):
         if len(value) > MAX_PROFILE_TEXT_CHARS:
-            add(
-                f"The company {label} is too long "
-                f"(limit {MAX_PROFILE_TEXT_CHARS:,} characters).",
-                korean=f"회사 {label_ko} 항목이 너무 길어요(최대 {MAX_PROFILE_TEXT_CHARS:,}자).",
-            )
+            add(f"company_{field_name}_too_long", limit=f"{MAX_PROFILE_TEXT_CHARS:,}")
 
     names = {n.lower() for n in all_names}
     for d in draft.departments:
         if not d.title.strip():
-            add(
-                "Every department needs a name.",
-                "every department needs a non-empty title",
-                korean="모든 부서에 이름이 필요해요.",
-            )
+            add("department_without_name", "every department needs a non-empty title")
         if len(d.title) > MAX_NAME_CHARS:
-            add(
-                f"A department name is too long (limit {MAX_NAME_CHARS} characters).",
-                korean=f"부서 이름이 너무 길어요(최대 {MAX_NAME_CHARS}자).",
-            )
+            add("department_name_too_long", limit=MAX_NAME_CHARS)
         if len(d.mission) > MAX_MISSION_CHARS:
-            add(
-                f"A department description is too long "
-                f"(limit {MAX_MISSION_CHARS:,} characters).",
-                korean=f"부서 설명이 너무 길어요(최대 {MAX_MISSION_CHARS:,}자).",
-            )
+            add("department_mission_too_long", limit=f"{MAX_MISSION_CHARS:,}")
         if d.head_person_name and d.head_person_name.strip().lower() not in names:
             add(
-                "A department is led by someone who isn't on the team list.",
+                "head_not_on_team",
                 f"department '{d.title}' head_person_name "
                 f"'{d.head_person_name}' is not in the roster",
-                korean="팀 목록에 없는 사람이 부서장으로 지정된 부서가 있어요.",
             )
     # Same fallback the store uses, so two titles that both slugify to
     # nothing collide here exactly as they would on insert.
@@ -495,11 +487,7 @@ def validate_draft(draft: CompanyDraft) -> list[DraftError]:
     ]
     if len(set(slugs)) != len(slugs):
         dupes = sorted({s for s in slugs if slugs.count(s) > 1})
-        add(
-            "Two departments have the same name.",
-            f"duplicate department title(s): {dupes}",
-            korean="이름이 같은 부서가 두 개 있어요.",
-        )
+        add("duplicate_department", f"duplicate department title(s): {dupes}")
 
     return errors
 
@@ -513,7 +501,7 @@ def _extract_tool_call(response: Any) -> tuple[str, dict[str, Any]]:
         data = getattr(block, "input", None)
         if name in (ASK_TOOL_NAME, EMIT_TOOL_NAME) and isinstance(data, dict):
             return name, data
-    raise InterviewError(_t(_UNUSABLE, _UNUSABLE_KO))
+    raise InterviewError(unusable_message())
 
 
 def _prose(response: Any) -> str:
@@ -729,9 +717,9 @@ async def advance(
             )
         except TimeoutError as exc:  # asyncio.TimeoutError is an alias since 3.11
             raise InterviewTimeout(
-                _t(
+                tr(
+                    "onboarding.interview.timeout",
                     "The setup assistant took too long to respond. Try again.",
-                    "설정 도우미의 응답이 너무 오래 걸렸어요. 다시 시도하세요.",
                 )
             ) from exc
         except InterviewError:
@@ -741,9 +729,9 @@ async def advance(
             # which carries the user's financials.
             logger.error("onboarding interview: provider call failed (%s)", type(exc).__name__)
             raise InterviewError(
-                _t(
+                tr(
+                    "onboarding.interview.unavailable",
                     "The setup assistant is unavailable right now. Try again.",
-                    "지금은 설정 도우미를 쓸 수 없어요. 다시 시도하세요.",
                 )
             ) from exc
 
@@ -813,10 +801,10 @@ async def advance(
                     ]
                     continue
                 raise InterviewError(
-                    _t(
-                        "The setup assistant could not produce a draft. "
-                        "Try adding a bit more detail, or use the step-by-step form.",
-                        "설정 도우미가 초안을 만들지 못했어요. 내용을 조금 더 자세히 쓰거나 단계별 양식을 쓰세요.",
+                    tr(
+                        "onboarding.interview.no_draft",
+                        "The setup assistant could not produce a draft. Try adding a bit more "
+                        "detail, or use the step-by-step form.",
                     )
                 )
             try:
@@ -836,7 +824,7 @@ async def advance(
                 )
                 if attempt == 0:
                     continue
-                raise InterviewError(_t(_UNUSABLE, _UNUSABLE_KO)) from exc
+                raise InterviewError(unusable_message()) from exc
 
         errors: list[str]
         try:
@@ -874,18 +862,18 @@ async def advance(
             continue
 
         raise InterviewError(
-            _t(
-                "The setup assistant could not produce a valid draft. "
-                "Try rephrasing, or use the step-by-step form instead.",
-                "설정 도우미가 쓸 수 있는 초안을 만들지 못했어요. 다르게 써 보거나 단계별 양식을 쓰세요.",
+            tr(
+                "onboarding.interview.no_valid_draft",
+                "The setup assistant could not produce a valid draft. Try rephrasing, or use the "
+                "step-by-step form instead.",
             )
         )
 
     # Unreachable: every branch above returns or raises on attempt 1. Kept
     # so the function has a provable return type.
     raise InterviewError(
-        _t(
+        tr(
+            "onboarding.interview.no_valid_draft_short",
             "The setup assistant could not produce a valid draft.",
-            "설정 도우미가 쓸 수 있는 초안을 만들지 못했어요.",
         )
     )

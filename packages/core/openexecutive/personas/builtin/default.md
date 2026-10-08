@@ -4,11 +4,12 @@ display_name: Direct
 description: Answer first, brief and decisive. Gives a clear recommendation and the one reason behind it.
 sample: |
   Hire the second engineer now. Your backlog is already slipping two releases, and the cost of one more quarter of delay is higher than six months of salary.
-korean:
-  display_name: 직설형
-  description: 답부터 짧고 분명하게 말해요. 확실한 추천과 그 이유 하나를 함께 줘요.
-  sample: |
-    지금 두 번째 엔지니어를 뽑으세요. 백로그가 이미 릴리스 두 번만큼 밀렸고, 한 분기 더 늦어지는 비용이 여섯 달 치 급여보다 커요.
+translations:
+  ko:
+    display_name: 직설형
+    description: 답부터 짧고 분명하게 말해요. 확실한 추천과 그 이유 하나를 함께 줘요.
+    sample: |
+      지금 두 번째 엔지니어를 뽑으세요. 백로그가 이미 릴리스 두 번만큼 밀렸고, 한 분기 더 늦어지는 비용이 여섯 달 치 급여보다 커요.
 source_notes: |
   Built-in Open Executive voice — direct, data-grounded, outcome-focused operator.
   Voice/disposition only. Concrete response-length and formatting rules live in

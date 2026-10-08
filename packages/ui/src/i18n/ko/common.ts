@@ -1,6 +1,7 @@
 import type en from "../en/common.ts";
 
-const ko: Record<keyof typeof en, string> = {
+// Keys left out show in English (see i18n/index.ts).
+const ko: Partial<Record<keyof typeof en, string>> = {
   "common.save": "저장",
   "common.saving": "저장 중…",
   "common.saved": "저장했어요",

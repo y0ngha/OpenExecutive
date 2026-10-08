@@ -123,17 +123,25 @@ class Settings(BaseSettings):
     research_model: str = Field("claude-sonnet-5-5", alias="RESEARCH_MODEL")
 
     # Language of everything the models write for people — replies, briefs,
-    # notes, drafts: ENGLISH (default) or KOREAN. Prompts stay in English
-    # either way (providers/output_language.py adds one fixed instruction).
-    # The web UI reads the same variable for its own text.
-    oe_language: Literal["ENGLISH", "KOREAN"] = Field("ENGLISH", alias="OE_LANGUAGE")
+    # notes, drafts — and of the fixed text the API and UI show: a code from
+    # utils.i18n.LANGUAGES ("en", the default, or "ko"). English names
+    # ("ENGLISH", "KOREAN") still work. Prompts stay in English either way
+    # (providers/output_language.py adds one instruction).
+    oe_language: str = Field("en", alias="OE_LANGUAGE")
 
     @field_validator("oe_language", mode="before")
     @classmethod
     def _parse_oe_language(cls, v: Any) -> Any:
+        from openexecutive.utils.i18n import DEFAULT_LANGUAGE, LANGUAGES, normalize_language
+
         if _blank_or_comment(v):
-            return "ENGLISH"
-        return v.strip().upper() if isinstance(v, str) else v
+            return DEFAULT_LANGUAGE
+        code = normalize_language(v)
+        if code is None:
+            raise ValueError(
+                f"OE_LANGUAGE must be one of {', '.join(LANGUAGES)} (got {v!r})"
+            )
+        return code
 
     vector_store_path: Path = Field(_ROOT / "chroma_db", alias="VECTOR_STORE_PATH")
     company_profile_path: Path = Field(

@@ -1,6 +1,7 @@
 import type en from "../en/lib.ts";
 
-const ko: Record<keyof typeof en, string> = {
+// Keys left out show in English (see i18n/index.ts).
+const ko: Partial<Record<keyof typeof en, string>> = {
   "lib.meta.title": "Open Executive",
   "lib.meta.description": "AI로 움직이는 나만의 가상 경영진",
   "lib.signin.localIntro": "이 앱은 내 컴퓨터에서만 돌아가고 나만 접속할 수 있어서 로그인할 필요가 없어요.",

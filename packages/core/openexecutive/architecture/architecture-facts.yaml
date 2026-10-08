@@ -334,17 +334,29 @@ providers:
   module: openexecutive.providers
   protocol: openexecutive.providers.provider.LLMProvider — two-method surface (messages_create / messages_stream) that mirrors anthropic.AsyncAnthropic().messages.create/stream so call sites stay Anthropic-shaped.
   output_language: |
-    OE_LANGUAGE (ENGLISH default | KOREAN) sets the language people read.
+    OE_LANGUAGE (a code from utils.i18n.LANGUAGES: en default | ko; the
+    older ENGLISH / KOREAN still parse) sets the language people read.
     Prompts stay English. providers.output_language.apply_output_language
-    runs in both backends' messages_create/messages_stream; for KOREAN it
-    appends one constant, uncached system block after the existing ones
-    (no new cache_control breakpoint, so the cached prefix still hits).
-    The block keeps fixed reply tokens (YES/NO, NO|reason for the response
-    gate, IDENTITY: for Honcho, JSON, list labels) in English, since
-    those are parsed. Fixed display text in code goes through
-    utils.i18n.localized(english, korean), read per call; the guide serves
-    guide/prebuilt/ko/<id>.json with English fallback; the web UI reads the
-    same variable (packages/ui/src/i18n, <html lang> stamped per request).
+    runs in both backends' messages_create/messages_stream; for a language
+    other than English it appends one uncached system block after the
+    existing ones, from one template filled with the language's name (no
+    new cache_control breakpoint, so the cached prefix still hits). The
+    block keeps fixed reply tokens (YES/NO, NO|reason for the response
+    gate, IDENTITY: for Honcho, JSON, list labels) in English, since those
+    are parsed, and asks for specialist questions and search queries in
+    English. Calls whose output only a model or the code reads run inside
+    output_language.internal_call() (a ContextVar) and get no block: the
+    chat turn's consult_specialist round (route_parallel), committee
+    critiques, the response gate, the inbox classifier, the inbound-reply
+    resolver, PDF transcription and the eval judges. So specialists work in
+    English and the reply is written once in the output language; a call
+    missed there just gets the block, as every call did before. Fixed
+    display text in code goes through utils.i18n.tr(id, english, **values)
+    / MessageTable, with other languages in utils/i18n/catalogs/<code>.json
+    (English fallback per id); the guide serves guide/prebuilt/<code>/<id>.json
+    with English fallback; the web UI reads the same variable
+    (packages/ui/src/i18n, English fallback per key, <html lang> stamped per
+    request, a script font per locale).
   resolver: |
     openexecutive.providers.registry.get_provider(model) picks the
     backend per call. Module-level singletons cache one provider per

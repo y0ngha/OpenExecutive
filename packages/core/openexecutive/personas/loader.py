@@ -58,18 +58,19 @@ class Persona(BaseModel):
     is_legacy: bool = False
     description: str = ""
     sample: str = ""
-    # Picker copy per OE_LANGUAGE value, from the frontmatter's `korean:`
-    # block. Never sent to the model or the API; see _picker_copy.
+    # Picker copy per language code, from the frontmatter's `translations:`
+    # block (`translations: {ko: {display_name, description, sample}}`).
+    # Never sent to the model or the API; see _picker_copy.
     translations: dict[str, dict[str, str]] = Field(default_factory=dict, exclude=True)
 
 
 def _picker_copy(p: Persona) -> dict[str, str]:
-    """display_name / description / sample in OE_LANGUAGE where the built-in
-    has a translation. The body (the prompt) always stays as written."""
-    from openexecutive.config import get_settings
+    """display_name / description / sample in the current language where the
+    built-in has a translation. The body (the prompt) always stays as written."""
+    from openexecutive.utils.i18n import current_language
 
     base = {"display_name": p.display_name, "description": p.description, "sample": p.sample}
-    return {**base, **p.translations.get(get_settings().oe_language, {})}
+    return {**base, **p.translations.get(current_language(), {})}
 
 
 def _parse_md(path: Path) -> dict[str, Any]:
@@ -100,10 +101,9 @@ def _load_builtins() -> dict[str, Persona]:
             description=str(data.get("description", "")).strip(),
             sample=str(data.get("sample", "")).strip(),
             translations={
-                "KOREAN": {k: str(v).strip() for k, v in (data.get("korean") or {}).items()}
-            }
-            if data.get("korean")
-            else {},
+                str(code): {k: str(v).strip() for k, v in (copy or {}).items()}
+                for code, copy in (data.get("translations") or {}).items()
+            },
         )
     return out
 
