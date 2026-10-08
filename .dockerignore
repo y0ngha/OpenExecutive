@@ -43,3 +43,8 @@ company
 .idea
 .DS_Store
 *.log
+
+# deploy/oracle per-server secrets and backups (the build context is the repo root)
+deploy/oracle/*.env
+deploy/oracle/.env
+deploy/oracle/backups/

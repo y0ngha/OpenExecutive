@@ -92,3 +92,9 @@ scripts/setup-flyctl.sh
 scripts/seed-google-workspace.sh
 .github/workflows/deploy.yml
 .github/workflows/deploy-qa.yml
+
+# deploy/oracle: per-server settings (secrets, written by init-env.sh) and
+# database backups. Never commit them.
+deploy/oracle/api.env
+deploy/oracle/ui.env
+deploy/oracle/backups/

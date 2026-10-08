@@ -1,0 +1,23 @@
+{
+	# Let's Encrypt account email: expiry and problem notices go here.
+	email {$ACME_EMAIL}
+}
+
+# HTTPS for the UI. Caddy gets and renews the certificate itself once the
+# domain's A record points at this server and ports 80/443 are open.
+{$OE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# The UI proxies every API call itself (/api/backend/*), so it is the
+	# only upstream. Chat replies stream as server-sent events; Caddy
+	# flushes those as they arrive.
+	reverse_proxy ui:3000
+}

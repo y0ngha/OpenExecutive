@@ -1,0 +1,97 @@
+# Production stack for one VM (Oracle Cloud or any Linux host with Docker):
+# the API, the production UI image, and Caddy in front for HTTPS.
+#
+# Run it through ./oe.sh (it sets the project directory), never with plain
+# `docker compose` from the repo root. Settings live next to this file, all
+# gitignored and written by ./init-env.sh:
+#   .env      OE_DOMAIN, ACME_EMAIL — read by compose for ${...} below
+#   api.env   everything the API reads (provider keys, integrations, ...)
+#   ui.env    the UI's sign-in settings and its signing key, kept off the API
+#
+# Only Caddy publishes ports. The API and the UI are reachable only on the
+# compose network, so the shared-secret-gated API is never on the internet
+# and the UI is only served through HTTPS.
+
+name: openexecutive
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    image: openexecutive-api:local
+    restart: unless-stopped
+    env_file:
+      - path: api.env
+        required: true
+    environment:
+      # Fixed for this topology; they shadow the same keys in api.env.
+      - OE_PUBLIC_DEPLOYMENT=1
+      - OE_LOCAL_LOGIN=
+      - VECTOR_STORE_PATH=/data/chroma_db
+      - COMPANY_PROFILE_PATH=/data/company/profile.yaml
+      - EPISODIC_DB_PATH=/data/episodic_memory.db
+      - MCP_SERVERS_CONFIG_PATH=/data/company/mcp_servers.json
+      - BACKEND_ALLOWED_ORIGINS=https://${OE_DOMAIN:?set OE_DOMAIN in deploy/oracle/.env}
+    volumes:
+      - executive_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # A cold start builds the tool index and loads Chroma before it serves
+      # (docs/deployment.md, Health checks).
+      start_period: 300s
+    logging: &logging
+      driver: local
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  ui:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.ui
+    image: openexecutive-ui:local
+    restart: unless-stopped
+    env_file:
+      - path: ui.env
+        required: true
+    environment:
+      - BACKEND_BASE_URL=http://api:8000
+      - OE_PUBLIC_DEPLOYMENT=1
+      - OE_LOCAL_LOGIN=
+      # Behind Caddy, Auth.js needs the public origin (docs/auth.md).
+      - AUTH_URL=https://${OE_DOMAIN:?set OE_DOMAIN in deploy/oracle/.env}
+      - AUTH_TRUST_HOST=true
+    depends_on:
+      - api
+    logging: *logging
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - OE_DOMAIN=${OE_DOMAIN:?set OE_DOMAIN in deploy/oracle/.env}
+      - ACME_EMAIL=${ACME_EMAIL:?set ACME_EMAIL in deploy/oracle/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the ACME account. Losing this volume only means
+      # Caddy asks Let's Encrypt again (rate limits apply), not lost data.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - ui
+    logging: *logging
+
+volumes:
+  # Everything the app keeps: SQLite, Chroma, company profile and docs,
+  # integration tokens. `./oe.sh backup` copies the database out of it.
+  executive_data:
+  caddy_data:
+  caddy_config:
