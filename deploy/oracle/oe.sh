@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Day-to-day commands for the production stack in this directory.
 #
-#   bash deploy/oracle/oe.sh up        build the images and start everything
+#   bash deploy/oracle/oe.sh up        start everything, building images that are missing
+#                                      (`up --build` rebuilds them)
+#   bash deploy/oracle/oe.sh load FILE load images saved elsewhere (docker save | gzip)
 #   bash deploy/oracle/oe.sh update    git pull, rebuild, restart
 #   bash deploy/oracle/oe.sh status    containers and the API's health
 #   bash deploy/oracle/oe.sh logs [service]
@@ -38,10 +40,20 @@ shift || true
 case "$cmd" in
   up)
     need_settings
-    compose build "$@"
+    # Images built on this host, or loaded with `load` (e.g. built on an
+    # arm64 laptop to spare the VM a 20-30 minute build), are used as they
+    # are; `up --build` rebuilds them from this checkout.
+    if [[ "${1:-}" == --build ]] || ! docker image inspect openexecutive-api:local >/dev/null 2>&1 \
+        || ! docker image inspect openexecutive-ui:local >/dev/null 2>&1; then
+      compose build
+    fi
     compose up -d
     echo "Started. The API takes up to ~5 minutes on its first boot; watch it with:"
     echo "  bash deploy/oracle/oe.sh logs api"
+    ;;
+  load)
+    file=${1:?usage: oe.sh load FILE.tar.gz}
+    gunzip -c "$file" | docker load
     ;;
   update)
     need_settings
@@ -94,7 +106,7 @@ dst.close(); src.close()
     compose "$@"
     ;;
   *)
-    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac

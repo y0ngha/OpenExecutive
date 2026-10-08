@@ -139,6 +139,20 @@ bash deploy/oracle/oe.sh up
 bash deploy/oracle/oe.sh status
 ```
 
+> **빌드를 서버 대신 ARM Mac에서 하기 (선택):** Apple Silicon Mac은 서버와 같은 `linux/arm64`라서 이미지를 미리 만들어 보낼 수 있습니다. 서버는 받아서 띄우기만 하면 됩니다.
+>
+> ```bash
+> # Mac (저장소 루트, deploy/oracle 브랜치)
+> docker build --platform linux/arm64 -f docker/Dockerfile    -t openexecutive-api:local .
+> docker build --platform linux/arm64 -f docker/Dockerfile.ui -t openexecutive-ui:local .
+> docker save openexecutive-api:local openexecutive-ui:local | gzip -1 > oe-images-arm64.tar.gz
+> scp -i <키> oe-images-arm64.tar.gz ubuntu@<서버IP>:
+> # 서버
+> bash deploy/oracle/oe.sh load ~/oe-images-arm64.tar.gz
+> bash deploy/oracle/oe.sh up        # 이미지가 있으면 빌드를 건너뜀 (`up --build`로 강제 재빌드)
+> ```
+
+
 브라우저에서 `https://exec.mydomain.com`에 접속해 Google로 로그인하면 설정 마법사(온보딩)가 시작됩니다. 처음에 "회사 프로필 없음"이 보이는 것은 정상입니다.
 
 ---
