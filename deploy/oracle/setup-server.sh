@@ -19,8 +19,11 @@ TARGET_USER="${SUDO_USER:-ubuntu}"
 
 echo "==> Packages"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -y
-apt-get install -y ca-certificates curl git sqlite3 python3-cryptography \
+# A fresh VM runs its own apt (cloud-init, unattended-upgrades) for the first
+# minutes after boot; wait for its lock instead of failing.
+apt_get() { apt-get -o DPkg::Lock::Timeout=900 "$@"; }
+apt_get update -y
+apt_get install -y ca-certificates curl git sqlite3 python3-cryptography \
   iptables-persistent netfilter-persistent
 
 echo "==> Docker"
@@ -32,8 +35,8 @@ if ! command -v docker >/dev/null 2>&1; then
   . /etc/os-release
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" \
     > /etc/apt/sources.list.d/docker.list
-  apt-get update -y
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  apt_get update -y
+  apt_get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 systemctl enable --now docker
 usermod -aG docker "$TARGET_USER"
