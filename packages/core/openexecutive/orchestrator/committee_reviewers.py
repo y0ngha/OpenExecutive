@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from openexecutive.orchestrator.router import SPECIALIST_DESCRIPTIONS
 from openexecutive.prompts.committee_prompts import DOMAIN_REVIEWER_SYSTEM_TEMPLATE
 from openexecutive.providers import get_provider
+from openexecutive.providers.output_language import internal_call
 
 logger = logging.getLogger(__name__)
 
@@ -109,18 +110,20 @@ class Reviewer:
         )
 
         try:
-            msg = await get_provider(self.model).messages_create(
-                model=self.model,
-                max_tokens=1024,
-                system=[
-                    {
-                        "type": "text",
-                        "text": self.system_prompt,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
-                messages=[{"role": "user", "content": user_content}],
-            )
+            # The critique is JSON for the revision call, not text for a person.
+            with internal_call():
+                msg = await get_provider(self.model).messages_create(
+                    model=self.model,
+                    max_tokens=1024,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": self.system_prompt,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                    messages=[{"role": "user", "content": user_content}],
+                )
             text_blocks = [b for b in msg.content if b.type == "text"]
             text = text_blocks[0].text if text_blocks else ""
         except Exception:

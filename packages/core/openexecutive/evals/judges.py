@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 from openexecutive.providers import get_provider
+from openexecutive.providers.output_language import internal_call
 
 # The judge routes through the provider abstraction (like every other LLM call),
 # so when OPENROUTER_ENABLED is on, judging bills the OpenRouter account too.
@@ -164,6 +165,13 @@ def _standing_facts_section(scenario: dict[str, Any]) -> str:
     return section
 
 
+
+async def _judge_create(**kwargs: Any) -> Any:
+    """One judge call. Judges score for the eval runner and stay in English
+    whatever language the deployment writes in."""
+    with internal_call():
+        return await get_provider(_JUDGE_MODEL).messages_create(**kwargs)
+
 async def judge_chat(
     scenario: dict[str, Any],
     response: str,
@@ -189,7 +197,7 @@ Rate each dimension (1=poor, 3=acceptable, 5=excellent):
 Respond in JSON format:
 {{"persona_coherence": N, "domain_accuracy": N, "actionability": N, "topic_coverage": N, "specificity": N, "overall": N, "notes": "brief explanation"}}"""
 
-    message = await get_provider(_JUDGE_MODEL).messages_create(
+    message = await _judge_create(
         model=_JUDGE_MODEL,
         max_tokens=_JUDGE_MAX_TOKENS,
         messages=[{"role": "user", "content": judge_prompt}],
@@ -238,7 +246,7 @@ Rate each dimension 1-5 (1=poor, 3=acceptable, 5=excellent):
 Respond in JSON:
 {{"structure": N, "specificity": N, "actionability": N, "coherence": N, "completeness": N, "overall": N, "notes": "brief"}}"""
 
-    message = await get_provider(_JUDGE_MODEL).messages_create(
+    message = await _judge_create(
         model=_JUDGE_MODEL,
         max_tokens=_JUDGE_MAX_TOKENS,
         messages=[{"role": "user", "content": judge_prompt}],
@@ -300,7 +308,7 @@ If any quality criterion is not met, overall must be 2 or lower and notes must n
 Respond in JSON:
 {{"faithfulness": N, "safety": N, "open_questions": N, "voice": N, "overall": N, "notes": "brief"}}"""
 
-    message = await get_provider(_JUDGE_MODEL).messages_create(
+    message = await _judge_create(
         model=_JUDGE_MODEL,
         max_tokens=_JUDGE_MAX_TOKENS,
         messages=[{"role": "user", "content": judge_prompt}],
@@ -379,7 +387,7 @@ ACTUAL DECISION:
 Respond in JSON:
 {{"severity_accuracy": N, "channel_appropriateness": N, "dedup_correctness": N, "overall": N, "notes": "brief"}}"""
 
-    message = await get_provider(_JUDGE_MODEL).messages_create(
+    message = await _judge_create(
         model=_JUDGE_MODEL,
         max_tokens=_JUDGE_MAX_TOKENS,
         messages=[{"role": "user", "content": judge_prompt}],

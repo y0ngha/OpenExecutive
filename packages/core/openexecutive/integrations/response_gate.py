@@ -141,6 +141,7 @@ async def should_respond(
         from openexecutive.agents.utility_fast import get_fast_model
         from openexecutive.config import get_settings
         from openexecutive.providers import get_provider
+        from openexecutive.providers.output_language import internal_call
 
         model = get_fast_model()
         provider = get_provider(model)
@@ -176,16 +177,18 @@ async def should_respond(
             f"Should {bot_label} reply? Output 'YES' or 'NO|<reason>'."
         )
 
-        response = await asyncio.wait_for(
-            provider.messages_create(
-                model=model,
-                max_tokens=_GATE_MAX_TOKENS,
-                temperature=0,
-                system=_RESPONSE_GATE_SYSTEM,
-                messages=[{"role": "user", "content": prompt}],
-            ),
-            timeout=gate_timeout,
-        )
+        # The gate answers YES / NO|reason for the code, so it stays English.
+        with internal_call():
+            response = await asyncio.wait_for(
+                provider.messages_create(
+                    model=model,
+                    max_tokens=_GATE_MAX_TOKENS,
+                    temperature=0,
+                    system=_RESPONSE_GATE_SYSTEM,
+                    messages=[{"role": "user", "content": prompt}],
+                ),
+                timeout=gate_timeout,
+            )
         raw = "".join(
             getattr(b, "text", "") for b in response.content
             if getattr(b, "type", "") == "text"

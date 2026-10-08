@@ -209,15 +209,17 @@ def render_email(message: Any, *, relation: str, addressed: Addressing | None = 
 async def _call_model(model: str, turn: str) -> dict[str, Any]:
     from openexecutive.audit.usage import log_model_usage
     from openexecutive.providers import get_provider
+    from openexecutive.providers.output_language import internal_call
 
-    response = await get_provider(model).messages_create(
-        model=model,
-        max_tokens=_MAX_TOKENS,
-        system=CLASSIFIER_PROMPT,
-        tools=[_CLASSIFY_TOOL],
-        tool_choice={"type": "tool", "name": _CLASSIFY_TOOL["name"]},
-        messages=[{"role": "user", "content": turn}],
-    )
+    with internal_call():
+        response = await get_provider(model).messages_create(
+            model=model,
+            max_tokens=_MAX_TOKENS,
+            system=CLASSIFIER_PROMPT,
+            tools=[_CLASSIFY_TOOL],
+            tool_choice={"type": "tool", "name": _CLASSIFY_TOOL["name"]},
+            messages=[{"role": "user", "content": turn}],
+        )
     log_model_usage(response, model=model, actor="inbox_classifier")
     for block in response.content:
         if getattr(block, "type", "") == "tool_use" and getattr(block, "name", "") == _CLASSIFY_TOOL["name"]:

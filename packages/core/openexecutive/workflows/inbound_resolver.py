@@ -467,16 +467,18 @@ async def _llm_disambiguate(
         from openexecutive.agents.utility_fast import get_fast_model
         from openexecutive.config import get_settings
         from openexecutive.providers import get_provider
+        from openexecutive.providers.output_language import internal_call
 
         model = get_fast_model()
-        response = await asyncio.wait_for(
-            get_provider(model).messages_create(
-                model=model,
-                max_tokens=128,
-                messages=[{"role": "user", "content": prompt}],
-            ),
-            timeout=get_settings().utility_fast_timeout_s,
-        )
+        with internal_call():
+            response = await asyncio.wait_for(
+                get_provider(model).messages_create(
+                    model=model,
+                    max_tokens=128,
+                    messages=[{"role": "user", "content": prompt}],
+                ),
+                timeout=get_settings().utility_fast_timeout_s,
+            )
         raw_text_blocks = [b for b in response.content if getattr(b, "type", "") == "text"]
         raw = raw_text_blocks[0].text.strip() if raw_text_blocks else ""
         if raw.startswith("```"):

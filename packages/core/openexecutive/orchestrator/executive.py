@@ -168,6 +168,7 @@ from openexecutive.orchestrator.workflow_run_tools import (
 )
 from openexecutive.prompts.cache_manager import build_system_blocks
 from openexecutive.providers import get_provider
+from openexecutive.providers.output_language import internal_call
 from openexecutive.providers.translator import reasoning_replay_block
 from openexecutive.workflows import python_job, step_script
 from openexecutive.workflows.action_step import looks_like_error
@@ -2286,26 +2287,30 @@ class Executive:
                 session_stage = getattr(
                     getattr(current_session.get(), "company_profile", None), "stage", None
                 )
-                specialist_results = await route_parallel(
-                    run_calls,
-                    episodic_context=episodic_context,
-                    session_id=session_id,
-                    debug_collector=debug_collector,
-                    company_stage=(
-                        session_stage if isinstance(session_stage, str) else None
-                    ),
-                    # Solo: what the principal does, so a specialist advises
-                    # a VP inside a large company differently from an owner.
-                    # Resolved with the turn's mode; team sends no tag.
-                    principal_role=principal_role_tag,
-                    record_source=turn_sources.add if turn_sources is not None else None,
-                    failed_calls_out=failed_calls,
-                    # The web chat shows a missing area under the reply;
-                    # everywhere else the reply itself has to say so.
-                    tell_user_when_unavailable=not getattr(
-                        current_session.get(), "from_web_chat", False
-                    ),
-                )
+                # The specialists answer the Executive, not a person: they
+                # work in English and the reply is written once, in the
+                # output language, from what they say.
+                with internal_call():
+                    specialist_results = await route_parallel(
+                        run_calls,
+                        episodic_context=episodic_context,
+                        session_id=session_id,
+                        debug_collector=debug_collector,
+                        company_stage=(
+                            session_stage if isinstance(session_stage, str) else None
+                        ),
+                        # Solo: what the principal does, so a specialist advises
+                        # a VP inside a large company differently from an owner.
+                        # Resolved with the turn's mode; team sends no tag.
+                        principal_role=principal_role_tag,
+                        record_source=turn_sources.add if turn_sources is not None else None,
+                        failed_calls_out=failed_calls,
+                        # The web chat shows a missing area under the reply;
+                        # everywhere else the reply itself has to say so.
+                        tell_user_when_unavailable=not getattr(
+                            current_session.get(), "from_web_chat", False
+                        ),
+                    )
                 # Only a specialist that actually answered counts as
                 # consulted: the committee picks its critics from that list,
                 # and each consulted department's memory records the turn.

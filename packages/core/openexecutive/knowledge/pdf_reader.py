@@ -254,33 +254,38 @@ async def _model_slice(
     provider: Any, model: str, data: bytes, start: int, end: int
 ) -> tuple[str, bool]:
     """Transcribe pages [start, end): ``(text, cut off at max_tokens)``."""
+    from openexecutive.providers.output_language import internal_call
+
     chunk = await asyncio.to_thread(slice_pdf, data, start, end)
-    response = await provider.messages_create(
-        model=model,
-        max_tokens=_VISION_MAX_TOKENS,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "document",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "application/pdf",
-                            "data": base64.standard_b64encode(chunk).decode(),
+    # A transcription, not text for a person: the output-language block
+    # would have the model translate the document.
+    with internal_call():
+        response = await provider.messages_create(
+            model=model,
+            max_tokens=_VISION_MAX_TOKENS,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "document",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "application/pdf",
+                                "data": base64.standard_b64encode(chunk).decode(),
+                            },
                         },
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            f"{_TRANSCRIBE_PROMPT}\n\nThese are pages "
-                            f"{start + 1} to {end} of the original document."
-                        ),
-                    },
-                ],
-            }
-        ],
-    )
+                        {
+                            "type": "text",
+                            "text": (
+                                f"{_TRANSCRIBE_PROMPT}\n\nThese are pages "
+                                f"{start + 1} to {end} of the original document."
+                            ),
+                        },
+                    ],
+                }
+            ],
+        )
     if getattr(response, "stop_reason", None) == "refusal":
         raise RuntimeError("model declined to transcribe the pages")
     text = "".join(

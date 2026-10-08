@@ -87,3 +87,48 @@ async def test_internal_calls_get_no_block(monkeypatch):
     # Outside it again, person-facing calls get the block.
     assert len(apply_output_language(kwargs)["system"]) == 2
 
+
+def test_chat_specialist_consults_run_as_internal_calls(monkeypatch):
+    """The Executive's consult_specialist round runs inside internal_call, so
+    specialists answer in English and only the reply is written in the
+    output language; the reply's own model call still gets the block."""
+    import asyncio
+    from typing import Any
+    from unittest.mock import patch
+
+    from openexecutive.orchestrator.executive import Executive
+    from openexecutive.orchestrator.schedule_tools import set_session
+    from openexecutive.orchestrator.session import Session
+    from openexecutive.providers import output_language
+
+    from ._agent_loop_fakes import FinalMsg, ScriptedProvider, TextBlock, ToolUseBlock
+
+    seen: list[bool] = []
+
+    async def fake_route_parallel(calls: list[dict[str, str]], **kwargs: Any) -> list[str]:
+        seen.append(output_language._internal.get())
+        return ["analysis"] * len(calls)
+
+    monkeypatch.setattr("openexecutive.orchestrator.executive.route_parallel", fake_route_parallel)
+    monkeypatch.setattr("openexecutive.orchestrator.executive.audit_log", lambda *a, **k: None)
+    provider = ScriptedProvider([
+        FinalMsg(
+            [ToolUseBlock("toolu_1", "consult_specialist", {"specialist": "cfo", "query": "runway?"})],
+            "tool_use",
+        ),
+        FinalMsg([TextBlock("done")], "end_turn"),
+    ])
+
+    async def go() -> None:
+        with patch("openexecutive.orchestrator.executive.get_provider", return_value=provider):
+            async for _ in Executive()._stream_agent_loop(
+                system_blocks=[],
+                messages=[{"role": "user", "content": "go"}],
+                model="claude-test",
+            ):
+                pass
+        seen.append(output_language._internal.get())
+
+    with set_session(Session()):
+        asyncio.run(go())
+    assert seen == [True, False]
