@@ -78,6 +78,9 @@ services:
       # shadows any OE_LOCAL_LOGIN left in the bind-mounted packages/ui/.env*.
       - OE_LOCAL_LOGIN=
       - OE_PUBLIC_DEPLOYMENT=${OE_PUBLIC_DEPLOYMENT:-}
+      # The UI's own text follows the same language as the API (read per
+      # request by src/i18n/index.ts).
+      - OE_LANGUAGE=${OE_LANGUAGE:-}
     depends_on:
       - api
 
