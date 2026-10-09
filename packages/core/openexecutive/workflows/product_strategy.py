@@ -374,7 +374,7 @@ def _assemble_memo(ctx: _PSCtx) -> str:
         _ensure_heading(ctx.success, "## Success Criteria"),
         "",
         "---",
-        "*Drafted by Open Executive. The product team should treat this as "
+        "*Drafted by Hoiv Executive. The product team should treat this as "
         "a starting point, debate the bets vs. non-bets explicitly, and "
         "publish the final version with founder + CPO sign-off.*",
     ]

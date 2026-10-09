@@ -468,7 +468,7 @@ def _assemble_doc(ctx: _MACtx) -> str:
         _ensure_heading(ctx.recommendation, "## Recommendation"),
         "",
         "---",
-        "*Drafted by Open Executive. Engage outside M&A counsel and a "
+        "*Drafted by Hoiv Executive. Engage outside M&A counsel and a "
         "deal advisor before issuing an LOI. Every diligence finding "
         "below must be confirmed against primary documents.*",
     ]

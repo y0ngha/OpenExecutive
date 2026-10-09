@@ -183,7 +183,7 @@ function TopBar({
         </button>
         <nav aria-label={t("chat.shell.breadcrumb")} className="flex items-center gap-1.5 min-w-0">
           {crumbs.length === 0 ? (
-            <span className="font-display text-[15px] font-extrabold tracking-tight text-fg">Open Executive</span>
+            <span className="font-display text-[15px] font-extrabold tracking-tight text-fg">Hoiv Executive</span>
           ) : (
             crumbs.map((c, i) => {
               const isLast = i === crumbs.length - 1;

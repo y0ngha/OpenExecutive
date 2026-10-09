@@ -392,7 +392,7 @@ def _assemble_report(ctx: _ChurnCtx) -> str:
         _ensure_heading(ctx.program, "## 90-Day Retention Program"),
         "",
         "---",
-        "*Drafted by Open Executive. Validate every percentage in the cohort "
+        "*Drafted by Hoiv Executive. Validate every percentage in the cohort "
         "section against the source data before circulating.*",
     ]
     return "\n".join(parts).strip() + "\n"

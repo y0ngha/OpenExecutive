@@ -402,7 +402,7 @@ def _assemble_doc(ctx: _RRCtx) -> str:
         _ensure_heading(ctx.ranking, "## Ranking & Ownership"),
         "",
         "---",
-        "*Drafted by Open Executive. Review with leadership, sharpen, "
+        "*Drafted by Hoiv Executive. Review with leadership, sharpen, "
         "and confirm owners. Revisit quarterly; the register loses "
         "value the moment it's filed and forgotten.*",
     ]

@@ -474,7 +474,7 @@ def _assemble_plan(ctx: _GTMContext) -> str:
         _ensure_heading(ctx.timeline, "## Timeline & Owners"),
         "",
         "---",
-        "*Drafted by Open Executive. Review with marketing, product, and "
+        "*Drafted by Hoiv Executive. Review with marketing, product, and "
         "the launch-day on-call before locking the schedule.*",
     ]
     return "\n".join(parts).strip() + "\n"

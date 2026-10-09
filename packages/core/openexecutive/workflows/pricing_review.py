@@ -421,7 +421,7 @@ def _assemble_memo(ctx: _PricingCtx) -> str:
         _ensure_heading(ctx.risks, "## Risks & Decision Criteria"),
         "",
         "---",
-        "*Drafted by Open Executive. Review with the CFO, head of sales, "
+        "*Drafted by Hoiv Executive. Review with the CFO, head of sales, "
         "and customer success before locking the launch date.*",
     ]
     return "\n".join(parts).strip() + "\n"

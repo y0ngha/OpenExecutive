@@ -60,7 +60,7 @@ export function effectiveKind(kind: PersonKind, isPrincipal: boolean): PersonKin
 }
 
 /**
- * Adding someone to the team while using Open Executive just for yourself
+ * Adding someone to the team while using Hoiv Executive just for yourself
  * means there is a team now: offer to switch the workspace to team mode.
  * Never for the principal's own entry or for a contact.
  */

@@ -223,7 +223,7 @@ const en = {
   "audit.review.needReview.other": "{n} items need review",
   "audit.review.approveAllPending": "Approve all pending",
   "audit.review.emptyTitle": "Nothing waiting on you.",
-  "audit.review.emptyBody": "The knowledge that ships with Open Executive is trusted by default — the Executive can use it right away, and it does not sit here waiting for sign-off. Items appear in this queue when you upload something new, edit an existing file, or deliberately send a domain for review.",
+  "audit.review.emptyBody": "The knowledge that ships with Hoiv Executive is trusted by default — the Executive can use it right away, and it does not sit here waiting for sign-off. Items appear in this queue when you upload something new, edit an existing file, or deliberately send a domain for review.",
   "audit.review.curateTitle": "Review a domain yourself",
   "audit.review.curateBody": "Sending a domain for review withholds it from the Executive until you work through it.",
   "audit.review.domainToReview": "Domain to review",

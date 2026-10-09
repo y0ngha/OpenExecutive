@@ -12,7 +12,7 @@ import "./globals.css";
 // Geist, self-hosted by next/font at build time: no request to Google from
 // the browser, and no layout shift while it loads.
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
-// The brand face: the Open Executive name and feature names (FeatureName).
+// The brand face: the Hoiv Executive name and feature names (FeatureName).
 const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
   weight: ["700", "800"],

@@ -2,7 +2,7 @@ import type en from "../en/lib.ts";
 
 // Keys left out show in English (see i18n/index.ts).
 const ko: Partial<Record<keyof typeof en, string>> = {
-  "lib.meta.title": "Open Executive",
+  "lib.meta.title": "Hoiv Executive",
   "lib.meta.description": "AI로 움직이는 나만의 가상 경영진",
   "lib.signin.localIntro": "이 앱은 내 컴퓨터에서만 돌아가고 나만 접속할 수 있어서 로그인할 필요가 없어요.",
   "lib.signin.intro": "계속하려면 로그인하세요.",
@@ -11,10 +11,10 @@ const ko: Partial<Record<keyof typeof en, string>> = {
   "lib.signin.withProvider": "{name} 계정으로 로그인",
   "lib.signin.withGoogle": "Google로 로그인",
   "lib.signin.notSetUpTitle": "아직 로그인이 설정되지 않았어요.",
-  "lib.signin.notSetUpBody": "Open Executive를 운영하는 분께 Google 또는 SSO 로그인을 켜 달라고 요청하세요.",
+  "lib.signin.notSetUpBody": "Hoiv Executive를 운영하는 분께 Google 또는 SSO 로그인을 켜 달라고 요청하세요.",
   "lib.signin.notSetUpSelf": "직접 운영한다면 docs/auth.md를 보세요.",
   "lib.signin.errorAccessDenied": "이 계정으로는 로그인할 수 없어요. 워크스페이스 허용 목록에 없거나 이메일 인증이 안 됐어요. 관리자에게 추가를 요청하세요.",
-  "lib.signin.errorCredentials": "'열기'는 Open Executive가 실행 중인 컴퓨터의 브라우저에서 http://localhost:3000으로 접속할 때만 쓸 수 있어요.",
+  "lib.signin.errorCredentials": "'열기'는 Hoiv Executive가 실행 중인 컴퓨터의 브라우저에서 http://localhost:3000으로 접속할 때만 쓸 수 있어요.",
   "lib.signin.errorConfiguration": "인증 설정이 잘못됐어요. 관리자에게 문의하세요.",
   "lib.signin.errorDefault": "로그인하지 못했어요. 다시 시도하고, 계속 안 되면 관리자에게 문의하세요.",
   "lib.sources.company": "내 문서",

@@ -7,7 +7,7 @@ import { updateWorkspace } from "@/lib/api";
 import { t } from "@/i18n/index.ts";
 
 // Shown after a team member is added (or a contact moved onto the team) while
-// Open Executive is used just for yourself: a team now exists, so offer to
+// Hoiv Executive is used just for yourself: a team now exists, so offer to
 // switch the workspace to team mode — or keep it as it is.
 export function TeamModeOffer({ name, onDone }: { name: string; onDone: () => void }) {
   const { refresh } = useWorkspace();

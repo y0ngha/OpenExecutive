@@ -225,7 +225,7 @@ const ko: Partial<Record<keyof typeof en, string>> = {
   "audit.review.needReview.other": "검토할 항목 {n}개",
   "audit.review.approveAllPending": "대기 항목 모두 승인",
   "audit.review.emptyTitle": "검토할 항목이 없어요.",
-  "audit.review.emptyBody": "Open Executive에 기본으로 들어 있는 지식은 처음부터 신뢰할 수 있는 것으로 봐요. Executive가 바로 쓸 수 있어서 여기서 승인을 기다리지 않아요. 새 문서를 올리거나, 기존 파일을 고치거나, 분야를 직접 검토에 보내면 이 대기열에 항목이 생겨요.",
+  "audit.review.emptyBody": "Hoiv Executive에 기본으로 들어 있는 지식은 처음부터 신뢰할 수 있는 것으로 봐요. Executive가 바로 쓸 수 있어서 여기서 승인을 기다리지 않아요. 새 문서를 올리거나, 기존 파일을 고치거나, 분야를 직접 검토에 보내면 이 대기열에 항목이 생겨요.",
   "audit.review.curateTitle": "분야 직접 검토하기",
   "audit.review.curateBody": "분야를 검토에 보내면 검토를 마칠 때까지 Executive가 그 분야를 쓰지 않아요.",
   "audit.review.domainToReview": "검토할 분야",

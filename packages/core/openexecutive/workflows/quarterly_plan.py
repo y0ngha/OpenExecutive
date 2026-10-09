@@ -453,7 +453,7 @@ def _assemble_plan(ctx: _QuarterlyPlanContext) -> str:
         _ensure_heading(ctx.risks, "## Risks and Mitigations"),
         "",
         "---",
-        "*Drafted by Open Executive. Review with the leadership team and "
+        "*Drafted by Hoiv Executive. Review with the leadership team and "
         "validate every '[placeholder]' before circulating.*",
     ]
     return "\n".join(parts).strip() + "\n"

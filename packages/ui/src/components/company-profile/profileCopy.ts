@@ -1,6 +1,6 @@
 // The words the profile uses for itself, by what it is (`profileWording` in
 // components/shell/navConfig.ts): a team's company, a solo owner's business,
-// or, for anyone else using Open Executive just for themselves, their work.
+// or, for anyone else using Hoiv Executive just for themselves, their work.
 // Copy only: every field keeps its name and meaning in all three.
 
 import type { ProfileWording } from "@/components/shell/navConfig";

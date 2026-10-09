@@ -52,7 +52,7 @@ SpecialistKey = Literal[
 ]
 
 _INSTRUCTIONS = (
-    "Open Executive exposed as an MCP server. It surfaces a company's "
+    "Hoiv Executive exposed as an MCP server. It surfaces a company's "
     "executive context and a council of specialist analysts so another agent "
     "can ground itself in this company without re-explaining it.\n\n"
     "Resources (read-only, company-internal): company profile, today's "

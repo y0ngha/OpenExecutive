@@ -406,7 +406,7 @@ def _assemble_doc(ctx: _CTCtx) -> str:
         _ensure_heading(ctx.battlecard, "## Battle Card"),
         "",
         "---",
-        "*Drafted by Open Executive. Stress-test with the sales and CS "
+        "*Drafted by Hoiv Executive. Stress-test with the sales and CS "
         "teams; their pattern-match on this competitor is the source of "
         "truth, not this document.*",
     ]

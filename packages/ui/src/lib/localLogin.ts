@@ -1,4 +1,4 @@
-// Local login: running Open Executive on your own computer without setting
+// Local login: running Hoiv Executive on your own computer without setting
 // up sign-in (Google or SSO). The sign-in page offers an "Open" button instead, and the
 // session it creates carries no email — so the UI proxy sends no
 // `x-caller-email`, and the backend treats the caller as the principal, exactly

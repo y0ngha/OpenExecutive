@@ -39,7 +39,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
       <div className="w-full max-w-sm rounded-2xl border border-line bg-surface/60 p-8 shadow-xl">
         <h1 className="flex items-center gap-2.5 font-display text-2xl font-extrabold tracking-tight text-fg">
           <BrandMark size="sm" />
-          Open Executive
+          Hoiv Executive
         </h1>
         <p className="mt-2 text-sm text-fg-muted">
           {LOCAL_LOGIN

@@ -409,7 +409,7 @@ def _assemble_packet(ctx: _FundraisingPrepContext) -> str:
         _ensure_heading(ctx.data_room, "## Data-Room Checklist"),
         "",
         "---",
-        "*Drafted by Open Executive. Sharpen with the CFO and a trusted "
+        "*Drafted by Hoiv Executive. Sharpen with the CFO and a trusted "
         "investor before sending the deck out — the first partner meeting "
         "will pull on every number.*",
     ]

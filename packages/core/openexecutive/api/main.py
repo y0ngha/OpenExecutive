@@ -846,7 +846,7 @@ def _webhook_verifies_its_caller(path: str) -> bool:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Open Executive API",
+        title="Hoiv Executive API",
         description="AI-powered virtual executive team",
         version="0.5.2",  # x-release-please-version
         lifespan=lifespan,

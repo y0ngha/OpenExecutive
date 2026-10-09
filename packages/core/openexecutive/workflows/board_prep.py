@@ -509,7 +509,7 @@ def _assemble_deck(ctx: _BoardPrepContext) -> str:
             "by the board chair._",
             "",
             "---",
-            "*Drafted by Open Executive. Review with the CEO and CFO before "
+            "*Drafted by Hoiv Executive. Review with the CEO and CFO before "
             "distributing to the board.*",
         ]
     )

@@ -463,7 +463,7 @@ def _assemble_plan(ctx: _APCtx) -> str:
         _ensure_heading(ctx.cadence, "## Checkpoint Cadence"),
         "",
         "---",
-        "*Drafted by Open Executive. Stress-test with the leadership team "
+        "*Drafted by Hoiv Executive. Stress-test with the leadership team "
         "before locking. Every placeholder should be filled in with the "
         "function-head owner before the board sees it.*",
     ]

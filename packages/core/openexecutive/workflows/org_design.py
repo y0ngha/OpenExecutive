@@ -389,7 +389,7 @@ def _assemble_doc(ctx: _ODCtx) -> str:
         _ensure_heading(ctx.comms, "## Comms Plan"),
         "",
         "---",
-        "*Drafted by Open Executive. Review with CHRO and the affected "
+        "*Drafted by Hoiv Executive. Review with CHRO and the affected "
         "leaders 1:1 before any all-hands announcement.*",
     ]
     return "\n".join(parts).strip() + "\n"

@@ -1516,7 +1516,7 @@ export async function resumeExecutive(): Promise<ExecutiveStatus> {
 // principal's role.
 // ----------------------------------------------------------------------------
 
-// "solo": one person using Open Executive just for themselves (no department
+// "solo": one person using Hoiv Executive just for themselves (no department
 // check-ins). "team": a company with departments and people (the default).
 export type WorkspaceMode = "solo" | "team";
 

@@ -473,7 +473,7 @@ def _assemble_brief(ctx: _ESCtx) -> str:
         _ensure_heading(ctx.dealbreakers, "## Deal-Breakers"),
         "",
         "---",
-        "*Drafted by Open Executive. Review with the hiring manager and "
+        "*Drafted by Hoiv Executive. Review with the hiring manager and "
         "the executive search partner before kicking off the search.*",
     ]
     return "\n".join(parts).strip() + "\n"

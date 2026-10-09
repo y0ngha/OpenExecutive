@@ -439,7 +439,7 @@ def _assemble_doc(ctx: _CCCtx) -> str:
         _ensure_heading(ctx.postmortem, "## Post-Incident Comms"),
         "",
         "---",
-        "*Drafted by Open Executive. EVERY external message must be "
+        "*Drafted by Hoiv Executive. EVERY external message must be "
         "reviewed by outside counsel before it leaves the building. "
         "Treat this as a starting structure, not a script.*",
     ]

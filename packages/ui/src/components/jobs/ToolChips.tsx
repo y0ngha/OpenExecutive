@@ -6,7 +6,7 @@ import { t } from "@/i18n/index.ts";
 
 /**
  * "google_workspace__append_table_rows" → { label: "Append table rows", source: "google_workspace" }
- * "oe__read_file" → { label: "Read file", source: "Open Executive" }
+ * "oe__read_file" → { label: "Read file", source: "Hoiv Executive" }
  */
 export function toolLabel(name: string): { label: string; source: string } {
   const cut = name.indexOf("__");
@@ -15,7 +15,7 @@ export function toolLabel(name: string): { label: string; source: string } {
   const words = (tool || name).replace(/[_-]+/g, " ").trim();
   return {
     label: words.charAt(0).toUpperCase() + words.slice(1),
-    source: server === "oe" ? "Open Executive" : server.replace(/[_-]+/g, " "),
+    source: server === "oe" ? "Hoiv Executive" : server.replace(/[_-]+/g, " "),
   };
 }
 

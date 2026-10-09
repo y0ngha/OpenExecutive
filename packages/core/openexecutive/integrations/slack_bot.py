@@ -773,7 +773,7 @@ async def create_slack_app():
                     user_text=cleaned,
                     author_display_name=speaker_label,
                     history=gate_history,
-                    bot_display_name="Open Executive",
+                    bot_display_name="Hoiv Executive",
                     channel="slack",
                 )
                 if not decision.allow:

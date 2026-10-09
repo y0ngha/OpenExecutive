@@ -22,7 +22,7 @@ import {
 } from "@/lib/api";
 import { roleFormErrors, roleFormFrom, roleUpdate, type RoleForm } from "@/lib/principalRole";
 
-// Settings → Workspace: who Open Executive is for (personal, or for your
+// Settings → Workspace: who Hoiv Executive is for (personal, or for your
 // team), your role when it's just you, the time zone its briefs run in, and
 // whether it books meetings without asking, as one card each, with company
 // email domains under Advanced. Mode, role and zone go through PUT

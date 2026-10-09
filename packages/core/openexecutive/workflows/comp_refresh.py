@@ -400,7 +400,7 @@ def _assemble_proposal(ctx: _CompCtx) -> str:
         _ensure_heading(ctx.rollout, "## Rollout Plan"),
         "",
         "---",
-        "*Drafted by Open Executive. Validate every band figure against "
+        "*Drafted by Hoiv Executive. Validate every band figure against "
         "the current market survey and the cap table before approving.*",
     ]
     return "\n".join(parts).strip() + "\n"

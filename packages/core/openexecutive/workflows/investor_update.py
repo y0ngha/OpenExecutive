@@ -316,7 +316,7 @@ def _assemble_email(ctx: _IUContext) -> str:
         "Thanks as always for the support.",
         "",
         "---",
-        "*Drafted by Open Executive. Review every number against the source "
+        "*Drafted by Hoiv Executive. Review every number against the source "
         "of truth before sending.*",
     ]
     return "\n".join(parts).strip() + "\n"

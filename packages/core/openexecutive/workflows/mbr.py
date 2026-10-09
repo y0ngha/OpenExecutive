@@ -433,7 +433,7 @@ def _assemble_packet(ctx: _MBRContext) -> str:
         [
             "",
             "---",
-            "*Drafted by Open Executive. Review with the leadership team "
+            "*Drafted by Hoiv Executive. Review with the leadership team "
             "before circulating — every variance call should be verified "
             "against the actual numbers in FP&A's tooling.*",
         ]
