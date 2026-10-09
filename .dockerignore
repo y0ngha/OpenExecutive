@@ -48,3 +48,4 @@ company
 deploy/oracle/*.env
 deploy/oracle/.env
 deploy/oracle/backups/
+deploy/oracle/conf.d/

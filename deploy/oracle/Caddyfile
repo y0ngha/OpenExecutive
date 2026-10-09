@@ -9,12 +9,26 @@
 	encode zstd gzip
 
 	header {
+		# A private app: keep it out of search engines and AI crawlers that
+		# honour these (robots.txt below covers the rest).
+		X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex"
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		-Server
 	}
+
+	handle /robots.txt {
+		respond "User-agent: *
+Disallow: /
+" 200
+	}
+
+	# Optional MCP endpoint behind a secret path (`oe.sh mcp-on`): files in
+	# conf.d are generated on the server and gitignored. With none there,
+	# nothing but the UI is served.
+	import /etc/caddy/conf.d/*.caddy
 
 	# The UI proxies every API call itself (/api/backend/*), so it is the
 	# only upstream. Chat replies stream as server-sent events; Caddy

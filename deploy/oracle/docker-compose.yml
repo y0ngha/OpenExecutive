@@ -81,6 +81,8 @@ services:
       - ACME_EMAIL=${ACME_EMAIL:?set ACME_EMAIL in deploy/oracle/.env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Generated, gitignored snippets (oe.sh mcp-on); empty by default.
+      - ./conf.d:/etc/caddy/conf.d:ro
       # Certificates and the ACME account. Losing this volume only means
       # Caddy asks Let's Encrypt again (rate limits apply), not lost data.
       - caddy_data:/data

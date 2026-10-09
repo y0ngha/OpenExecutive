@@ -98,3 +98,4 @@ scripts/seed-google-workspace.sh
 deploy/oracle/api.env
 deploy/oracle/ui.env
 deploy/oracle/backups/
+deploy/oracle/conf.d/*.caddy
