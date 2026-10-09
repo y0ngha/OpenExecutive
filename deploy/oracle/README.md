@@ -1,4 +1,6 @@
-# Oracle Cloud에 Open Executive 배포하기
+# Oracle Cloud에 Hoiv Executive 배포하기
+
+> 전체 흐름(CLI로 서버 만들기, 비밀값 YAML, 오너 순서, MCP, 문제 해결)은 저장소 루트의 [`DEPLOY.md`](../../DEPLOY.md)에 정리되어 있습니다. 이 문서는 콘솔 화면 기준의 상세 단계입니다.
 
 VM 한 대에 Docker로 세 개의 컨테이너를 띄웁니다.
 

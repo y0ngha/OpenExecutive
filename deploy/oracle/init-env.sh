@@ -55,6 +55,7 @@ ask OWNER_EMAIL "Your sign-in email (the owner)"
 ask EXEC_EMAIL_ADDRESS "The Executive's own email address (the mailbox it sends from)"
 ask OE_LANGUAGE "Language (en or ko)" "ko"
 ask USER_TIMEZONE "Time zone (IANA)" "Asia/Seoul"
+ask EXEC_DISPLAY_NAME "The Executive's display name" "Hoiv Executive"
 ask_secret ANTHROPIC_API_KEY "Anthropic API key (sk-ant-...)"
 ask AUTH_GOOGLE_ID "Google OAuth client ID for sign-in (blank: fill in ui.env later)" ""
 AUTH_GOOGLE_SECRET=${AUTH_GOOGLE_SECRET-}
@@ -87,7 +88,7 @@ umask 077
 # Single-quoted in the env files, so compose reads the value literally: no
 # ${VAR} expansion and no " #" comment inside a pasted secret. Compose has no
 # escape inside single quotes, so a value holding one is refused instead.
-for v in OE_DOMAIN ACME_EMAIL OWNER_EMAIL EXEC_EMAIL_ADDRESS OE_LANGUAGE USER_TIMEZONE \
+for v in OE_DOMAIN ACME_EMAIL OWNER_EMAIL EXEC_EMAIL_ADDRESS OE_LANGUAGE USER_TIMEZONE EXEC_DISPLAY_NAME \
   ANTHROPIC_API_KEY AUTH_GOOGLE_ID AUTH_GOOGLE_SECRET; do
   if [[ "${!v}" == *"'"* || "${!v}" == *$'\n'* ]]; then
     echo "$v contains a quote (') or a line break, which the env file can't hold." >&2
@@ -112,6 +113,7 @@ ANTHROPIC_API_KEY=$(q "$ANTHROPIC_API_KEY")
 EXEC_EMAIL_ADDRESS=$(q "$EXEC_EMAIL_ADDRESS")
 OE_LANGUAGE=$(q "$OE_LANGUAGE")
 USER_TIMEZONE=$(q "$USER_TIMEZONE")
+EXEC_DISPLAY_NAME=$(q "$EXEC_DISPLAY_NAME")
 
 # Must equal BACKEND_SHARED_SECRET in ui.env.
 BACKEND_SHARED_SECRET=$(q "$BACKEND_SHARED_SECRET")
