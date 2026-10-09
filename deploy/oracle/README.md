@@ -182,6 +182,20 @@ scp -i <키> ubuntu@<서버IP>:OpenExecutive/deploy/oracle/backups/*.db ./
 
 **절대 하지 말 것**: `docker compose down -v`. `-v`는 데이터 볼륨(대화, 사람, 메모리 전부)을 지웁니다.
 
+### 검색엔진 차단
+기본으로 켜져 있습니다. Caddy가 `robots.txt`(`Disallow: /`)를 돌려주고, 모든 응답에 `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex`를 붙입니다. 로그인 없이 보이는 페이지는 로그인 화면뿐입니다.
+
+### 외부 MCP 클라이언트 연결 (선택, 예: ChatGPT)
+`/mcp`는 기본으로 외부에 열려 있지 않습니다. ChatGPT 커넥터처럼 `x-api-key` 헤더를 보낼 수 없는 클라이언트용으로 **비밀 주소**를 열 수 있습니다.
+
+```bash
+bash deploy/oracle/oe.sh mcp-on      # 비밀 주소 생성 + 출력 (이미 있으면 같은 주소)
+bash deploy/oracle/oe.sh mcp-rotate  # 새 주소로 교체 (이전 주소는 바로 막힘)
+bash deploy/oracle/oe.sh mcp-off     # 닫기
+```
+
+**주소 자체가 비밀번호입니다.** 주소를 가진 사람은 회사 자료를 읽고 모델 호출 비용을 쓸 수 있습니다(오너 권한은 없음). 주소가 새면 `mcp-rotate`를 실행하세요. 생성된 설정은 `deploy/oracle/conf.d/mcp.caddy`(gitignore 대상)에 저장됩니다.
+
 ### Slack, Telegram, Gmail 등 연동 추가
 
 저장소의 `.env.example`에서 필요한 줄을 `deploy/oracle/api.env`로 복사해 값을 채운 뒤 `bash deploy/oracle/oe.sh compose up -d`를 실행합니다. 각 연동 문서(`docs/*_setup.md`)와 `docs/deployment.md`의 Google Workspace / Microsoft 365 절에서 `docker compose` 명령은 `bash deploy/oracle/oe.sh compose …`로 바꿔 실행하면 됩니다.
