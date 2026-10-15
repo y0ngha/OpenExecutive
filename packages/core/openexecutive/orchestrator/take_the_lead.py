@@ -56,10 +56,40 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from openexecutive.utils.i18n import MessageTable, fill, tr
+from openexecutive.utils.i18n import tr as _translate
+
 if TYPE_CHECKING:
     from openexecutive.people.models import AuthorityScope, Person
 
 logger = logging.getLogger(__name__)
+
+
+def _tr(message_id: str, english: str, /, *, en: bool = False, **values: Any) -> str:
+    """``tr``, or the English filled in when ``en`` (text that goes to a
+    model or the audit log, which stays English)."""
+    return fill(english, values) if en else _translate(message_id, english, **values)
+
+
+class _Filled:
+    """A MessageTable whose messages have ``{name}`` placeholders, filled
+    with fixed values on every read."""
+
+    def __init__(self, table: MessageTable, **values: Any) -> None:
+        self.table = table
+        self.values = values
+
+    def __getitem__(self, key: str) -> str:
+        return fill(self.table[key], self.values)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self.table
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.table)
+
+    def __len__(self) -> int:
+        return len(self.table)
 
 DECISION_CLASS = "take_the_lead_action"
 
@@ -101,23 +131,24 @@ FEATURE = "take_the_lead"
 # person's own, by person_id.
 FEATURE_ACT_AS_ME = "act_as_me"
 
-KIND_LABELS: dict[str, str] = {
-    MONEY: "Money",
-    CONTRACTS: "Contracts and legal",
-    PEOPLE_DECISIONS: "Hiring and people decisions",
-    DELETE_SHARE: "Deleting, cancelling or sharing",
-    SOMEONE_NEW: "Someone new",
-    BIG_SEND: "Big sends",
-}
+# Keyed by the KINDS values (literals, so the catalog test can read them).
+KIND_LABELS = MessageTable("lead.kind", {
+    "money": "Money",
+    "contracts": "Contracts and legal",
+    "people_decisions": "Hiring and people decisions",
+    "delete_share": "Deleting, cancelling or sharing",
+    "someone_new": "Someone new",
+    "big_send": "Big sends",
+})
 # One line under each switch saying what it catches, in the words check() uses.
-KIND_HINTS: dict[str, str] = {
-    MONEY: "Anything about payments, invoices, prices, budgets or an amount of money.",
-    CONTRACTS: "Contracts, agreements, signatures, terms and other legal matters.",
-    PEOPLE_DECISIONS: "Hiring, firing, pay, promotions and performance reviews.",
-    DELETE_SHARE: "Deleting or cancelling something, or sharing a file or access.",
-    SOMEONE_NEW: "Messages to anyone who isn't on your team or in your contacts.",
-    BIG_SEND: f"Company-wide or department-wide messages, or anything going to more than {BIG_SEND_RECIPIENTS} people.",
-}
+KIND_HINTS = _Filled(MessageTable("lead.kind_hint", {
+    "money": "Anything about payments, invoices, prices, budgets or an amount of money.",
+    "contracts": "Contracts, agreements, signatures, terms and other legal matters.",
+    "people_decisions": "Hiring, firing, pay, promotions and performance reviews.",
+    "delete_share": "Deleting or cancelling something, or sharing a file or access.",
+    "someone_new": "Messages to anyone who isn't on your team or in your contacts.",
+    "big_send": "Company-wide or department-wide messages, or anything going to more than {count} people.",
+}), count=BIG_SEND_RECIPIENTS)
 
 RULE_PERSON = "person"
 RULE_DOMAIN = "domain"
@@ -365,20 +396,20 @@ class RuleError(ValueError):
 def clean_rule(kind: str, value: str) -> str:
     """``value`` normalised for ``kind``, or RuleError."""
     if kind not in RULE_KINDS:
-        raise RuleError("Pick a person, a domain, words or an amount.")
+        raise RuleError(tr("lead.rule_error.kind", "Pick a person, a domain, words or an amount."))
     text = " ".join(str(value or "").split())
     if not text:
-        raise RuleError("The rule is empty.")
+        raise RuleError(tr("lead.rule_error.empty", "The rule is empty."))
     if len(text) > RULE_VALUE_MAX:
-        raise RuleError(f"Keep it under {RULE_VALUE_MAX} characters.")
+        raise RuleError(tr("lead.rule_error.too_long", "Keep it under {max} characters.", max=RULE_VALUE_MAX))
     if kind == RULE_DOMAIN:
         text = text.lower().lstrip("@")
         if not _DOMAIN_RE.match(text):
-            raise RuleError("That isn't a domain, like example.com.")
+            raise RuleError(tr("lead.rule_error.domain", "That isn't a domain, like example.com."))
     elif kind == RULE_AMOUNT:
         number = _number(text.lstrip("$€£¥"))
         if number is None or number <= 0:
-            raise RuleError("That isn't an amount, like 500.")
+            raise RuleError(tr("lead.rule_error.amount", "That isn't an amount, like 500."))
         # Plain digits: "{:g}" turns 1000000 into "1e+06", which _number can't read back.
         text = format(number, "f").rstrip("0").rstrip(".")
     elif kind == RULE_PERSON:
@@ -415,7 +446,7 @@ def add_rule(scope: str, kind: str, value: str, *, created_by: str, db_path: Pat
             f"SELECT COUNT(*) FROM {RULES_TABLE} WHERE scope = ?", (scope,),  # noqa: S608
         ).fetchone()[0]
         if count >= RULES_MAX:
-            raise RuleError(f"There are already {RULES_MAX} rules here.")
+            raise RuleError(tr("lead.rule_error.too_many", "There are already {max} rules here.", max=RULES_MAX))
         now = datetime.now(UTC).isoformat()
         cur = conn.execute(
             f"INSERT INTO {RULES_TABLE} (scope, kind, value, created_by, created_at) VALUES (?, ?, ?, ?, ?)",  # noqa: S608
@@ -449,8 +480,15 @@ class Hit:
     """Why an action waits: a base kind or an added rule."""
 
     kind: str
+    # English: what the model is told ("Not done yet: … because <reason>").
     reason: str
     rule_id: int | None = None
+    # The same in the deployment's language, for people; empty means ``reason``.
+    shown: str = ""
+
+    @property
+    def display(self) -> str:
+        return self.shown or self.reason
 
 
 def _number(text: str) -> float | None:
@@ -584,20 +622,24 @@ def _rule_hit(rules: list[Rule], text: str, recipients: list[str]) -> Hit | None
     for rule in rules:
         value = rule.value
         if rule.kind == RULE_PERSON:
-            if "@" in value and value in recipients:
-                return Hit("rule", f"your rule about {value}", rule.id)
-            if "@" not in value and re.search(rf"\b{re.escape(value.lower())}\b", lowered):
-                return Hit("rule", f"your rule about {value}", rule.id)
+            if ("@" in value and value in recipients) or (
+                "@" not in value and re.search(rf"\b{re.escape(value.lower())}\b", lowered)
+            ):
+                return Hit("rule", f"your rule about {value}", rule.id,
+                           tr("lead.reason.rule_about", "your rule about {value}", value=value))
         elif rule.kind == RULE_DOMAIN:
             if any(r.endswith("@" + value) or r.endswith("." + value) for r in recipients):
-                return Hit("rule", f"your rule about {value}", rule.id)
+                return Hit("rule", f"your rule about {value}", rule.id,
+                           tr("lead.reason.rule_about", "your rule about {value}", value=value))
         elif rule.kind == RULE_WORDS:
             if value.lower() in lowered:
-                return Hit("rule", f'your rule about "{value}"', rule.id)
+                return Hit("rule", f'your rule about "{value}"', rule.id,
+                           tr("lead.reason.rule_words", 'your rule about "{value}"', value=value))
         elif rule.kind == RULE_AMOUNT:
             limit = _number(value) or 0
             if any(a >= limit for a in amounts(text)):
-                return Hit("rule", f"your rule about amounts of {value} or more", rule.id)
+                return Hit("rule", f"your rule about amounts of {value} or more", rule.id,
+                           tr("lead.reason.rule_amount", "your rule about amounts of {value} or more", value=value))
     return None
 
 
@@ -622,20 +664,35 @@ def check(
     hit = _rule_hit(rules, text, recipients)
     if hit is not None:
         return hit
-    checks: list[tuple[str, bool, str]] = [
-        (DELETE_SHARE, tool in _DELETE_TOOLS or (mcp and bool(_MCP_DELETE_RE.search(tool))),
-         "it deletes, cancels or shares something"),
-        (BIG_SEND, tool in _BROADCAST_TOOLS or len(recipients) > BIG_SEND_RECIPIENTS,
-         "it goes to a lot of people"),
-        (MONEY, bool(_MONEY_RE.search(text) or amounts(text)), "it's about money"),
-        (CONTRACTS, bool(_CONTRACTS_RE.search(text)), "it's about a contract or legal matter"),
-        (PEOPLE_DECISIONS, bool(_PEOPLE_RE.search(text)), "it's about hiring or a people decision"),
-        (SOMEONE_NEW, any(not _known(r) for r in recipients), "it goes to someone new"),
+    checks: list[tuple[str, bool]] = [
+        (DELETE_SHARE, tool in _DELETE_TOOLS or (mcp and bool(_MCP_DELETE_RE.search(tool)))),
+        (BIG_SEND, tool in _BROADCAST_TOOLS or len(recipients) > BIG_SEND_RECIPIENTS),
+        (MONEY, bool(_MONEY_RE.search(text) or amounts(text))),
+        (CONTRACTS, bool(_CONTRACTS_RE.search(text))),
+        (PEOPLE_DECISIONS, bool(_PEOPLE_RE.search(text))),
+        (SOMEONE_NEW, any(not _known(r) for r in recipients)),
     ]
-    for kind, matched, reason in checks:
+    for kind, matched in checks:
         if matched and lead.asks_first(kind):
-            return Hit(kind, reason)
+            return Hit(kind, _KIND_REASONS.english[kind], shown=_KIND_REASONS[kind])
     return None
+
+
+# Why a base kind holds: English for the model (``Hit.reason``), the
+# deployment's language for people (``Hit.shown``).
+_KIND_REASONS = MessageTable("lead.reason", {
+    "delete_share": "it deletes, cancels or shares something",
+    "big_send": "it goes to a lot of people",
+    "money": "it's about money",
+    "contracts": "it's about a contract or legal matter",
+    "people_decisions": "it's about hiring or a people decision",
+    "someone_new": "it goes to someone new",
+})
+
+
+def _unreadable() -> Hit:
+    return Hit("rule", "its rules couldn't be read",
+               shown=tr("lead.reason.unreadable", "its rules couldn't be read"))
 
 
 def reply_hit(person_id: int, texts: list[str], recipients: list[str], *, db_path: Path | None = None) -> Hit | None:
@@ -644,7 +701,7 @@ def reply_hit(person_id: int, texts: list[str], recipients: list[str], *, db_pat
     try:
         rules = list_rules([SCOPE_COMPANY, person_scope(person_id)], db_path=db_path)
     except Exception:
-        return Hit("rule", "its rules couldn't be read")
+        return _unreadable()
     return _rule_hit(rules, "\n".join(texts), sorted({r.lower() for r in recipients}))
 
 
@@ -667,8 +724,10 @@ def _name(person_id: Any) -> str | None:
     return person.full_name or person.email or None
 
 
-def _names(names: list[str]) -> str:
-    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+def _names(names: list[str], *, en: bool = True) -> str:
+    if len(names) == 1:
+        return names[0]
+    return _tr("lead.names.and", "{names} and {last}", en=en, names=", ".join(names[:-1]), last=names[-1])
 
 
 def allowance(tool: str, tool_input: dict[str, Any], *, mcp: bool = False) -> tuple[str, str] | None:
@@ -695,18 +754,20 @@ def allowance(tool: str, tool_input: dict[str, Any], *, mcp: bool = False) -> tu
         if any(_MCP_REACH_ARG_RE.search(str(k)) for k in tool_input):
             return None
         shape = ",".join(sorted(str(k) for k in tool_input))
-        label = _connected_label(tool, tool_input, recipient=False) or (f"{bare}: {what}" if what else bare)
+        label = _connected_label(tool, tool_input, recipient=False, en=True) or (f"{bare}: {what}" if what else bare)
         return f"{FEATURE}|mcp|{tool}|{what.lower()}|{shape}", label[:200]
     if tool in _DIRECT_MESSAGE_TOOLS:
         person = _target_person(tool, tool_input)
         if person is None or person.id is None:
             return None
-        return f"{FEATURE}|message|person:{person.id}", f"Message {person.full_name or person.email}"[:200]
+        label = _tr("lead.label.message", "Message {name}", en=True, name=person.full_name or person.email)
+        return f"{FEATURE}|message|person:{person.id}", label[:200]
     if tool == "assign_open_loop":
         name = _name(tool_input.get("person_id"))
         if name is None:
             return None
-        return f"{FEATURE}|assign|person:{int(tool_input['person_id'])}", f"Assign things to {name}"[:200]
+        label = _tr("lead.label.assign", "Assign things to {name}", en=True, name=name)
+        return f"{FEATURE}|assign|person:{int(tool_input['person_id'])}", label[:200]
     if tool in _BOOK_TOOLS:
         raw = tool_input.get("attendee_person_ids")
         if not isinstance(raw, list):
@@ -718,27 +779,91 @@ def allowance(tool: str, tool_input: dict[str, Any], *, mcp: bool = False) -> tu
         names = [_name(i) for i in ids]
         if any(n is None for n in names):
             return None
-        who = f" with {_names([n for n in names if n])}" if names else ""
-        return f"{FEATURE}|book|people:{','.join(str(i) for i in ids)}", f"Book meetings{who}"[:200]
+        label = (
+            _tr("lead.label.book_with", "Book meetings with {names}", en=True, names=_names([n for n in names if n]))
+            if names else _tr("lead.label.book", "Book meetings", en=True)
+        )
+        return f"{FEATURE}|book|people:{','.join(str(i) for i in ids)}", label[:200]
     if tool == "run_workflow" and isinstance(tool_input.get("workflow_id"), str) and tool_input["workflow_id"]:
         workflow = str(tool_input["workflow_id"])
-        return f"{FEATURE}|workflow|{workflow}", f"Start the {workflow} workflow"[:200]
+        label = _tr("lead.label.workflow", "Start the {workflow} workflow", en=True, workflow=workflow)
+        return f"{FEATURE}|workflow|{workflow}", label[:200]
     if tool == "send_department_message" and isinstance(tool_input.get("department_slug"), str):
         slug = str(tool_input["department_slug"])
-        return f"{FEATURE}|department|{slug}", f"Message the {slug} department"[:200]
+        label = _tr("lead.label.department", "Message the {department} department", en=True, department=slug)
+        return f"{FEATURE}|department|{slug}", label[:200]
     return None
 
 
-# What a card lets you change before approving, per tool: (field, label, long).
-_EDITABLE: dict[str, tuple[tuple[str, str, bool], ...]] = {
-    **{t: (("text", "Message", True),) for t in _DIRECT_MESSAGE_TOOLS},
-    "create_calendar_event": (
-        ("title", "Title", False), ("start", "Starts", False), ("end", "Ends", False),
-        ("description", "Description", True),
-    ),
-    "create_instant_meeting": (("title", "Title", False), ("description", "Description", True)),
-    "assign_open_loop": (("task", "Task", True), ("due_date", "Due", False)),
+_CONNECTED_LABEL_RE = re.compile(r"^(Share|Delete|Create|Update|Move) (.+?)(?: \(([^()]*)\))?$", re.DOTALL)
+
+
+def display_label(key: str, label: str) -> str:
+    """An allowed action's label (``allowance``, stored in English: it goes
+    into a prompt through ``learned_note``) in the deployment's language,
+    for people. A label it can't read back is shown as it is."""
+    if len(label) >= 200:
+        return label
+    parts = key.split("|")
+    if len(parts) < 3 or parts[0] != FEATURE:
+        return label
+    action, target = parts[1], parts[2]
+
+    def after(prefix: str, suffix: str = "") -> str | None:
+        if label.startswith(prefix) and label.endswith(suffix) and len(label) > len(prefix) + len(suffix):
+            return label[len(prefix):len(label) - len(suffix)]
+        return None
+
+    if action == "message" and (name := after("Message ")) is not None:
+        return tr("lead.label.message", "Message {name}", name=name)
+    if action == "assign" and (name := after("Assign things to ")) is not None:
+        return tr("lead.label.assign", "Assign things to {name}", name=name)
+    if action == "book":
+        if label == "Book meetings":
+            return tr("lead.label.book", "Book meetings")
+        if after("Book meetings with ") is None:
+            return label
+        try:
+            names = [_name(i) for i in target.removeprefix("people:").split(",")]
+        except Exception:
+            return label
+        if not names or any(n is None for n in names):
+            return label
+        return tr("lead.label.book_with", "Book meetings with {names}",
+                  names=_names([n for n in names if n], en=False))
+    if action == "workflow" and after("Start the ", " workflow") is not None:
+        return tr("lead.label.workflow", "Start the {workflow} workflow", workflow=target)
+    if action == "department" and after("Message the ", " department") is not None:
+        return tr("lead.label.department", "Message the {department} department", department=target)
+    if action == "mcp" and (match := _CONNECTED_LABEL_RE.match(label)):
+        verb, what, app = match.group(1), match.group(2), match.group(3)
+        apps = {a for _, a, _ in _MCP_APPS}
+        if app is not None and (app not in apps or verb == "Share"):
+            return label
+        nouns = {v: k for k, v in _MCP_NOUNS.english.items()}
+        if what in nouns:
+            what = _MCP_NOUNS[nouns[what]]
+        return _connected_text(verb, what, app, "", en=False)
+    return label
+
+
+# What a card lets you change before approving, per tool: (field, long).
+_EDITABLE: dict[str, tuple[tuple[str, bool], ...]] = {
+    **{t: (("text", True),) for t in _DIRECT_MESSAGE_TOOLS},
+    "create_calendar_event": (("title", False), ("start", False), ("end", False), ("description", True)),
+    "create_instant_meeting": (("title", False), ("description", True)),
+    "assign_open_loop": (("task", True), ("due_date", False)),
 }
+# Each editable field's name on the card.
+_FIELD_LABELS = MessageTable("lead.field", {
+    "text": "Message",
+    "title": "Title",
+    "start": "Starts",
+    "end": "Ends",
+    "description": "Description",
+    "task": "Task",
+    "due_date": "Due",
+})
 EDIT_MAX = 4000
 # The edited fields kept as an example of how it's wanted: the wording.
 _STYLE_FIELDS = frozenset({"text", "title", "description", "task"})
@@ -753,8 +878,8 @@ def editable_fields(tool: str, tool_input: dict[str, Any], *, mcp: bool = False)
     if mcp:
         return []
     return [
-        {"field": f, "label": label, "long": long, "value": str(tool_input.get(f) or "")}
-        for f, label, long in _EDITABLE.get(tool, ())
+        {"field": f, "label": _FIELD_LABELS[f], "long": long, "value": str(tool_input.get(f) or "")}
+        for f, long in _EDITABLE.get(tool, ())
         if isinstance(tool_input.get(f), str) or f in ("description", "due_date")
     ]
 
@@ -765,24 +890,30 @@ def apply_edits(
     """``tool_input`` with a person's edits, and the fields they changed.
     Only a card's editable fields, as text; anything else is an EditError."""
     if not isinstance(edits, dict):
-        raise EditError("The changes must be a set of fields.")
+        raise EditError(tr("lead.edit_error.not_fields", "The changes must be a set of fields."))
     allowed = {f["field"]: f for f in editable_fields(tool, tool_input, mcp=mcp)}
     out = dict(tool_input)
     changed: dict[str, str] = {}
     for key, value in edits.items():
         if key not in allowed:
-            raise EditError(f"{key} can't be changed on this card.")
+            raise EditError(tr("lead.edit_error.not_editable", "{field} can't be changed on this card.", field=key))
+        label = allowed[key]["label"]
         if not isinstance(value, str) or len(value) > EDIT_MAX:
-            raise EditError(f"{allowed[key]['label']} must be text of at most {EDIT_MAX} characters.")
+            raise EditError(tr("lead.edit_error.too_long", "{label} must be text of at most {max} characters.",
+                               label=label, max=EDIT_MAX))
         value = value.strip()
         if not value and key not in ("description", "due_date"):
-            raise EditError(f"{allowed[key]['label']} can't be empty.")
+            raise EditError(tr("lead.edit_error.empty", "{label} can't be empty.", label=label))
         if value and key in ("start", "end", "due_date"):
             try:
                 (date.fromisoformat if key == "due_date" else datetime.fromisoformat)(value)
             except ValueError:
-                raise EditError(f"{allowed[key]['label']} must be a date{'' if key == 'due_date' else ' and time'}, "
-                                "like 2026-10-09" + ("" if key == "due_date" else "T15:00") + ".") from None
+                raise EditError(
+                    tr("lead.edit_error.date", "{label} must be a date, like 2026-10-09.", label=label)
+                    if key == "due_date" else
+                    tr("lead.edit_error.datetime", "{label} must be a date and time, like 2026-10-09T15:00.",
+                       label=label)
+                ) from None
         if value != str(tool_input.get(key) or "").strip():
             changed[key] = value
             out[key] = value
@@ -790,11 +921,12 @@ def apply_edits(
         try:
             start, end = datetime.fromisoformat(str(out["start"])), datetime.fromisoformat(str(out["end"]))
         except ValueError:
-            raise EditError("Start and End must be dates and times, like 2026-10-09T15:00.") from None
+            raise EditError(tr("lead.edit_error.start_end",
+                               "Start and End must be dates and times, like 2026-10-09T15:00.")) from None
         if (start.tzinfo is None) != (end.tzinfo is None):
-            raise EditError("Start and End must both give a time zone, or neither.")
+            raise EditError(tr("lead.edit_error.time_zone", "Start and End must both give a time zone, or neither."))
         if end <= start:
-            raise EditError("End must be after Start.")
+            raise EditError(tr("lead.edit_error.order", "End must be after Start."))
     return out, changed
 
 
@@ -811,6 +943,11 @@ class Allowed:
     # Whose it is, for a feature that learns per person (Act as me); None
     # for Take the lead as the Executive.
     person_id: int | None = None
+
+    @property
+    def shown(self) -> str:
+        """``label`` (English, for prompts) in the deployment's language."""
+        return display_label(self.key, self.label)
 
 
 _ALLOWED_COLUMNS = "id, key, label, feature, example, uses, last_used_at, created_at, person_id"
@@ -872,7 +1009,7 @@ def allow(
         if not _is_allowed(conn, key):
             count = _allowed_count(conn, feature, person_id)
             if count >= ALLOWED_MAX:
-                raise RuleError(f"It can learn at most {ALLOWED_MAX} things. Remove one first.")
+                raise RuleError(tr("lead.rule_error.allowed_max", "It can learn at most {max} things. Remove one first.", max=ALLOWED_MAX))
         conn.execute(
             f"INSERT INTO {ALLOWED_TABLE} "  # noqa: S608
             "(key, label, feature, example, created_by, created_at, decision_id, person_id) "
@@ -969,6 +1106,11 @@ class Suggestion:
     label: str
     approvals: int
 
+    @property
+    def shown(self) -> str:
+        """``label`` (English, what ``allow`` stores) in the deployment's language."""
+        return display_label(self.key, self.label)
+
 
 def suggestions(*, db_path: Path | None = None) -> list[Suggestion]:
     """Training cards approved unchanged ``SUGGEST_AFTER`` times or more in
@@ -1052,7 +1194,7 @@ def learned_note(*, db_path: Path | None = None) -> str:
 # Acting under the gate
 # --------------------------------------------------------------------------- #
 
-_TOOL_LABELS: dict[str, str] = {
+_TOOL_LABELS = MessageTable("lead.tool", {
     "archive_person": "Remove someone from the team",
     "assign_open_loop": "Assign something to someone",
     "cancel_calendar_event": "Cancel a meeting",
@@ -1065,7 +1207,7 @@ _TOOL_LABELS: dict[str, str] = {
     "send_discord_dm": "Send a Discord message",
     "send_slack_dm": "Send a Slack message",
     "send_telegram_message": "Send a Telegram message",
-}
+})
 
 
 # A connected tool, named in plain words: what it does, to which file, in
@@ -1081,15 +1223,32 @@ _MCP_VERBS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
 )
 _MCP_APPS: tuple[tuple[re.Pattern[str], str, str], ...] = tuple(
     (re.compile(p, re.IGNORECASE), app, noun) for p, app, noun in (
-        (r"excel|workbook|worksheet", "Excel", "a workbook"),
-        (r"ms365.*(word|document)|word_document", "Word", "a document"),
-        (r"onedrive|ms365.*(drive|file)", "OneDrive", "a file"),
-        (r"sheet", "Google Sheets", "a spreadsheet"),
-        (r"slide|presentation", "Google Slides", "a presentation"),
-        (r"doc", "Google Docs", "a document"),
-        (r"drive|file|folder", "Google Drive", "a file"),
+        (r"excel|workbook|worksheet", "Excel", "workbook"),
+        (r"ms365.*(word|document)|word_document", "Word", "document"),
+        (r"onedrive|ms365.*(drive|file)", "OneDrive", "file"),
+        (r"sheet", "Google Sheets", "spreadsheet"),
+        (r"slide|presentation", "Google Slides", "presentation"),
+        (r"doc", "Google Docs", "document"),
+        (r"drive|file|folder", "Google Drive", "file"),
     )
 )
+# What a connected tool works on when the call doesn't name it, by the
+# _MCP_APPS noun key.
+_MCP_NOUNS = MessageTable("lead.mcp.noun", {
+    "workbook": "a workbook",
+    "document": "a document",
+    "file": "a file",
+    "spreadsheet": "a spreadsheet",
+    "presentation": "a presentation",
+})
+# Each _MCP_VERBS verb with what it acts on.
+_MCP_VERB_TEXT = MessageTable("lead.mcp.verb", {
+    "Share": "Share {what}",
+    "Delete": "Delete {what}",
+    "Create": "Create {what}",
+    "Update": "Update {what}",
+    "Move": "Move {what}",
+})
 _MCP_NAME_KEYS = ("title", "name", "file_name", "filename", "document_title", "spreadsheet_title", "sheet_title")
 # An argument whose name says the call reaches or opens to someone.
 _MCP_REACH_ARG_RE = re.compile(
@@ -1111,7 +1270,7 @@ def _first_text(tool_input: dict[str, Any], keys: tuple[str, ...]) -> str:
     return ""
 
 
-def _connected_label(tool: str, tool_input: dict[str, Any], *, recipient: bool) -> str | None:
+def _connected_label(tool: str, tool_input: dict[str, Any], *, recipient: bool, en: bool = False) -> str | None:
     """"Update Supplier deliveries (Google Sheets)", "Share Plant review prep
     with plant-team@…": the file or record by name, never its content. The
     person it's shared with only where ``recipient`` (the approval card,
@@ -1124,35 +1283,49 @@ def _connected_label(tool: str, tool_input: dict[str, Any], *, recipient: bool) 
     name = _first_text(tool_input, _MCP_NAME_KEYS)
     if not name and not app:
         return None
-    what = name or noun or ""
+    what = name or ((_MCP_NOUNS.english[noun] if en else _MCP_NOUNS[noun]) if noun else "")
+    who = _first_text(tool_input, _MCP_RECIPIENT_KEYS) if recipient and verb == "Share" else ""
+    return _connected_text(verb, what, app, who, en=en)
+
+
+def _connected_text(verb: str, what: str, app: str | None, who: str, *, en: bool) -> str:
     if verb == "Share":
-        label = f"Share {what}"
-        who = _first_text(tool_input, _MCP_RECIPIENT_KEYS) if recipient else ""
-        return f"{label} with {who}" if who else label
-    return f"{verb} {what} ({app})" if app else f"{verb} {what}"
+        if who:
+            return _tr("lead.mcp.share_with", "Share {what} with {who}", en=en, what=what, who=who)
+        app = None
+    text = fill(_MCP_VERB_TEXT.english[verb] if en else _MCP_VERB_TEXT[verb], {"what": what})
+    return f"{text} ({app})" if app else text
 
 
-def summarize(tool: str, tool_input: dict[str, Any], *, mcp: bool = False, quote: bool = True) -> str:
+def summarize(
+    tool: str, tool_input: dict[str, Any], *, mcp: bool = False, quote: bool = True, en: bool = False,
+) -> str:
     """One plain line saying what the action does; ``quote`` adds the start
     of what it says and, for a share, who it's shared with (the approval
-    card has them, the activity feed doesn't)."""
-    label = _TOOL_LABELS.get(tool) or tool.replace("_", " ").strip().capitalize()
+    card has them, the activity feed doesn't). In the deployment's language,
+    or English with ``en`` (the audit log)."""
+    label = (_TOOL_LABELS.english.get(tool) if en else _TOOL_LABELS.get(tool)) or (
+        tool.replace("_", " ").strip().capitalize()
+    )
     if mcp:
         bare = tool.split("__", 1)[-1]
-        label = _connected_label(tool, tool_input, recipient=quote) or bare.replace("_", " ").strip().capitalize()
+        label = _connected_label(tool, tool_input, recipient=quote, en=en) or (
+            bare.replace("_", " ").strip().capitalize()
+        )
     if tool == "message_person":
         try:
             from openexecutive.people.store import get_person
 
             person = get_person(int(tool_input.get("person_id")))  # type: ignore[arg-type]
             if person is not None:
-                label = f"Message {person.full_name or person.email}"
+                label = _tr("lead.label.message", "Message {name}", en=en, name=person.full_name or person.email)
         except Exception:
             pass
     elif tool == "create_calendar_event" and tool_input.get("title"):
-        label = f"Book {tool_input.get('title')}"
+        label = _tr("lead.label.book_title", "Book {title}", en=en, title=tool_input.get("title"))
     elif tool == "run_workflow" and tool_input.get("workflow_id"):
-        label = f"Start the {tool_input.get('workflow_id')} workflow"
+        label = _tr("lead.label.workflow", "Start the {workflow} workflow", en=en,
+                    workflow=tool_input.get("workflow_id"))
     snippet = ""
     for key in ("text", "message", "body", "description", "subject"):
         value = tool_input.get(key)
@@ -1371,7 +1544,7 @@ def hold(
     shown = summary if private else summarize(tool, tool_input, mcp=mcp, quote=False)
     payload = {
         "tool": tool, "input": tool_input, "mcp": mcp, "kind": hit.kind, "rule_id": hit.rule_id,
-        "reason": hit.reason, "summary": summary, "source": source,
+        "reason": hit.display, "summary": summary, "source": source,
         "fields": editable_fields(tool, tool_input, mcp=mcp),
         **({"allow": {"key": grant[0], "label": grant[1]}} if grant is not None else {}),
     }
@@ -1392,9 +1565,10 @@ def hold(
             source=DECISION_ALERT_SOURCE,
             external_id=external_id,
             severity="medium",
-            headline=f"The Executive wants to: {shown}"[:160],
-            body=f"{shown}\n\nIt waited because {hit.reason}."
-            + (f" Approve + allow lets it do this from now on: {grant[1]}." if grant is not None else ""),
+            headline=tr("lead.hold.headline", "The Executive wants to: {action}", action=shown)[:160],
+            body=tr("lead.hold.body", "{action}\n\nIt waited because {reason}.", action=shown, reason=hit.display)
+            + (tr("lead.hold.body_allow", " Approve + allow lets it do this from now on: {label}.",
+                  label=display_label(*grant)) if grant is not None else ""),
             suggested_action=shown,
             topic_tags=[
                 decision_instance_tag(decision_id),
@@ -1412,7 +1586,8 @@ def hold(
         logger.exception("take_the_lead: couldn't put decision %d on Today", decision_id)
     record(scope=SCOPE_EXECUTIVE, source=source, tool=tool, summary=summarize(tool, tool_input, mcp=mcp, quote=False),
            status="waiting",
-           why=f"It waited because {hit.reason}.", decision_id=decision_id, db_path=db_path)
+           why=tr("lead.hold.why", "It waited because {reason}.", reason=hit.display),
+           decision_id=decision_id, db_path=db_path)
     return decision_id
 
 
@@ -1445,10 +1620,12 @@ async def _gated(name: str, inner: _Handler, tool_input: dict[str, Any], *, sour
                 grant = allowance(name, tool_input, mcp=mcp)
                 allowed = find_allowed(grant[0]) if grant is not None else None
                 if allowed is None:
-                    hit = Hit(TRAINING, "it's in training and you haven't allowed this yet")
+                    hit = Hit(TRAINING, "it's in training and you haven't allowed this yet", shown=tr(
+                        "lead.reason.training", "it's in training and you haven't allowed this yet",
+                    ))
     except Exception:
         logger.warning("take_the_lead: the gate failed — holding the action", exc_info=True)
-        hit = Hit("rule", "its rules couldn't be read")
+        hit = _unreadable()
     if hit is not None:
         try:
             decision_id = hold(name, tool_input, hit, source=source, mcp=mcp)
@@ -1466,9 +1643,10 @@ async def _gated(name: str, inner: _Handler, tool_input: dict[str, Any], *, sour
     result = await inner(tool_input)
     text = result if isinstance(result, str) else json.dumps(result) if isinstance(result, dict) else str(result)
     failed = result_failed(text)
-    why = _SOURCE_WHY.get(source, "")
+    why = _SOURCE_WHY.get(source) or ""
     if allowed is not None:
-        why = f"{why} You allowed this: {allowed.label}.".strip()
+        allowed_why = tr("lead.why.allowed", "You allowed this: {label}.", label=allowed.shown)
+        why = f"{why} {allowed_why}".strip()
         if not failed:
             _used(allowed.id)
     record(scope=SCOPE_EXECUTIVE, source=source, tool=name, summary=summarize(name, tool_input, mcp=mcp, quote=False),
@@ -1487,11 +1665,11 @@ def result_failed(text: str) -> bool:
     return isinstance(parsed, dict) and "error" in parsed
 
 
-_SOURCE_WHY: dict[str, str] = {
+_SOURCE_WHY = MessageTable("lead.why", {
     "reflection": "It came up while it looked over what's going on.",
     "research": "It came up in its research.",
     "scheduled": "Something you or it scheduled came due.",
-}
+})
 
 
 def gated_handlers(handlers: dict[str, Any], *, source: str) -> dict[str, Any]:

@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from openexecutive.orchestrator import tool_labels
+from openexecutive.utils.i18n import MessageTable, tr
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,12 @@ def _parse_result(tool_result: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+# datetime.weekday() -> its short name, for "on Mon" (strftime's %a is English only).
+_WEEKDAY = MessageTable("chips.weekday", {
+    "0": "Mon", "1": "Tue", "2": "Wed", "3": "Thu", "4": "Fri", "5": "Sat", "6": "Sun",
+})
+
+
 def _humanize_iso(iso_ts: str) -> str:
     """Render an ISO timestamp as a chip-friendly RELATIVE phrase.
 
@@ -115,19 +122,33 @@ def _humanize_iso(iso_ts: str) -> str:
         dt = dt.replace(tzinfo=UTC)
     delta_s = (dt - datetime.now(UTC)).total_seconds()
     if delta_s < 0:
-        return "just now"
+        return tr("chips.when.just_now", "just now")
     if delta_s < 60:
-        return "in <1m"
+        return tr("chips.when.under_minute", "in <1m")
     if delta_s < 3600:
-        return f"in {int(delta_s // 60)}m"
+        return tr("chips.when.minutes", "in {n}m", n=int(delta_s // 60))
     if delta_s < 86_400:
-        return f"in {int(delta_s // 3600)}h"
+        return tr("chips.when.hours", "in {n}h", n=int(delta_s // 3600))
     if delta_s < 172_800:
-        return "tomorrow"
+        return tr("chips.when.tomorrow", "tomorrow")
     if delta_s < 7 * 86_400:
         # Render the weekday — relative to "now" within a week.
-        return f"on {dt.strftime('%a')}"
-    return f"in {int(delta_s // 86_400)}d"
+        return tr("chips.when.weekday", "on {weekday}", weekday=_WEEKDAY[str(dt.weekday())])
+    return tr("chips.when.days", "in {n}d", n=int(delta_s // 86_400))
+
+
+def _goal_status(status: str) -> str:
+    """A goal status as the chip shows it ("on_track" -> "on track")."""
+    if status in _GOAL_STATUS:
+        return _GOAL_STATUS[status]
+    return status.replace("_", " ")
+
+
+_GOAL_STATUS = MessageTable("chips.goal_status", {
+    "on_track": "on track",
+    "at_risk": "at risk",
+    "off_track": "off track",
+})
 
 
 def summarize_action(
@@ -205,17 +226,24 @@ def summarize_action(
         return {**payload, **fields} if fields is not None else None
 
     if tool_name == "send_slack_dm":
-        user_id = tool_input.get("user_id") or "a teammate"
-        payload["summary"] = f"DM'd {user_id} on Slack"
-        payload["target"] = user_id
+        user_id = tool_input.get("user_id")
+        payload["summary"] = (
+            tr("chips.slack_dm", "DM'd {who} on Slack", who=user_id) if user_id
+            else tr("chips.slack_dm.teammate", "DM'd a teammate on Slack")
+        )
+        payload["target"] = user_id or "a teammate"
     elif tool_name == "send_discord_dm":
-        user_id = tool_input.get("discord_user_id") or "a teammate"
-        payload["summary"] = f"DM'd {user_id} on Discord"
-        payload["target"] = user_id
+        user_id = tool_input.get("discord_user_id")
+        payload["summary"] = (
+            tr("chips.discord_dm", "DM'd {who} on Discord", who=user_id) if user_id
+            else tr("chips.discord_dm.teammate", "DM'd a teammate on Discord")
+        )
+        payload["target"] = user_id or "a teammate"
     elif tool_name == "send_telegram_message":
         chat_id = tool_input.get("chat_id")
         payload["summary"] = (
-            f"Sent Telegram message to {chat_id}" if chat_id else "Sent Telegram message"
+            tr("chips.telegram", "Sent Telegram message to {chat}", chat=chat_id) if chat_id
+            else tr("chips.telegram.plain", "Sent Telegram message")
         )
         payload["target"] = str(chat_id) if chat_id is not None else None
     elif tool_name == "ghostwrite_email":
@@ -227,8 +255,8 @@ def summarize_action(
         from openexecutive.delegation.gmail import MAILBOX_LINK_PREFIXES
 
         payload["summary"] = (
-            f"Drafted an email as you to {first} — in your Drafts"
-            if first else "Drafted an email as you — in your Drafts"
+            tr("chips.ghostwrite.to", "Drafted an email as you to {to} — in your Drafts", to=first)
+            if first else tr("chips.ghostwrite", "Drafted an email as you — in your Drafts")
         )
         payload["target"] = first or None
         link = (parsed or {}).get("gmail_link")
@@ -242,16 +270,26 @@ def summarize_action(
         when = str((parsed or {}).get("when") or "")
         # The text as stored (already cleaned), so the speaker sees what will be sent.
         text = str((parsed or {}).get("text") or "")[:120]
-        summary = f"Reminder set for {when}" if when else "Reminder set"
-        payload["summary"] = f"{summary}: {text}" if text else summary
+        if when and text:
+            summary = tr("chips.reminder.when_text", "Reminder set for {when}: {text}", when=when, text=text)
+        elif when:
+            summary = tr("chips.reminder.when", "Reminder set for {when}", when=when)
+        elif text:
+            summary = tr("chips.reminder.text", "Reminder set: {text}", text=text)
+        else:
+            summary = tr("chips.reminder", "Reminder set")
+        payload["summary"] = summary
         payload["target"] = None
     elif tool_name == "propose_actions":
         # A card carried out on its own (allowed in training) says what it did.
         if (parsed or {}).get("status") == "done_on_its_own":
             done = [a for a in (parsed or {}).get("actions") or [] if isinstance(a, dict)]
             ok = sum(1 for a in done if a.get("status") in ("done", "waiting"))
-            noun = "action" if ok == 1 else "actions"
-            payload["summary"] = f"Done on its own, as you allowed: {ok} {noun}"
+            payload["summary"] = (
+                tr("chips.actions.done_one", "Done on its own, as you allowed: {n} action", n=ok)
+                if ok == 1
+                else tr("chips.actions.done_many", "Done on its own, as you allowed: {n} actions", n=ok)
+            )
             payload["target"] = None
             payload["link"] = "/today"
             return payload
@@ -260,8 +298,12 @@ def summarize_action(
             return None
         actions = (parsed or {}).get("actions")
         count = len(actions) if isinstance(actions, list) else 0
-        noun = "action" if count == 1 else "actions"
-        payload["summary"] = f"Waiting for your approval: {count} {noun}" if count else "Waiting for your approval"
+        if count == 1:
+            payload["summary"] = tr("chips.actions.waiting_one", "Waiting for your approval: {n} action", n=count)
+        elif count:
+            payload["summary"] = tr("chips.actions.waiting_many", "Waiting for your approval: {n} actions", n=count)
+        else:
+            payload["summary"] = tr("chips.actions.waiting", "Waiting for your approval")
         payload["target"] = None
         payload["link"] = "/today"
         # The chat shows the card itself under its message, by this id.
@@ -271,7 +313,8 @@ def summarize_action(
     elif tool_name == "message_person":
         pid = tool_input.get("person_id")
         payload["summary"] = (
-            f"Messaged person #{pid}" if pid is not None else "Messaged a person"
+            tr("chips.message_person", "Messaged person #{id}", id=pid) if pid is not None
+            else tr("chips.message_person.anyone", "Messaged a person")
         )
         payload["target"] = str(pid) if pid is not None else None
         if isinstance(pid, int):
@@ -279,30 +322,50 @@ def summarize_action(
     elif tool_name == "schedule_followup":
         when = _humanize_iso(str(tool_input.get("run_at", "")))
         channel = tool_input.get("channel", "")
-        suffix = f" via {channel}" if channel else ""
-        payload["summary"] = f"Scheduled follow-up for {when}{suffix}".strip()
+        if channel:
+            summary = tr("chips.followup.via", "Scheduled follow-up for {when} via {channel}",
+                         when=when, channel=channel)
+        else:
+            summary = tr("chips.followup", "Scheduled follow-up for {when}", when=when)
+        payload["summary"] = summary.strip()
         payload["target"] = str(tool_input.get("channel_ref", "") or "") or None
     elif tool_name == "suggest_workflow":
         wf = tool_input.get("workflow_name", "")
         when = _humanize_iso(str(tool_input.get("run_at", "")))
-        payload["summary"] = f"Queued {wf} workflow suggestion for {when}".strip()
+        payload["summary"] = tr(
+            "chips.suggest_workflow", "Queued {workflow} workflow suggestion for {when}",
+            workflow=wf, when=when,
+        ).strip()
         payload["target"] = wf or None
     elif tool_name == "upsert_person":
         full_name = tool_input.get("full_name", "")
         # parsed result includes the person id when this was an insert/update.
         pid = (parsed or {}).get("id") if parsed else None
-        payload["summary"] = f"Updated {full_name}" if full_name else "Updated a person"
+        payload["summary"] = (
+            tr("chips.upsert_person", "Updated {name}", name=full_name) if full_name
+            else tr("chips.upsert_person.anyone", "Updated a person")
+        )
         payload["target"] = full_name or None
         if isinstance(pid, int):
             payload["link"] = f"/people/{pid}"
     elif tool_name == "close_open_loop":
         loop_id = tool_input.get("loop_id")
-        payload["summary"] = f"Closed open loop #{loop_id}" if loop_id else "Closed an open loop"
+        payload["summary"] = (
+            tr("chips.close_loop", "Closed open loop #{id}", id=loop_id) if loop_id
+            else tr("chips.close_loop.any", "Closed an open loop")
+        )
     elif tool_name == "assign_open_loop":
         owner = str((parsed or {}).get("owner") or "")
         task = " ".join(str(tool_input.get("task", "") or "").split())[:80]
-        who = owner or "someone"
-        payload["summary"] = f"Assigned {who}: {task}" if task else f"Assigned {who} a task"
+        if owner and task:
+            summary = tr("chips.assign_loop", "Assigned {who}: {task}", who=owner, task=task)
+        elif owner:
+            summary = tr("chips.assign_loop.no_task", "Assigned {who} a task", who=owner)
+        elif task:
+            summary = tr("chips.assign_loop.someone", "Assigned someone: {task}", task=task)
+        else:
+            summary = tr("chips.assign_loop.someone_no_task", "Assigned someone a task")
+        payload["summary"] = summary
         payload["target"] = owner or None
         pid = (parsed or {}).get("owner_person_id")
         if isinstance(pid, int):
@@ -311,20 +374,29 @@ def summarize_action(
         decision = str(tool_input.get("decision", "") or "")
         name = str((parsed or {}).get("full_name") or tool_input.get("full_name") or "")
         if decision == "decline":
-            payload["summary"] = "Left a new sender off the People list"
+            payload["summary"] = tr("chips.roster.declined", "Left a new sender off the People list")
         else:
-            payload["summary"] = f"Added {name} to the People list" if name else "Updated the People list"
+            payload["summary"] = (
+                tr("chips.roster.added", "Added {name} to the People list", name=name) if name
+                else tr("chips.roster.updated", "Updated the People list")
+            )
         pid = (parsed or {}).get("person_id") if parsed else None
         payload["target"] = name or None
         if isinstance(pid, int):
             payload["link"] = f"/people/{pid}"
     elif tool_name == "archive_person":
         pid = tool_input.get("person_id")
-        payload["summary"] = f"Archived person #{pid}" if pid else "Archived a person"
+        payload["summary"] = (
+            tr("chips.archive_person", "Archived person #{id}", id=pid) if pid
+            else tr("chips.archive_person.anyone", "Archived a person")
+        )
         payload["target"] = str(pid) if pid else None
     elif tool_name == "set_department_head":
         slug = tool_input.get("department_slug", "")
-        payload["summary"] = f"Set {slug} department head" if slug else "Set department head"
+        payload["summary"] = (
+            tr("chips.department_head", "Set {department} department head", department=slug) if slug
+            else tr("chips.department_head.any", "Set department head")
+        )
         payload["target"] = slug or None
         if slug:
             payload["link"] = f"/departments/{slug}"
@@ -345,16 +417,19 @@ def summarize_action(
             and from_status != to_status
         )
         if slug and status_changed:
-            payload["summary"] = f"Updated {slug} goal → {str(to_status).replace('_', ' ')}"
+            payload["summary"] = tr(
+                "chips.goal.status", "Updated {department} goal → {status}",
+                department=slug, status=_goal_status(str(to_status)),
+            )
         elif slug and current_updated:
-            payload["summary"] = f"Updated {slug} goal progress"
+            payload["summary"] = tr("chips.goal.progress", "Updated {department} goal progress", department=slug)
         elif slug:
             # Status didn't change AND no current edit — defensive
             # fallback; the handler rejects this combo so this branch
             # should never fire in practice.
-            payload["summary"] = f"Touched {slug} goal"
+            payload["summary"] = tr("chips.goal.touched", "Touched {department} goal", department=slug)
         else:
-            payload["summary"] = "Updated a department goal"
+            payload["summary"] = tr("chips.goal.any", "Updated a department goal")
         payload["target"] = slug or None
         if slug:
             payload["link"] = f"/departments/{slug}"
@@ -365,13 +440,20 @@ def summarize_action(
         area = str((parsed or {}).get("area_title") or tool_input.get("area", "") or "")
         key_result = str(tool_input.get("key_result", "") or "")[:80]
         created = bool((parsed or {}).get("area_created"))
-        where = f"new {area} area" if created and area else area
-        if where and key_result:
-            payload["summary"] = f"Added a {where} goal: {key_result}"
+        if created and area and key_result:
+            payload["summary"] = tr(
+                "chips.create_goal.new_area", "Added a new {area} area goal: {key_result}",
+                area=area, key_result=key_result,
+            )
+        elif area and key_result:
+            payload["summary"] = tr(
+                "chips.create_goal.area", "Added a {area} goal: {key_result}",
+                area=area, key_result=key_result,
+            )
         elif key_result:
-            payload["summary"] = f"Added a goal: {key_result}"
+            payload["summary"] = tr("chips.create_goal.key_result", "Added a goal: {key_result}", key_result=key_result)
         else:
-            payload["summary"] = "Added a goal"
+            payload["summary"] = tr("chips.create_goal", "Added a goal")
         payload["target"] = slug or None
         if workspace_mode == "solo":
             # Solo's nav has Goals (every goal grouped by area), not Departments.
@@ -382,8 +464,8 @@ def summarize_action(
         # The handler's result names the decision it wrote to.
         decision = str((parsed or {}).get("decision") or "")[:80]
         payload["summary"] = (
-            f"Recorded how it turned out: {decision}" if decision
-            else "Recorded how a decision turned out"
+            tr("chips.decision_outcome", "Recorded how it turned out: {decision}", decision=decision)
+            if decision else tr("chips.decision_outcome.any", "Recorded how a decision turned out")
         )
         decision_id = (parsed or {}).get("decision_id", tool_input.get("decision_id"))
         payload["target"] = f"decision {decision_id}" if decision_id else None
@@ -391,14 +473,21 @@ def summarize_action(
     elif tool_name == "remember_fact":
         statement = str((parsed or {}).get("statement") or tool_input.get("statement", "") or "")[:80]
         corrected = str((parsed or {}).get("kind") or "") == "correction"
-        verb = "Corrected" if corrected else "Will remember"
-        payload["summary"] = f"{verb}: {statement}" if statement else "Kept a standing fact"
+        if statement and corrected:
+            payload["summary"] = tr("chips.fact.corrected", "Corrected: {statement}", statement=statement)
+        elif statement:
+            payload["summary"] = tr("chips.fact.remember", "Will remember: {statement}", statement=statement)
+        else:
+            payload["summary"] = tr("chips.fact.kept", "Kept a standing fact")
         fact_id = (parsed or {}).get("fact_id")
         payload["target"] = f"fact {fact_id}" if fact_id else None
         payload["link"] = "/memories?tab=corrections"
     elif tool_name == "forget_fact":
         forgotten = str((parsed or {}).get("forgotten") or "")[:80]
-        payload["summary"] = f"Forgot: {forgotten}" if forgotten else "Forgot a standing fact"
+        payload["summary"] = (
+            tr("chips.fact.forgot", "Forgot: {fact}", fact=forgotten) if forgotten
+            else tr("chips.fact.forgot_any", "Forgot a standing fact")
+        )
         fact_id = (parsed or {}).get("fact_id", tool_input.get("fact_id"))
         payload["target"] = f"fact {fact_id}" if fact_id else None
         payload["link"] = "/memories?tab=corrections"
@@ -406,28 +495,41 @@ def summarize_action(
         label = str((parsed or {}).get("label") or tool_input.get("field", "") or "")[:60]
         value = str((parsed or {}).get("value") or "")[:60]
         payload["summary"] = (
-            f"Updated the company profile: {label} → {value}" if label and value
-            else "Updated the company profile"
+            tr("chips.profile.field", "Updated the company profile: {label} → {value}",
+               label=label, value=value)
+            if label and value else tr("chips.profile", "Updated the company profile")
         )
         payload["target"] = str(tool_input.get("field") or "") or None
         payload["link"] = "/company-profile"
     elif tool_name == "create_alert":
         headline = (tool_input.get("headline") or "")[:60]
-        payload["summary"] = f"Flagged alert: {headline}" if headline else "Flagged alert"
+        payload["summary"] = (
+            tr("chips.alert", "Flagged alert: {headline}", headline=headline) if headline
+            else tr("chips.alert.plain", "Flagged alert")
+        )
         payload["target"] = headline or None
     elif tool_name == "draft_artifact":
         title = (tool_input.get("title") or "")[:60]
-        payload["summary"] = f"Drafted artifact for review: {title}" if title else "Drafted artifact for review"
+        payload["summary"] = (
+            tr("chips.artifact", "Drafted artifact for review: {title}", title=title) if title
+            else tr("chips.artifact.plain", "Drafted artifact for review")
+        )
         payload["target"] = title or None
         artifact_id = (parsed or {}).get("artifact_id") if parsed else None
         payload["link"] = f"/artifacts/{artifact_id}" if isinstance(artifact_id, str) else "/artifacts"
     elif tool_name == "ack_alert":
         alert_id = tool_input.get("alert_id")
         status = tool_input.get("status", "ack")
-        verb = "Approved" if status == "ack" else "Dismissed"
-        payload["summary"] = (
-            f"{verb} proposal #{alert_id}" if alert_id is not None else f"{verb} proposal"
-        )
+        if status == "ack":
+            payload["summary"] = (
+                tr("chips.proposal.approved", "Approved proposal #{id}", id=alert_id)
+                if alert_id is not None else tr("chips.proposal.approved_any", "Approved proposal")
+            )
+        else:
+            payload["summary"] = (
+                tr("chips.proposal.dismissed", "Dismissed proposal #{id}", id=alert_id)
+                if alert_id is not None else tr("chips.proposal.dismissed_any", "Dismissed proposal")
+            )
         payload["target"] = str(alert_id) if alert_id is not None else None
     elif tool_name == "call_tool":
         # MCP — the underlying tool name lives in tool_input["name"]. The chip
@@ -445,35 +547,42 @@ def summarize_action(
         slug = tool_input.get("department_slug", "")
         integration = tool_input.get("integration", "")
         if slug and integration:
-            payload["summary"] = f"Posted to {slug} on {integration.capitalize()}"
+            payload["summary"] = tr(
+                "chips.department_post.on", "Posted to {department} on {integration}",
+                department=slug, integration=integration.capitalize(),
+            )
         elif slug:
-            payload["summary"] = f"Posted to {slug}"
+            payload["summary"] = tr("chips.department_post", "Posted to {department}", department=slug)
         else:
-            payload["summary"] = "Posted to a department channel"
+            payload["summary"] = tr("chips.department_post.any", "Posted to a department channel")
         payload["target"] = slug or None
         if slug:
             payload["link"] = f"/departments/{slug}"
     elif tool_name == "send_company_broadcast":
         integration = tool_input.get("integration", "")
         payload["summary"] = (
-            f"Broadcast to company on {integration.capitalize()}"
-            if integration else "Broadcast to company"
+            tr("chips.broadcast.on", "Broadcast to company on {integration}",
+               integration=integration.capitalize())
+            if integration else tr("chips.broadcast", "Broadcast to company")
         )
         payload["target"] = integration or None
     elif tool_name == "load_mcp_server":
         url = tool_input.get("url", "")
-        payload["summary"] = f"Connected MCP server: {url}" if url else "Connected MCP server"
+        payload["summary"] = (
+            tr("chips.mcp_server", "Connected MCP server: {url}", url=url) if url
+            else tr("chips.mcp_server.plain", "Connected MCP server")
+        )
         payload["target"] = url or None
     elif tool_name == "run_workflow":
         wf = str(tool_input.get("workflow", "")).replace("_", " ")
         run_id = (parsed or {}).get("run_id")
         awaiting = (parsed or {}).get("status") == "awaiting_human"
         if wf and awaiting:
-            payload["summary"] = f"Started {wf} — awaiting sign-off"
+            payload["summary"] = tr("chips.workflow.awaiting", "Started {workflow} — awaiting sign-off", workflow=wf)
         elif wf:
-            payload["summary"] = f"Ran {wf} workflow"
+            payload["summary"] = tr("chips.workflow.ran", "Ran {workflow} workflow", workflow=wf)
         else:
-            payload["summary"] = "Ran a workflow"
+            payload["summary"] = tr("chips.workflow.any", "Ran a workflow")
         payload["target"] = tool_input.get("workflow") or None
         if isinstance(run_id, str) and run_id:
             payload["link"] = f"/jobs/runs/{run_id}"

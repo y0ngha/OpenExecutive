@@ -54,6 +54,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from openexecutive.utils.i18n import MessageTable, tr
+
 logger = logging.getLogger(__name__)
 
 DECISION_CLASS = "delegation_actions"
@@ -85,6 +87,20 @@ class ApproveRefused(Exception):
         self.status = status
         self.code = code
         self.message = message
+
+
+class _Refusal(str):
+    """Why an action can't be stored or carried out: the English the model
+    reads, with ``shown``, the part a person reads on the card, in
+    OE_LANGUAGE."""
+
+    shown: str
+
+
+def _refusal(english: str, shown: str) -> _Refusal:
+    refusal = _Refusal(english)
+    refusal.shown = shown
+    return refusal
 
 
 @dataclass
@@ -140,13 +156,30 @@ def _when(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=get_user_timezone())
 
 
-def _shown(start: datetime, end: datetime) -> str:
-    """When a meeting is, in the workspace's timezone: "Thu Oct 9, 14:00–14:30"."""
+# Day and month names for ``_shown`` (strftime's %a / %b are English only).
+_WEEKDAY = MessageTable("action_cards.weekday", {
+    "0": "Mon", "1": "Tue", "2": "Wed", "3": "Thu", "4": "Fri", "5": "Sat", "6": "Sun",
+})
+_MONTH = MessageTable("action_cards.month", {
+    "1": "Jan", "2": "Feb", "3": "Mar", "4": "Apr", "5": "May", "6": "Jun",
+    "7": "Jul", "8": "Aug", "9": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
+})
+
+
+def _shown(start: datetime, end: datetime, *, shown: bool = False) -> str:
+    """When a meeting is, in the workspace's timezone: "Thu Oct 9, 14:00–14:30".
+    In OE_LANGUAGE when ``shown`` (for the card), else English (for the model)."""
     from openexecutive.memory.workspace_settings import get_user_timezone
 
     zone = get_user_timezone()
     local, until = start.astimezone(zone), end.astimezone(zone)
-    return f"{local:%a %b} {local.day}, {local:%H:%M}–{until:%H:%M}"
+    if not shown:
+        return f"{local:%a %b} {local.day}, {local:%H:%M}–{until:%H:%M}"
+    return tr(
+        "action_cards.when", "{weekday} {month} {day}, {start}–{end}",
+        weekday=_WEEKDAY[str(local.weekday())], month=_MONTH[str(local.month)], day=local.day,
+        start=f"{local:%H:%M}", end=f"{until:%H:%M}",
+    )
 
 
 def _roster_person(person_id: int | None, *, contacts: bool) -> Any:
@@ -167,45 +200,87 @@ def _check_message(action: dict[str, Any], speaker: Any) -> dict[str, Any] | str
     pid = _int(action.get("person_id"))
     person = _roster_person(pid, contacts=bool(speaker.is_principal))
     if person is None:
-        return "message: person_id must be someone on the roster (lookup_person)."
+        return _refusal(
+            "message: person_id must be someone on the roster (lookup_person).",
+            tr("action_cards.check.not_on_roster", "person_id must be someone on the roster (lookup_person)."),
+        )
     if person.id == speaker.id:
-        return "message: that is the person you are speaking with; tell them here instead."
+        return _refusal(
+            "message: that is the person you are speaking with; tell them here instead.",
+            tr("action_cards.check.self",
+               "that is the person you are speaking with; tell them here instead."),
+        )
     text = _text(action.get("text"), MESSAGE_MAX + 1)
     if not text:
-        return "message: pass `text`, the message as it will be sent."
+        return _refusal(
+            "message: pass `text`, the message as it will be sent.",
+            tr("action_cards.check.no_text", "pass `text`, the message as it will be sent."),
+        )
     if len(text) > MESSAGE_MAX:
-        return f"message: keep `text` to {MESSAGE_MAX} characters."
+        return _refusal(
+            f"message: keep `text` to {MESSAGE_MAX} characters.",
+            tr("action_cards.check.text_long", "keep `text` to {max} characters.", max=MESSAGE_MAX),
+        )
     return {
         "kind": "message", "input": {"person_id": person.id, "text": text},
-        "summary": f"Message {_one_line(person.full_name, NAME_MAX)}", "text": text,
+        "summary": f"Message {_one_line(person.full_name, NAME_MAX)}",
+        "shown": tr("action_cards.summary.message", "Message {name}",
+                    name=_one_line(person.full_name, NAME_MAX)),
+        "text": text,
     }
 
 
 def _check_invite(action: dict[str, Any], speaker: Any, now: datetime) -> dict[str, Any] | str:
     title = _one_line(action.get("title"), TITLE_MAX + 1)
     if not title or len(title) > TITLE_MAX:
-        return f"invite: pass a `title` of at most {TITLE_MAX} characters."
+        return _refusal(
+            f"invite: pass a `title` of at most {TITLE_MAX} characters.",
+            tr("action_cards.check.title", "pass a `title` of at most {max} characters.", max=TITLE_MAX),
+        )
     start, end = _when(action.get("start")), _when(action.get("end"))
     if start is None or end is None:
-        return "invite: `start` and `end` must be dates and times like 2026-10-10T14:00."
+        return _refusal(
+            "invite: `start` and `end` must be dates and times like 2026-10-10T14:00.",
+            tr("action_cards.check.times",
+               "`start` and `end` must be dates and times like 2026-10-10T14:00."),
+        )
     if start <= now:
-        return "invite: that start time has passed."
+        return _refusal(
+            "invite: that start time has passed.",
+            tr("action_cards.check.past", "that start time has passed."),
+        )
     if end <= start:
-        return "invite: `end` must be after `start`."
+        return _refusal(
+            "invite: `end` must be after `start`.",
+            tr("action_cards.check.end_before_start", "`end` must be after `start`."),
+        )
     if start > now + HORIZON:
-        return "invite: that is more than a year away."
+        return _refusal(
+            "invite: that is more than a year away.",
+            tr("action_cards.check.too_far", "that is more than a year away."),
+        )
     raw_ids = action.get("attendee_person_ids")
     if not isinstance(raw_ids, list) or not raw_ids:
-        return "invite: pass `attendee_person_ids`, people on the roster."
+        return _refusal(
+            "invite: pass `attendee_person_ids`, people on the roster.",
+            tr("action_cards.check.no_attendees", "pass `attendee_person_ids`, people on the roster."),
+        )
     if len(raw_ids) > MAX_ATTENDEES:
-        return f"invite: at most {MAX_ATTENDEES} people."
+        return _refusal(
+            f"invite: at most {MAX_ATTENDEES} people.",
+            tr("action_cards.check.too_many", "at most {max} people.", max=MAX_ATTENDEES),
+        )
     names: list[str] = []
     ids: list[int] = []
     include_principal = False
     for raw in raw_ids:
         person = _roster_person(_int(raw), contacts=bool(speaker.is_principal))
         if person is None or not person.email:
-            return f"invite: {raw!r} is not someone on the roster with an email (lookup_person)."
+            return _refusal(
+                f"invite: {raw!r} is not someone on the roster with an email (lookup_person).",
+                tr("action_cards.check.attendee",
+                   "{who} is not someone on the roster with an email (lookup_person).", who=repr(raw)),
+            )
         if person.id in ids:
             continue
         include_principal = include_principal or bool(person.is_principal)
@@ -220,6 +295,10 @@ def _check_invite(action: dict[str, Any], speaker: Any, now: datetime) -> dict[s
     return {
         "kind": "invite", "input": tool_input,
         "summary": f"Invite {', '.join(names)}: \"{title}\", {_shown(start, end)}",
+        "shown": tr(
+            "action_cards.summary.invite", "Invite {names}: \"{title}\", {when}",
+            names=", ".join(names), title=title, when=_shown(start, end, shown=True),
+        ),
         "text": description,
     }
 
@@ -229,20 +308,37 @@ def _check_contact(action: dict[str, Any], speaker: Any) -> dict[str, Any] | str
     from openexecutive.people.store import find_person_by_email
 
     if not speaker.is_principal:
-        return "add_contact: contacts are the owner's; only they can add one."
+        return _refusal(
+            "add_contact: contacts are the owner's; only they can add one.",
+            tr("action_cards.check.owner_only", "contacts are the owner's; only they can add one."),
+        )
     name = _one_line(action.get("full_name"), NAME_MAX + 1)
     if not name or len(name) > NAME_MAX:
-        return f"add_contact: pass `full_name`, at most {NAME_MAX} characters."
+        return _refusal(
+            f"add_contact: pass `full_name`, at most {NAME_MAX} characters.",
+            tr("action_cards.check.name", "pass `full_name`, at most {max} characters.", max=NAME_MAX),
+        )
     email = normalize_email(str(action.get("email") or ""))
     if not _EMAIL_RE.match(email):
-        return "add_contact: pass a valid `email`."
+        return _refusal(
+            "add_contact: pass a valid `email`.",
+            tr("action_cards.check.email", "pass a valid `email`."),
+        )
     if find_person_by_email(email, include_contacts=True) is not None:
-        return f"add_contact: {email} is already on the roster."
+        return _refusal(
+            f"add_contact: {email} is already on the roster.",
+            tr("action_cards.check.known", "{email} is already on the roster.", email=email),
+        )
     role = _one_line(action.get("role"), NAME_MAX)
-    shown = f"Add contact {name}, {email}" + (f" ({role})" if role else "")
+    summary = f"Add contact {name}, {email}" + (f" ({role})" if role else "")
+    shown = (
+        tr("action_cards.summary.contact_role", "Add contact {name}, {email} ({role})",
+           name=name, email=email, role=role)
+        if role else tr("action_cards.summary.contact", "Add contact {name}, {email}", name=name, email=email)
+    )
     return {
         "kind": "add_contact", "input": {"full_name": name, "email": email, "role": role},
-        "summary": shown, "text": "",
+        "summary": summary, "shown": shown, "text": "",
     }
 
 
@@ -357,7 +453,8 @@ def cards(person: Any) -> list[ActionCard]:
             decision_id=card.id, status=card.status, created_at=card.created_at,
             why=str(payload.get("why") or ""),
             actions=[
-                CardAction(index=i, kind=str(a.get("kind") or ""), summary=str(a.get("summary") or ""),
+                CardAction(index=i, kind=str(a.get("kind") or ""),
+                           summary=str(a.get("shown") or a.get("summary") or ""),
                            text=str(a.get("text") or ""))
                 for i, a in enumerate(actions) if isinstance(a, dict)
             ],
@@ -447,7 +544,8 @@ async def _do(action: dict[str, Any], person: Any, *, tapped: bool = True) -> di
         # Checked again: the roster or the time may have changed since.
         checked = check([{"kind": kind, **stored}], person, now=datetime.now(UTC))
         if isinstance(checked, str):
-            return {"status": "failed", "detail": checked.split(": ", 1)[-1]}
+            shown = getattr(checked, "shown", None)
+            return {"status": "failed", "detail": shown if isinstance(shown, str) else checked.split(": ", 1)[-1]}
         tool_input = checked[0]["input"]
         if kind == "message":
             from openexecutive.orchestrator.schedule_tools import message_person
@@ -456,8 +554,10 @@ async def _do(action: dict[str, Any], person: Any, *, tapped: bool = True) -> di
             # message_person falls back to, which more people than them read.
             result = _result(await message_person(tool_input, alert_fallback=False))
             if result.get("status") == "sent":
-                return {"status": "done", "detail": "Sent."}
-            return {"status": "failed", "detail": str(result.get("error") or result.get("reason") or "Not sent.")[:300]}
+                return {"status": "done", "detail": tr("action_cards.result.sent", "Sent.")}
+            failure = result.get("error") or result.get("reason")
+            return {"status": "failed", "detail": str(failure)[:300] if failure
+                    else tr("action_cards.result.not_sent", "Not sent.")}
         if kind == "invite":
             from openexecutive.orchestrator.calendar_tools import (
                 approved_by,
@@ -470,10 +570,13 @@ async def _do(action: dict[str, Any], person: Any, *, tapped: bool = True) -> di
             else:
                 result = _result(await handle_create_calendar_event(tool_input))
             if result.get("status") == "created":
-                return {"status": "done", "detail": "Booked."}
+                return {"status": "done", "detail": tr("action_cards.result.booked", "Booked.")}
             if result.get("status") in ("proposed", "already_proposed"):
-                return {"status": "waiting", "detail": "Sent to whoever approves meetings."}
-            return {"status": "failed", "detail": str(result.get("error") or "Not booked.")[:300]}
+                return {"status": "waiting", "detail": tr(
+                    "action_cards.result.to_approver", "Sent to whoever approves meetings.")}
+            failure = result.get("error")
+            return {"status": "failed", "detail": str(failure)[:300] if failure
+                    else tr("action_cards.result.not_booked", "Not booked.")}
         if kind == "add_contact":
             from openexecutive.people import registry as people_registry
             from openexecutive.people import store as people_store
@@ -483,11 +586,14 @@ async def _do(action: dict[str, Any], person: Any, *, tapped: bool = True) -> di
                 role=tool_input.get("role") or "", kind="contact",
             )
             people_registry.invalidate()
-            return {"status": "done", "detail": "Added."}
+            return {"status": "done", "detail": tr("action_cards.result.added", "Added.")}
     except Exception:
         logger.exception("action_cards: a %s action failed", kind)
-        return {"status": "failed", "detail": "Something went wrong, so it may not have happened. Check before trying again."}
-    return {"status": "failed", "detail": "Unknown action."}
+        return {"status": "failed", "detail": tr(
+            "action_cards.result.error",
+            "Something went wrong, so it may not have happened. Check before trying again.",
+        )}
+    return {"status": "failed", "detail": tr("action_cards.result.unknown", "Unknown action.")}
 
 
 async def approve(
@@ -511,39 +617,40 @@ async def approve(
     payload = _payload(instance)
     person = get_person(_int(payload.get("person_id")) or 0)
     if person is None or person.id is None or person.archived or person.id != instance.approver_person_id:
-        raise ApproveRefused(404, "gone", "This card is no longer there.")
+        raise ApproveRefused(404, "gone", tr("action_cards.refused.gone", "This card is no longer there."))
     refused = caller_refusal(caller, normalize_email(person.email or ""))
     if refused == NOT_YOURS:
-        raise ApproveRefused(403, "not_yours", "Only the person this card is for can approve it.")
+        raise ApproveRefused(403, "not_yours", tr("action_cards.refused.not_yours", "Only the person this card is for can approve it."))
     if refused is not None:
         raise ApproveRefused(
             409, "caller_signing_required",
-            "Approving needs signed sign-ins on this server, so that nobody else can approve it for you.",
+            tr("action_cards.refused.caller_signing_required",
+               "Approving needs signed sign-ins on this server, so that nobody else can approve it for you."),
         )
     if not can_delegate(person) or not is_enabled(person.id):
-        raise ApproveRefused(409, "act_as_me_off", "Act as me is off, so this card can't be approved.")
+        raise ApproveRefused(409, "act_as_me_off", tr("action_cards.refused.act_as_me_off", "Act as me is off, so this card can't be approved."))
     if not _live(instance, datetime.now(UTC)):
-        raise ApproveRefused(409, "expired", "This card is more than a week old. Ask again if it still needs doing.")
+        raise ApproveRefused(409, "expired", tr("action_cards.refused.expired", "This card is more than a week old. Ask again if it still needs doing."))
     actions = [a for a in payload.get("actions") or [] if isinstance(a, dict)]
     chosen = set(range(len(actions)))
     if only is not None:
         if not isinstance(only, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in only):
-            raise ApproveRefused(422, "bad_selection", "Pick the actions to do by their number.")
+            raise ApproveRefused(422, "bad_selection", tr("action_cards.refused.bad_selection.number", "Pick the actions to do by their number."))
         chosen &= set(only)
         if not chosen:
-            raise ApproveRefused(422, "bad_selection", "Pick at least one action.")
+            raise ApproveRefused(422, "bad_selection", tr("action_cards.refused.bad_selection.none", "Pick at least one action."))
     if allow:
         from openexecutive.delegation import training
 
         if not training.get(person.id).actions:
-            raise ApproveRefused(422, "cant_allow", "Approve + allow is for cards while Suggested actions is in training.")
+            raise ApproveRefused(422, "cant_allow", tr("action_cards.refused.cant_allow.training", "Approve + allow is for cards while Suggested actions is in training."))
         keys = [found[0] for i in chosen if (found := training.action_key(person.id, actions[i])) is not None]
         if not keys:
-            raise ApproveRefused(422, "cant_allow", "Nothing on this card can be allowed.")
+            raise ApproveRefused(422, "cant_allow", tr("action_cards.refused.cant_allow.nothing", "Nothing on this card can be allowed."))
         if not all(training.room_for(person.id, k) for k in keys):
-            raise ApproveRefused(409, "learned_full", "It has learned as much as it can hold. Remove something first.")
+            raise ApproveRefused(409, "learned_full", tr("action_cards.refused.learned_full", "It has learned as much as it can hold. Remove something first."))
     if not claim_for_execution(instance.id, resolver_person_id=resolver):
-        raise ApproveRefused(409, "already_handled", "This card was already handled.")
+        raise ApproveRefused(409, "already_handled", tr("action_cards.refused.already_handled", "This card was already handled."))
     results = await _carry_out(person, actions, chosen)
     any_ok = any(r["status"] in ("done", "waiting") for r in results)
     status = (STATUS_APPROVED_UNCHANGED if len(chosen) == len(actions) else STATUS_APPROVED_WITH_EDIT) if any_ok else STATUS_FAILED
@@ -577,7 +684,8 @@ async def _carry_out(
         with rows_for_person(person.id), grant_contact_egress() if person.is_principal else nullcontext():
             for i, action in enumerate(actions):
                 if i not in chosen:
-                    results.append({"index": i, "status": "skipped", "detail": "Left out."})
+                    results.append({"index": i, "status": "skipped",
+                                    "detail": tr("action_cards.result.left_out", "Left out.")})
                     continue
                 results.append({"index": i, **await _do(action, person, tapped=tapped)})
     finally:

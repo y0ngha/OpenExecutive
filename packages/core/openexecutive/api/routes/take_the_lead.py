@@ -169,10 +169,10 @@ def _out(principal: Any) -> LeadOut:
         ],
         rules=[RuleOut(id=r.id, kind=r.kind, value=r.value) for r in rules],
         learned=[
-            LearnedOut(id=a.id, label=a.label, feature=a.feature, example=_example(a.example), uses=a.uses, created_at=a.created_at)
+            LearnedOut(id=a.id, label=a.shown, feature=a.feature, example=_example(a.example), uses=a.uses, created_at=a.created_at)
             for a in learned
         ],
-        suggested=[SuggestedOut(key=s.key, label=s.label, approvals=s.approvals) for s in suggested],
+        suggested=[SuggestedOut(key=s.key, label=s.shown, approvals=s.approvals) for s in suggested],
         available=_signing_available(),
         paused=_paused(),
     )

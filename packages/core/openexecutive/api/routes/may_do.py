@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from openexecutive.api import caller as api_caller
+from openexecutive.utils.i18n import tr
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ def _viewer(request: Request) -> Any:
 
     who = api_caller.caller(request)
     if not who.email and not (who.defaults_to_principal and is_local_login()):
-        raise HTTPException(status_code=403, detail="Sign in to see what it may do.")
+        raise HTTPException(status_code=403, detail=tr("may_do.api.sign_in", "Sign in to see what it may do."))
     try:
         person_id = _resolve_caller_person_id(request)
         if person_id is None:
@@ -79,9 +80,9 @@ def _viewer(request: Request) -> Any:
         person = get_person(person_id) if person_id is not None else None
     except Exception as exc:
         logger.exception("may_do: caller lookup failed")
-        raise HTTPException(status_code=503, detail="Couldn't read the People list.") from exc
+        raise HTTPException(status_code=503, detail=tr("may_do.api.people_unreadable", "Couldn't read the People list.")) from exc
     if person is None or person.id is None or person.archived or person.kind != "team":
-        raise HTTPException(status_code=403, detail="Only people on the team can see this.")
+        raise HTTPException(status_code=403, detail=tr("may_do.api.team_only", "Only people on the team can see this."))
     return person
 
 
@@ -97,7 +98,7 @@ def get_what_it_may_do(request: Request) -> MayDoOut:
         )
     except Exception as exc:
         logger.exception("may_do: couldn't put the page together")
-        raise HTTPException(status_code=503, detail="Couldn't read the settings.") from exc
+        raise HTTPException(status_code=503, detail=tr("may_do.api.settings_unreadable", "Couldn't read the settings.")) from exc
     return MayDoOut(
         paused=found.paused,
         sections=[

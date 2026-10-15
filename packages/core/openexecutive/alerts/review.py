@@ -37,6 +37,7 @@ from openexecutive.alerts import lifecycle
 from openexecutive.alerts import store as alert_store
 from openexecutive.alerts.lifecycle import TTL_EXEMPT_SOURCES, parse_aware
 from openexecutive.alerts.models import SEVERITY_RANK, Alert
+from openexecutive.utils.i18n import tr
 
 logger = logging.getLogger(__name__)
 
@@ -541,7 +542,8 @@ def _dm_text(headline: str, text: str) -> str:
     Executive's automatic review, about a named alert — never a bare,
     model-authored message that could read as an instruction from a person."""
     body = "".join(ch for ch in (text or "") if ch == "\n" or ch >= " ").strip()[:_DM_MAX_CHARS]
-    return f"[Alert review] Re: {_untrusted(headline, 120)}\n\n{body}"
+    header = tr("alerts.review.dm_header", "[Alert review] Re: {headline}", headline=_untrusted(headline, 120))
+    return f"{header}\n\n{body}"
 
 
 async def _dm(
@@ -868,7 +870,7 @@ async def _apply_nudge(ctx: _MoveContext) -> None:
         return  # a DM about it already waits for their quiet hours or brief
     with _urgent_if(alert.severity == "urgent"):
         ok, detail = await _dm(
-            target, v.message or f"Checking in on: {alert.headline}", headline=alert.headline,
+            target, v.message or tr("alerts.review.checking_in", "Checking in on: {headline}", headline=alert.headline), headline=alert.headline,
             alert_id=ctx.alert_id,
         )
     ctx.summary.moves_used += 1
@@ -901,7 +903,10 @@ async def _apply_escalate(ctx: _MoveContext) -> None:
     with _urgent_if(_bump_severity(alert.severity, v.severity) == "urgent"):
         ok, detail = await _dm(
             ctx.principal_id,
-            v.message or f"Needs you today: {alert.headline}\n{v.why_now or ''}".strip(),
+            v.message or tr(
+                "alerts.review.needs_you", "Needs you today: {headline}\n{why_now}",
+                headline=alert.headline, why_now=v.why_now or "",
+            ).strip(),
             headline=alert.headline,
             alert_id=ctx.alert_id,
         )
