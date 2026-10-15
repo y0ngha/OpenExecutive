@@ -337,3 +337,40 @@ def test_cache_skips_repeat_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
     assert r1.json()["context_quality"] == "rich"  # profile + sessions both present
     assert r1.json()["subtitle"] == "Cached subtitle."
     assert calls["n"] == 1, "second call should be served from cache"
+
+
+class _ToolUseBlock:
+    def __init__(self, given: dict[str, Any]) -> None:
+        self.type = "tool_use"
+        self.name = "suggest_starters"
+        self.input = given
+
+
+class _ToolUseResponse:
+    def __init__(self, given: dict[str, Any]) -> None:
+        self.content = [_ToolUseBlock(given)]
+
+
+@pytest.mark.asyncio
+async def test_llm_answer_is_read_from_the_forced_tool_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from openexecutive import providers
+    from openexecutive.agents import utility_fast
+
+    seen: dict[str, Any] = {}
+
+    class _Provider:
+        async def messages_create(self, **kwargs: Any) -> _ToolUseResponse:
+            seen.update(kwargs)
+            return _ToolUseResponse({
+                "subtitle": "Tighten the Series A story before the partner meeting.",
+                "prompts": ["a?", "b?", "c?", "d?"],
+            })
+
+    monkeypatch.setattr(utility_fast, "get_fast_model", lambda: "claude-haiku-test")
+    monkeypatch.setattr(providers, "get_provider", lambda _model: _Provider())
+
+    result = await chat_route._generate_prompts_via_llm("ctx")
+    assert result == (["a?", "b?", "c?", "d?"], "Tighten the Series A story before the partner meeting.")
+    assert seen["tool_choice"] == {"type": "tool", "name": "suggest_starters"}
