@@ -1841,9 +1841,20 @@ def _cache_key(
 
 
 async def _fast_json_call(
-    system: str, user_content: str, max_tokens: int, log_tag: str
+    system: str,
+    user_content: str,
+    max_tokens: int,
+    log_tag: str,
+    tool: dict[str, Any],
 ) -> dict[str, Any] | None:
     """One utility-fast call that must answer with a JSON object.
+
+    The answer comes as a forced call to ``tool``, whose input is the
+    object. Asked for JSON in prose, the small model sometimes answers the
+    transcript in the executive's voice instead (seen on a live install, and
+    cut off at ``max_tokens``). A model that can't be forced (the provider
+    relaxes the choice to auto) or a provider without tools may still answer
+    in text, so a JSON text reply is read too.
 
     Returns the parsed object, or None on any failure (timeout, API error,
     malformed or non-object JSON) — callers fall back rather than raise.
@@ -1860,9 +1871,15 @@ async def _fast_json_call(
                 max_tokens=max_tokens,
                 system=system,
                 messages=[{"role": "user", "content": user_content}],
+                tools=[tool],
+                tool_choice={"type": "tool", "name": tool["name"]},
             ),
             timeout=get_settings().utility_fast_timeout_s,
         )
+        for block in response.content:
+            if getattr(block, "type", "") == "tool_use" and getattr(block, "name", "") == tool["name"]:
+                given = block.input
+                return given if isinstance(given, dict) else None
         text_blocks = [b for b in response.content if getattr(b, "type", "") == "text"]
         raw = text_blocks[0].text.strip() if text_blocks else ""
         if raw.startswith("```"):
@@ -1879,6 +1896,24 @@ async def _fast_json_call(
     return data if isinstance(data, dict) else None
 
 
+_PROMPTS_TOOL: dict[str, Any] = {
+    "name": "suggest_starters",
+    "description": "Give the subtitle and the four starter prompts for the empty chat.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "subtitle": {"type": "string", "description": "One sentence, 8-16 words."},
+            "prompts": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Exactly 4 starter phrases, each 4-12 words.",
+            },
+        },
+        "required": ["subtitle", "prompts"],
+    },
+}
+
+
 async def _generate_prompts_via_llm(
     user_content: str,
 ) -> tuple[list[str], str] | None:
@@ -1888,7 +1923,9 @@ async def _generate_prompts_via_llm(
     non-empty string. Any short-fall returns None so the caller can fall
     back rather than render a half-broken empty state.
     """
-    data = await _fast_json_call(_PROMPTS_SYSTEM, user_content, 500, "suggested_prompts")
+    data = await _fast_json_call(
+        _PROMPTS_SYSTEM, user_content, 500, "suggested_prompts", _PROMPTS_TOOL
+    )
     if data is None:
         return None
     prompts_raw = data.get("prompts")
@@ -1926,6 +1963,21 @@ _FOLLOWUP_SYSTEM = (
     "exclamation marks, ending with a period or question mark."
 )
 
+_FOLLOWUP_TOOL: dict[str, Any] = {
+    "name": "suggest_next_message",
+    "description": "Give the one message the user would most naturally send next.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "suggestion": {
+                "type": "string",
+                "description": "The user's next message: one sentence, 4-14 words.",
+            },
+        },
+        "required": ["suggestion"],
+    },
+}
+
 # Per-message budget when building the transcript. The follow-up only
 # needs the thread's gist, and the reply being followed up on can be long.
 _FOLLOWUP_MAX_MESSAGES = 6
@@ -1946,7 +1998,9 @@ def _build_followup_transcript(messages: list[dict[str, Any]]) -> str:
 
 async def _generate_followup_via_llm(transcript: str) -> str | None:
     """Returns one suggested next user message, or None on any failure."""
-    data = await _fast_json_call(_FOLLOWUP_SYSTEM, transcript, 150, "followup_suggestion")
+    data = await _fast_json_call(
+        _FOLLOWUP_SYSTEM, transcript, 150, "followup_suggestion", _FOLLOWUP_TOOL
+    )
     if data is None:
         return None
     raw = data.get("suggestion")
