@@ -82,7 +82,10 @@ UPSERT_PERSON_TOOL: dict[str, Any] = {
             },
             "person_id": {
                 "type": "integer",
-                "description": "Existing person id to UPDATE. Omit to create a new row.",
+                "description": (
+                    "Existing person id to UPDATE. Omit to create a new row. "
+                    "On an update, fields you leave out keep their current values."
+                ),
             },
             "role": {
                 "type": "string",
@@ -831,14 +834,27 @@ async def handle_upsert_person(tool_input: dict[str, Any]) -> str:
     if existing is not None and existing.is_principal and kind == "contact":
         return _bad("the principal is always on the team and cannot be made a contact")
 
-    preferred_channel = tool_input.get("preferred_channel", "any")
+    def _given_or_kept(field: str, default: Any) -> Any:
+        """What the call passed for ``field``, else — on an update — what the
+        row already holds. The store rewrites every column, so an update that
+        passes only a Slack id must not clear the email (that row's sign-in)
+        or anything else it didn't mention."""
+        if field in tool_input:
+            return tool_input[field]
+        return getattr(existing, field) if existing is not None else default
+
+    preferred_channel = _given_or_kept("preferred_channel", "any")
     if preferred_channel not in _VALID_PREFERRED_CHANNELS:
         return _bad(
             f"preferred_channel must be one of {sorted(_VALID_PREFERRED_CHANNELS)}"
         )
 
     on_leave_until_raw = tool_input.get("on_leave_until")
-    on_leave_until: date | None = None
+    on_leave_until: date | None = (
+        existing.on_leave_until
+        if existing is not None and "on_leave_until" not in tool_input
+        else None
+    )
     if on_leave_until_raw:
         try:
             on_leave_until = date.fromisoformat(str(on_leave_until_raw))
@@ -853,7 +869,7 @@ async def handle_upsert_person(tool_input: dict[str, Any]) -> str:
         except ValueError as exc:
             return _bad(f"invalid authority scope: {exc}")
 
-    department_slugs = tool_input.get("department_slugs")
+    department_slugs = _given_or_kept("department_slugs", None)
     if department_slugs is not None:
         department_slugs = [str(s).strip() for s in department_slugs if str(s).strip()]
 
@@ -864,7 +880,7 @@ async def handle_upsert_person(tool_input: dict[str, Any]) -> str:
             return _bad("email_aliases must be a list of addresses")
         try:
             aliases = people_store.clean_aliases(
-                [str(a) for a in aliases_raw], primary=tool_input.get("email")
+                [str(a) for a in aliases_raw], primary=_given_or_kept("email", None)
             )
         except ValueError as exc:
             return _bad(str(exc))
@@ -878,17 +894,17 @@ async def handle_upsert_person(tool_input: dict[str, Any]) -> str:
     )
     kwargs: dict[str, Any] = {
         "full_name": full_name,
-        "role": str(tool_input.get("role", "") or ""),
+        "role": str(_given_or_kept("role", "") or ""),
         "is_principal": preserved_principal,
         "department_slugs": department_slugs,
-        "email": tool_input.get("email"),
-        "slack_user_id": tool_input.get("slack_user_id"),
-        "telegram_chat_id": tool_input.get("telegram_chat_id"),
-        "discord_user_id": tool_input.get("discord_user_id"),
+        "email": _given_or_kept("email", None),
+        "slack_user_id": _given_or_kept("slack_user_id", None),
+        "telegram_chat_id": _given_or_kept("telegram_chat_id", None),
+        "discord_user_id": _given_or_kept("discord_user_id", None),
         "preferred_channel": preferred_channel,
-        "response_sla_hours": int(tool_input.get("response_sla_hours", 24)),
+        "response_sla_hours": int(_given_or_kept("response_sla_hours", 24)),
         "on_leave_until": on_leave_until,
-        "reports_to_person_id": tool_input.get("reports_to_person_id"),
+        "reports_to_person_id": _given_or_kept("reports_to_person_id", None),
         "kind": kind,
     }
     if person_id is not None:
