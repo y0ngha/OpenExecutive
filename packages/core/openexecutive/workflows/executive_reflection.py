@@ -493,12 +493,16 @@ def _with_lead_tools(
         return tools, handlers, False
     if gateway is None:
         return tools, handlers, True
+    from openexecutive.orchestrator.teammate_mail import guard_in_turn
+
     extra = [t for t in MCP_TOOLS if t["name"] in ("search_tools", "call_tool")]
     tools = sorted([*tools, *extra], key=lambda t: t["name"])
     handlers = {
         **handlers,
         "search_tools": gateway.search_tools,
-        "call_tool": take_the_lead.gated_call_tool(gateway.call_tool, source="reflection"),
+        # Run from a chat turn, the pass reaches the mailbox the way the chat
+        # does (orchestrator.teammate_mail).
+        "call_tool": guard_in_turn(take_the_lead.gated_call_tool(gateway.call_tool, source="reflection")),
     }
     return tools, handlers, True
 
@@ -709,8 +713,11 @@ class ExecutiveReflectionWorkflow(Workflow):
         )
         from openexecutive.orchestrator.executive import (
             _ALL_SKILL_HANDLERS,
-            _ALL_SKILL_TOOLS,
+            _offered_skill_tools,
         )
+        # The Python job tool as this instance describes it (a runner's libraries).
+        _ALL_SKILL_TOOLS = _offered_skill_tools()
+        from openexecutive.audit.usage import log_model_usage
         from openexecutive.orchestrator.knowledge_tools import (
             KNOWLEDGE_TOOL_HANDLERS,
             KNOWLEDGE_TOOLS,
@@ -841,7 +848,9 @@ class ExecutiveReflectionWorkflow(Workflow):
         )
         tools, handlers, leading = _with_lead_tools(tools, handlers)
         if leading:
-            user_content += _LEAD_NOTE
+            from openexecutive.orchestrator import take_the_lead
+
+            user_content += _LEAD_NOTE + take_the_lead.learned_note()
         # Nobody reads what this pass sends before it goes: an outward tool
         # whose text names a person or figure absent from the input (or a
         # tool result so far) is refused with a reason the model can act on.
@@ -886,6 +895,7 @@ class ExecutiveReflectionWorkflow(Workflow):
                         type="error", message=f"Reflection LLM call failed: {exc}"
                     )
                     return
+                log_model_usage(response, model=model, actor=self.name, iteration=iteration)
 
                 # Only the await sits inside the tag — this is an async
                 # generator, and a ContextVar set across a `yield` would leak.

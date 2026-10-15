@@ -16,6 +16,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -30,6 +33,24 @@ _INSTANT_START_LEAD = timedelta(minutes=1)
 _POST_MEETING_FOLLOWUP_DELAY = timedelta(minutes=5)
 # A single calendar event can't sensibly run longer than a day.
 _MAX_INSTANT_DURATION_MINUTES = 24 * 60
+
+# The Person who already approved this booking on an approval card
+# (``delegation.action_cards``). When they are also the person the meeting
+# gate would ask, it is booked now instead of asking them twice; anyone else's
+# approval still goes to the gate's approver.
+_approved_by: ContextVar[int | None] = ContextVar("calendar_approved_by", default=None)
+
+
+@contextmanager
+def approved_by(person_id: int) -> Iterator[None]:
+    """Book inside this block as already approved by ``person_id``. Only for
+    code that has itself established that person approved this exact
+    meeting (the decisions approve route, after the signed-caller check)."""
+    token = _approved_by.set(person_id)
+    try:
+        yield
+    finally:
+        _approved_by.reset(token)
 
 # ---------------------------------------------------------------------------
 # Tool definitions (Anthropic tool-use schema)
@@ -482,6 +503,29 @@ def _propose_via_decision_alert(
         )
 
 
+def _asked_on_a_verified_surface(session: Any) -> bool:
+    """Whether someone on the team started this turn on a surface that
+    verified who they are: the principal (``is_principal_on_verified_surface``)
+    or a rostered teammate (``teammate_on_verified_surface``, never in a turn
+    an email started). An inbound email, a contact's message or an unattended
+    run answers False, so text someone else wrote can't book, start or cancel
+    a meeting with nobody approving it. Fails closed."""
+    from openexecutive.orchestrator.people_tools import (
+        is_principal_on_verified_surface,
+        teammate_on_verified_surface,
+    )
+
+    if session is None:
+        return False
+    return is_principal_on_verified_surface(session) or teammate_on_verified_surface(session) is not None
+
+
+_NOT_FROM_HERE = (
+    "only someone on the team, asking directly in the app or their own chat, "
+    "can do this; suggest it to them instead"
+)
+
+
 def _solo_meeting_gate(class_mode: str, session: Any) -> GateDecision:
     """The meeting gate in solo mode. No department is consulted — the
     install's departments are only the principal's areas, not an
@@ -529,11 +573,6 @@ def _solo_meeting_gate(class_mode: str, session: Any) -> GateDecision:
 
 async def handle_create_calendar_event(tool_input: dict[str, Any]) -> str:
     """Propose (or auto-execute when promoted) a calendar meeting."""
-    from openexecutive.delegation.lockdown import mail_touched_refusal
-
-    if (refused := mail_touched_refusal('create_calendar_event')) is not None:
-        return refused
-
     from openexecutive.config import get_settings
     from openexecutive.departments.authority import gate_action
     from openexecutive.memory.decision_ledger import (
@@ -554,10 +593,10 @@ async def handle_create_calendar_event(tool_input: dict[str, Any]) -> str:
 
     # 1. Gate: calendar must be enabled and MCP must be active.
     if not settings.calendar_booking_enabled:
-        return json.dumps({"error": "calendar_booking_enabled is not set to true"})
+        return json.dumps({"error": "calendar booking isn't turned on for this workspace"})
     gateway = get_active_gateway()
     if gateway is None:
-        return json.dumps({"error": "MCP gateway is not running — calendar unavailable"})
+        return json.dumps({"error": "the calendar isn't connected right now"})
 
     # 2. Parse required fields.
     try:
@@ -657,6 +696,19 @@ async def handle_create_calendar_event(tool_input: dict[str, Any]) -> str:
             required_scope=AuthorityScope.MEETING_SCHEDULING,
             now=now,
         )
+        if gate_decision.action == "execute" and not _asked_on_a_verified_surface(session):
+            # The department's authority covers its people asking, not text
+            # from outside (an inbound email): that waits for an approver.
+            # An execute decision carries no approver: route it as a proposal.
+            from openexecutive.departments.authority import _route_proposal
+
+            gate_decision = _route_proposal(
+                department_slug="operations",
+                action="propose",
+                required_scope=AuthorityScope.MEETING_SCHEDULING,
+                now=now,
+                reason="auto_execute needs someone on the team on a verified surface — proposing",
+            )
     # With a contact on the invite the booking is private to the principal:
     # they approve it (only they may reach a contact at approval time) and
     # nobody else sees the proposal.
@@ -700,8 +752,11 @@ async def handle_create_calendar_event(tool_input: dict[str, Any]) -> str:
         logger.exception("calendar_tools: failed to create decision_instance")
         return json.dumps({"error": "internal error recording proposal"})
 
-    # 12. Execute or propose.
-    if gate_decision.action == "execute" and class_mode == "auto_execute":
+    # 12. Execute or propose. A booking its approver already approved on a
+    # card is booked now: asking them again would only repeat the question.
+    approved = _approved_by.get()
+    already_approved = approved is not None and approved == approver_person_id
+    if (gate_decision.action == "execute" and class_mode == "auto_execute") or already_approved:
         # Auto-execute path (Build 3 — only reachable after promotion). The
         # booking happens now, so there is nothing to approve — deliberately
         # NO briefing alert here.
@@ -757,11 +812,6 @@ async def handle_create_instant_meeting(tool_input: dict[str, Any]) -> str:
     max-attendees, principal-protection, and the daily booking cap, and records
     an executed row in the decision ledger for audit.
     """
-    from openexecutive.delegation.lockdown import mail_touched_refusal
-
-    if (refused := mail_touched_refusal('create_instant_meeting')) is not None:
-        return refused
-
     from openexecutive.config import get_settings
     from openexecutive.memory.decision_ledger import (
         STATUS_FAILED,
@@ -776,10 +826,13 @@ async def handle_create_instant_meeting(tool_input: dict[str, Any]) -> str:
     settings = get_settings()
 
     if not settings.calendar_booking_enabled:
-        return json.dumps({"error": "calendar_booking_enabled is not set to true"})
+        return json.dumps({"error": "calendar booking isn't turned on for this workspace"})
     gateway = get_active_gateway()
     if gateway is None:
-        return json.dumps({"error": "MCP gateway is not running — calendar unavailable"})
+        return json.dumps({"error": "the calendar isn't connected right now"})
+    # It books at once, with no approval: only for someone on the team.
+    if not _asked_on_a_verified_surface(current_session.get()):
+        return json.dumps({"error": _NOT_FROM_HERE})
 
     try:
         attendee_person_ids = list(tool_input["attendee_person_ids"])
@@ -922,17 +975,17 @@ async def _do_delete_event(
 
 async def handle_cancel_calendar_event(tool_input: dict[str, Any]) -> str:
     """Cancel a booked event by its decision_instance_id."""
-    from openexecutive.delegation.lockdown import mail_touched_refusal
-
-    if (refused := mail_touched_refusal('cancel_calendar_event')) is not None:
-        return refused
-
     from openexecutive.memory.decision_ledger import (
         get_decision_instance,
         mark_reversed,
     )
     from openexecutive.orchestrator.mcp_gateway import get_active_gateway
     from openexecutive.orchestrator.people_tools import contacts_reachable_now
+    from openexecutive.orchestrator.schedule_tools import current_session
+
+    # Cancelling notifies everyone invited: only for someone on the team.
+    if not _asked_on_a_verified_surface(current_session.get()):
+        return json.dumps({"error": _NOT_FROM_HERE})
 
     try:
         instance_id = int(tool_input["decision_instance_id"])

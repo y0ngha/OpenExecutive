@@ -13,6 +13,8 @@ from typing import Any, NamedTuple
 
 from pydantic import BaseModel
 
+from openexecutive.memory.conversation_ids import family_clause, family_params
+
 logger = logging.getLogger(__name__)
 
 # Holds strong references to background tasks so GC cannot cancel them mid-flight.
@@ -472,6 +474,55 @@ def initialize_db(db_path: Path | None = None) -> None:
             except sqlite3.OperationalError as exc:
                 if "duplicate column" not in str(exc).lower():
                     raise
+        # How many history messages the conversation held when a turn last
+        # read that mail: the lockdown is carried only while that turn is in
+        # the model's view (session_store.mail_read_at). NULL = unknown, so it
+        # is always carried. A conversation that read mail before the column
+        # existed counts as having read it now, so its hold lifts 20 to 30
+        # messages on instead of never.
+        if "mail_read_at" not in _sessions_existing:
+            try:
+                conn.execute("ALTER TABLE sessions ADD COLUMN mail_read_at INTEGER")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
+            conn.execute(
+                "UPDATE sessions SET mail_read_at = (SELECT COUNT(*) FROM chat_messages "
+                "WHERE chat_messages.session_id = sessions.session_id) "
+                "WHERE mail_private = 1 AND mail_read_at IS NULL"
+            )
+        # Chat list controls (session_store.set_pinned / rename_session): when
+        # the owner pinned the chat (NULL = not pinned), and 1 once they named
+        # it, so the auto-title never writes over their name.
+        if "pinned_at" not in _sessions_existing:
+            try:
+                conn.execute("ALTER TABLE sessions ADD COLUMN pinned_at TEXT")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
+        if "title_locked" not in _sessions_existing:
+            try:
+                conn.execute(
+                    "ALTER TABLE sessions ADD COLUMN title_locked INTEGER NOT NULL DEFAULT 0"
+                )
+            except sqlite3.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
+        # Who a chat's owner shared it with, to read (session_store.share_session).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS session_shares (
+                session_id          TEXT NOT NULL,
+                person_id           INTEGER NOT NULL,
+                shared_by_person_id INTEGER,
+                created_at          TEXT NOT NULL,
+                PRIMARY KEY (session_id, person_id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_session_shares_person ON session_shares(person_id)"
+        )
 
         # Trust-ledger tables (first-climb autonomy, Build 1+2).
         # `decision_instances` is the correlation unit: links a proposal, its
@@ -736,10 +787,12 @@ def get_recent_advice(
         return []
     with _get_conn(resolved) as conn:
         if session_id:
+            # Every conversation of a chat app's stream shares what it
+            # decided (memory.conversation_ids).
             rows = conn.execute(
-                "SELECT * FROM advice_given WHERE session_id = ?"
+                f"SELECT * FROM advice_given WHERE {family_clause()}"
                 " ORDER BY timestamp DESC LIMIT ?",
-                (session_id, limit),
+                (*family_params(session_id), limit),
             ).fetchall()
         else:
             rows = conn.execute(
@@ -758,10 +811,12 @@ def get_recent_decisions(
         return []
     with _get_conn(resolved) as conn:
         if session_id:
+            # Every conversation of a chat app's stream shares what it
+            # decided (memory.conversation_ids).
             rows = conn.execute(
-                "SELECT * FROM decisions WHERE session_id = ?"
+                f"SELECT * FROM decisions WHERE {family_clause()}"
                 " ORDER BY timestamp DESC LIMIT ?",
-                (session_id, limit),
+                (*family_params(session_id), limit),
             ).fetchall()
         else:
             rows = conn.execute(
@@ -1879,7 +1934,8 @@ def format_for_prompt(
     """Render recent decisions, active initiatives, and recent advice for prompt injection.
 
     When `session_id` is non-empty, decisions and advice are scoped to that
-    session only — used by Discord/Telegram/Slack/email thread handlers so
+    session only (for a chat app, every conversation of its stream —
+    `memory.conversation_ids`) — used by Discord/Telegram/Slack/email thread handlers so
     each conversation sees its own extracted context rather than a global mix
     from unrelated conversations. Initiatives are always global (company-wide).
 

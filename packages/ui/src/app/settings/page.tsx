@@ -6,33 +6,34 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { useExecutiveStatus } from "@/components/executive/ExecutiveStatusContext";
 import Icon from "@/components/Icon";
-import { HANDLE_IT_MODES } from "@/components/settings/HandleItCard";
 import { MODE_LABEL } from "@/components/settings/WorkspaceCard";
 import {
   ADVANCED_ITEMS,
   SETTINGS_PAGES,
-  settingsPageForHash,
+  settingsHrefForHash,
   type SettingsPageDef,
   type SettingsPageId,
 } from "@/components/shell/navConfig";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import {
   getAgentDetail,
-  getDelegation,
   getHistory,
+  getNotificationSettings,
   getVersion,
   listPersonas,
-  type DelegationSettings,
   type HistoryState,
+  type NotificationSettings,
 } from "@/lib/api";
 import { retentionLabel } from "@/lib/history";
+import { tileStatus as notificationsTileStatus } from "@/lib/notifications";
 import { versionNotice } from "@/lib/versionNotice";
 
 // Settings — a hub of tiles, one per page (SETTINGS_PAGES): Your Executive,
-// Act as me, About you, Workspace, Advanced and About. Each tile says what's on its page
+// Notifications, About you, Workspace, Advanced and About. Each tile says what's on its page
 // and, where it's cheap to know, how things stand right now. The one-page
 // Settings this replaces used anchors (`/settings#workspace`); a link that
-// still carries one is sent on to the matching page.
+// still carries one is sent on to the matching page (Act as me's, to its tab
+// under Delegate).
 
 function subscribeHash(onChange: () => void): () => void {
   window.addEventListener("hashchange", onChange);
@@ -56,19 +57,20 @@ export default function SettingsPage() {
   // none to read. The hub is held back until it is known, and while an old
   // anchor link is on its way to its page, so the tiles don't flash.
   const hash = useSyncExternalStore(subscribeHash, readHash, () => null);
-  const target = hash === null ? null : settingsPageForHash(hash);
+  const target = hash === null ? null : settingsHrefForHash(hash);
   useEffect(() => {
-    if (target) router.replace(target.href);
+    if (target) router.replace(target);
   }, [router, target]);
 
   const statuses = useTileStatuses();
-  // Act as me has a tile only for someone who can have it (GET /delegation
-  // answers null for everyone else).
-  // About you, only for someone with notes to keep (GET /memories/history
+  // About you has a tile only for someone with notes to keep (GET /memories/history
   // answers null for anyone not signed in or not on the People list).
+  // Notifications likewise only for someone on the People list (GET
+  // /notifications/settings answers null for anyone else).
   const pages = SETTINGS_PAGES.filter(
     (p) =>
-      (p.id !== "act-as-me" || statuses.actAsMeOffered) && (p.id !== "memory" || statuses.memoryOffered),
+      (p.id !== "memory" || statuses.memoryOffered) &&
+      (p.id !== "notifications" || statuses.notificationsOffered),
   );
 
   if (hash === null || target) return <main className="flex-1" />;
@@ -138,15 +140,15 @@ function SettingsTile({ page, status }: { page: SettingsPageDef; status?: TileSt
 // leaves its tile without a status rather than guessing.
 function useTileStatuses(): {
   byPage: Partial<Record<SettingsPageId, TileStatus>>;
-  actAsMeOffered: boolean;
   memoryOffered: boolean;
+  notificationsOffered: boolean;
 } {
   const { status: run, unknown } = useExecutiveStatus();
   const { mode, effectiveTimezone, loading: workspaceLoading } = useWorkspace();
   const [voice, setVoice] = useState<string | null>(null);
-  const [delegation, setDelegation] = useState<DelegationSettings | null | "error">(null);
   const [version, setVersion] = useState<TileStatus | null>(null);
   const [history, setHistory] = useState<HistoryState | null | "error">(null);
+  const [notifications, setNotifications] = useState<NotificationSettings | null | "error">(null);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -157,15 +159,15 @@ function useTileStatuses(): {
         if (!ctrl.signal.aborted && name) setVoice(name);
       })
       .catch(() => {});
-    getDelegation(ctrl.signal)
-      .then((d) => setDelegation(d))
-      .catch((err) => {
-        if ((err as Error)?.name !== "AbortError") setDelegation("error");
-      });
     getHistory(undefined, ctrl.signal)
       .then((h) => setHistory(h))
       .catch((err) => {
         if ((err as Error)?.name !== "AbortError") setHistory("error");
+      });
+    getNotificationSettings(ctrl.signal)
+      .then((n) => setNotifications(n))
+      .catch((err) => {
+        if ((err as Error)?.name !== "AbortError") setNotifications("error");
       });
     getVersion(ctrl.signal)
       .then((v) => {
@@ -193,22 +195,6 @@ function useTileStatuses(): {
     byPage.executive = { text: `${voice} voice`, tone: "none" };
   }
 
-  if (delegation && delegation !== "error") {
-    byPage["act-as-me"] =
-      delegation.gmail.status === "connected"
-        ? {
-            text: delegation.enabled ? "Mailbox connected · drafts on" : "Mailbox connected",
-            tone: "ok",
-          }
-        : { text: "Mailbox not connected", tone: "warn" };
-    const handleIt = delegation.handle_it;
-    if (handleIt?.enabled) {
-      const mode = HANDLE_IT_MODES.find((m) => m.mode === handleIt.mode)?.label ?? "On";
-      // Short enough for one line on a phone: the dial step is what matters.
-      byPage["act-as-me"] = { text: `Handles: ${mode}`, tone: "ok" };
-    }
-  }
-
   if (history && history !== "error") {
     const days = history.company_retention_days;
     byPage.memory = {
@@ -217,6 +203,10 @@ function useTileStatuses(): {
       }`,
       tone: "none",
     };
+  }
+
+  if (notifications && notifications !== "error") {
+    byPage.notifications = { text: notificationsTileStatus(notifications), tone: "none" };
   }
 
   if (!workspaceLoading) {
@@ -229,5 +219,5 @@ function useTileStatuses(): {
   byPage.advanced = { text: `${ADVANCED_ITEMS.length} tools for power users`, tone: "none" };
   if (version) byPage.about = version;
 
-  return { byPage, actAsMeOffered: delegation !== null, memoryOffered: history !== null };
+  return { byPage, memoryOffered: history !== null, notificationsOffered: notifications !== null };
 }

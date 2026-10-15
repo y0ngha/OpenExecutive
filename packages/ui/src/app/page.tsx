@@ -14,9 +14,14 @@ import AppSidebar from "@/components/shell/AppSidebar";
 import { profileWording } from "@/components/shell/navConfig";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useExecutiveStatus } from "@/components/executive/ExecutiveStatusContext";
+import { GettingStartedCard, useGettingStarted } from "@/components/onboard/GettingStarted";
+import { useFirstRunRedirect } from "@/components/onboard/useFirstRunRedirect";
 import PausedBanner from "@/components/executive/PausedBanner";
 import OverflowMenu from "@/components/ui/OverflowMenu";
-import { ChatMessage, DebugEvent, getSessionMessages } from "@/lib/api";
+import { ChatMessage, DebugEvent, getSessionMessages, updateSession } from "@/lib/api";
+import { downloadChat } from "@/lib/downloadChat";
+import { recall, remember, STORAGE_KEYS } from "@/lib/firstRun";
+import { sessionTitle } from "@/lib/sessionChannel";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -44,6 +49,8 @@ export default function HomePage() {
   const { sessions, loaded: sessionsLoaded, refresh: refreshSessions } = useSessions();
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
   const [activeMessages, setActiveMessages] = useState<ChatMessage[]>([]);
+  // Words to find in the chat opened from a Chats-page search (`?find=`).
+  const [activeFind, setActiveFind] = useState<string | undefined>();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Briefing-first landing: default to "briefing" so opening the app shows
   // what's been happening, not an empty chat. Switches to "chat" when the
@@ -72,11 +79,12 @@ export default function HomePage() {
   // yanking them into the old chat mid-turn.
   const selectGenRef = useRef(0);
 
-  const handleSelectSession = useCallback(async (sessionId: string) => {
+  const handleSelectSession = useCallback(async (sessionId: string, find?: string) => {
     const gen = ++selectGenRef.current;
     try {
       const msgs = await getSessionMessages(sessionId);
       if (gen !== selectGenRef.current) return;
+      setActiveFind(find);
       setActiveSessionId(sessionId);
       setActiveMessages(msgs);
       setDebugEvents([]);
@@ -144,7 +152,7 @@ export default function HomePage() {
   // Cross-route entries: from every inner route the sidebar and mobile
   // bottom nav link to `/?new=1` (New chat) and `/?session=<id>` (a
   // Recent chat, or a row on /chats). `/?new=1&draft=<text>` also seeds
-  // the new chat's input without sending it (Playbooks "Try in chat"). When either param is present on
+  // the new chat's input without sending it (the Workflows page's "Talk it through in chat"). When either param is present on
   // mount, apply it and strip the query so a refresh doesn't reapply it.
   // A `session` id is held until the caller's own (owner-scoped) session
   // list has loaded, and opened only if that list contains it: the id comes
@@ -157,12 +165,22 @@ export default function HomePage() {
   // wrapped in <Suspense>, and the chat home is a heavy static page we
   // want to keep prerendered. The effect runs client-only anyway.
   const router = useRouter();
-  const deepLinkRef = useRef<{ sessionId: string; gen: number } | null>(null);
+  const deepLinkRef = useRef<{ sessionId: string; gen: number; find?: string } | null>(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const sessionParam = params.get("session");
     const draftParam = params.get("draft");
+    // The last setup screen's first question: asked once, as if typed here.
+    // It comes from session storage the setup screen wrote, never from the
+    // URL, so it is the person's own and may send without a second tap.
+    const firstQuestion = recall(STORAGE_KEYS.firstQuestion);
+    if (firstQuestion) {
+      remember(STORAGE_KEYS.firstQuestion, null);
+      handleContinueFromBriefing(firstQuestion.slice(0, MAX_DRAFT_PARAM_CHARS));
+      if (params.toString()) router.replace("/");
+      return;
+    }
     if (params.get("new") === "1") {
       handleNewChat();
       if (draftParam) {
@@ -171,10 +189,14 @@ export default function HomePage() {
       }
       router.replace("/");
     } else if (sessionParam) {
-      deepLinkRef.current = { sessionId: sessionParam, gen: selectGenRef.current };
+      deepLinkRef.current = {
+        sessionId: sessionParam,
+        gen: selectGenRef.current,
+        find: params.get("find")?.slice(0, 200) || undefined,
+      };
       router.replace("/");
     }
-  }, [handleNewChat, router]);
+  }, [handleNewChat, handleContinueFromBriefing, router]);
 
   useEffect(() => {
     const pending = deepLinkRef.current;
@@ -182,7 +204,7 @@ export default function HomePage() {
     deepLinkRef.current = null;
     if (pending.gen !== selectGenRef.current) return;
     if (sessions.some((s) => s.session_id === pending.sessionId)) {
-      void handleSelectSession(pending.sessionId);
+      void handleSelectSession(pending.sessionId, pending.find);
     }
   }, [sessions, sessionsLoaded, handleSelectSession]);
 
@@ -209,15 +231,24 @@ export default function HomePage() {
   const companyName = health?.company_name;
   const profileCopy = PROFILE_COPY[profileWording(workspaceMode, role.role_kind)];
 
+  // First run: the owner lands on setup until a profile exists (unless they
+  // chose to do it later), and the first days show a getting-started
+  // checklist in the banner slot.
+  const redirecting = useFirstRunRedirect(health?.company_profile_loaded);
+  const gettingStarted = useGettingStarted(health?.company_profile_loaded, companyName);
+
   // The briefing's one banner slot shows the most important notice: paused,
-  // then no profile, then a brief that wasn't sent. With none, the briefing
-  // shows its quiet-day note there instead.
+  // then the getting-started checklist, then no profile, then a brief that
+  // wasn't sent. With none, the briefing shows its quiet-day note there
+  // instead.
   const { status: execStatus, unknown: execStatusUnknown } = useExecutiveStatus();
   const deliveryNotice = useBriefDeliveryNotice();
   const homeBanner = execStatus?.paused && !execStatusUnknown ? (
     <div className="overflow-hidden rounded-2xl border border-amber-500/30 [&>div]:border-b-0">
       <PausedBanner />
     </div>
+  ) : gettingStarted.visible ? (
+    <GettingStartedCard {...gettingStarted} />
   ) : !isOnboarded && health ? (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-accent/5 px-4 py-3">
       <p className="text-[15px] text-fg-muted">{profileCopy.missingBanner}</p>
@@ -228,6 +259,44 @@ export default function HomePage() {
   ) : deliveryNotice ? (
     <BriefDeliveryNotice notice={deliveryNotice} />
   ) : undefined;
+
+  // The open chat, when it is one of the caller's own saved chats: its
+  // Pin, Rename and Download sit in the header's ⋯ menu.
+  const openChat =
+    mode === "chat" && activeSessionId
+      ? sessions.find((s) => s.session_id === activeSessionId)
+      : undefined;
+  const chatItems = openChat
+    ? [
+        {
+          label: openChat.pinned_at ? "Unpin" : "Pin",
+          onSelect: () => {
+            updateSession(openChat.session_id, { pinned: !openChat.pinned_at })
+              .then(refreshSessions)
+              .catch(() => window.alert("Couldn't pin this chat."));
+          },
+        },
+        {
+          label: "Rename",
+          onSelect: () => {
+            const title = window.prompt("Name this chat", sessionTitle(openChat))?.trim();
+            if (!title) return;
+            updateSession(openChat.session_id, { title: title.slice(0, 120) })
+              .then(refreshSessions)
+              .catch(() => window.alert("Couldn't rename this chat."));
+          },
+        },
+        {
+          label: "Download",
+          onSelect: () => {
+            downloadChat(openChat.session_id).catch(() => window.alert("Couldn't download this chat."));
+          },
+        },
+      ]
+    : [];
+
+  // Hold the page while the browser moves to setup.
+  if (redirecting) return <div className="h-full bg-surface" />;
 
   return (
     <div className="flex h-full relative">
@@ -282,6 +351,7 @@ export default function HomePage() {
           <OverflowMenu
             label="Home options"
             items={[
+              ...chatItems,
               {
                 label: debugOpen ? "Hide agent activity" : "Show agent activity",
                 onSelect: () => setDebugOpen((o) => !o),
@@ -321,6 +391,7 @@ export default function HomePage() {
               onDebugEvent={handleDebugEvent}
               initialMessages={activeMessages}
               initialSessionId={activeSessionId}
+              initialFind={activeFind}
               initialInput={pendingPrompt}
               // Briefing handoffs (Discuss / Approve / Dismiss / Edit&Approve)
               // are commitments, not drafts, so they auto-fire the first

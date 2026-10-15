@@ -392,6 +392,20 @@ async def test_slack_states_after_the_token_works() -> None:
     assert not_listening.state == "warn"
 
 
+async def test_slack_events_over_http() -> None:
+    http_settings = make_settings(SLACK_BOT_TOKEN=SLACK_BOT, SLACK_SIGNING_SECRET="signing-secret-value")
+    ada = Person(id=1, full_name="Ada", slack_user_id="U1")
+    async with Recorder(slack_ok).client() as c:
+        not_started = await check_slack(make_snap(http_settings, people=[ada]), c)
+        # No connection to ask about: the handler only has to exist.
+        taking = await check_slack(
+            make_snap(http_settings, slack_handler=SimpleNamespace(mode="http"), people=[ada]), c
+        )
+    assert not_started.state == "error" and "didn't start" in not_started.summary
+    assert (taking.state, taking.summary) == ("ok", "Takes Slack events from Acme HQ at /webhook/slack.")
+    assert_no_secret(taking, SLACK_BOT, "signing-secret-value")
+
+
 async def test_slack_listening_without_its_own_identity_warns() -> None:
     snap = make_snap(
         slack_settings(),
@@ -1051,3 +1065,62 @@ async def test_a_paused_tick_records_itself(scheduler_loop: dict[str, Any]) -> N
     pause.pause("ceo@example.com")
     _, tick = await _one_tick()
     assert tick is not None and tick[1] == "paused"
+
+
+def _gmail_gateway(probe: Any) -> Any:
+    """A started gateway stand-in carrying a priming result. A bare object() —
+    what the other Gmail tests pass — has no attribute at all, which is the
+    "not a real gateway" case and must read exactly as it did before."""
+    return SimpleNamespace(pinned_tools=probe)
+
+
+def test_gmail_names_the_pinned_google_tools_priming_could_not_find(
+    gmail_settings: Settings,
+) -> None:
+    from openexecutive.orchestrator.mcp_gateway import PinnedToolsProbe
+
+    seen = {"email": inbound("email", "Inbound email")}
+
+    def check(probe: Any) -> SetupCheck:
+        return check_gmail(
+            make_snap(gmail_settings, mcp_gateway=_gmail_gateway(probe), last_inbound=seen)
+        )
+
+    every_tool_there = check(PinnedToolsProbe(missing=()))
+    assert every_tool_there.state == "ok"
+    assert "couldn't be found" not in every_tool_there.summary
+
+    one = check(PinnedToolsProbe(missing=("google_workspace__create_doc",)))
+    assert one.state == "warn"
+    assert "1 Google tool couldn't be found: google_workspace__create_doc." in one.summary
+    assert "renamed them" in (one.fix or "")
+    assert one.last_activity is not None, "the inbox timestamp survives the warning"
+
+    two = check(PinnedToolsProbe(missing=("a_tool", "b_tool")))
+    assert "2 Google tools couldn't be found: a_tool, b_tool." in two.summary
+
+    # Long lists are capped by count, not clipped mid-identifier.
+    many = check(PinnedToolsProbe(missing=tuple(f"tool_{i}" for i in range(24))))
+    assert "24 Google tools couldn't be found: tool_0, tool_1, tool_2, and 21 more." in many.summary
+
+
+def test_gmail_does_not_report_green_before_priming_answers(gmail_settings: Settings) -> None:
+    from openexecutive.orchestrator.mcp_gateway import PinnedToolsProbe
+
+    not_finished = check_gmail(make_snap(gmail_settings, mcp_gateway=_gmail_gateway(None)))
+    assert not_finished.state == "warn"
+    assert "Still checking which Google tools loaded." in not_finished.summary
+    # The whole sentence, not a substring: these branches append to a running
+    # summary, and an earlier draft read "...is stuck — The API log says why —"
+    # because a standalone sentence was glued into a clause. A substring
+    # assertion passed that; rendering the page is what caught it.
+    assert not_finished.fix == (
+        "That takes a few minutes after a restart. If it doesn't finish, the connection "
+        'to Google is stuck: look for "MCPGateway" in the API log, then restart the app.'
+    )
+
+    failed = check_gmail(
+        make_snap(gmail_settings, mcp_gateway=_gmail_gateway(PinnedToolsProbe(missing=None)))
+    )
+    assert failed.state == "warn"
+    assert "Couldn't check which Google tools loaded." in failed.summary

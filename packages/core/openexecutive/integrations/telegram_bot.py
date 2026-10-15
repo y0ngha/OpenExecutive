@@ -80,18 +80,34 @@ async def send_message(token: str, chat_id: int, text: str) -> str | None:
     Returns the Telegram message_id of the last chunk sent (best-effort —
     ``None`` if no chunk delivered or the response lacks one), so callers can
     link an outbound DM to a later reply. Existing callers ignore the return."""
+    from openexecutive.utils.markdown_telegram import markdown_to_telegram_html
+
     client = _get_http_client()
     last_message_id: str | None = None
     for chunk in _split_message(text):
         if not chunk:
             continue
+        # No link previews: Telegram's server would fetch a link in the
+        # text on its own, and a reply can quote mail a sender wrote to
+        # carry data out in one.
+        base: dict[str, Any] = {"chat_id": chat_id, "link_preview_options": {"is_disabled": True}}
+        # The reply is Markdown, which Telegram shows as typed: send it as
+        # Telegram's HTML instead. Should Telegram refuse that (an entity it
+        # can't parse, or escaping that pushed it over the length cap), the
+        # chunk goes again as the plain text it was before. Only a 400 is a
+        # refusal of the message itself: a 429 or 5xx would fail again (or,
+        # after a 5xx that was delivered anyway, send the reply twice).
         resp = await client.post(
             _tg_url(token, "sendMessage"),
-            # No link previews: Telegram's server would fetch a link in the
-            # text on its own, and a reply can quote mail a sender wrote to
-            # carry data out in one.
-            json={"chat_id": chat_id, "text": chunk, "link_preview_options": {"is_disabled": True}},
+            json={**base, "text": markdown_to_telegram_html(chunk), "parse_mode": "HTML"},
         )
+        if resp.status_code == 400:
+            logger.warning(
+                "Telegram sendMessage (HTML) failed, sending as plain text: %s %s",
+                resp.status_code,
+                resp.text,
+            )
+            resp = await client.post(_tg_url(token, "sendMessage"), json={**base, "text": chunk})
         if resp.is_error:
             logger.error(
                 "Telegram sendMessage failed: %s %s", resp.status_code, resp.text
@@ -154,11 +170,14 @@ async def _process_and_reply(
     ``attachment_file_ids`` is a list of ``(file_id, filename, content_type)``
     tuples for any files or photos attached to the message.
     """
-    # Deterministic per-chat session id — stamped on every audit row (inbound,
+    # Per-conversation session id — stamped on every audit row (inbound,
     # chat_turn, specialist_consult, tool_invocation) so a single request can
     # be followed end-to-end in /audit. Must match the value used when the
-    # Session is constructed below.
-    session_id = f"telegram:{chat_id}"
+    # Session is constructed below. The chat is one stream, `telegram:{chat_id}`,
+    # cut into conversations after a quiet gap or a /new (memory.conversations).
+    from openexecutive.integrations.conversations import conversation_for
+
+    session_id = await asyncio.to_thread(conversation_for, f"telegram:{chat_id}")
 
     from openexecutive.audit import log_event as audit_log
     audit_log(
@@ -200,16 +219,14 @@ async def _process_and_reply(
 
     # Fork into alert triage pipeline (fire-and-forget, same pattern as other integrations).
     try:
-        from openexecutive.alerts.models import AlertEvent
-        from openexecutive.alerts.pipeline import schedule_evaluation
+        from openexecutive.alerts.pipeline import schedule_chat_message_evaluation
 
-        schedule_evaluation(
-            AlertEvent(
-                source="telegram",
-                external_id=str(message_id),
-                body=message_text,
-                user=sender_name,
-            )
+        schedule_chat_message_evaluation(
+            source="telegram",
+            external_id=str(message_id),
+            body=message_text,
+            sender=_tg_person,
+            fallback_name=sender_name,
         )
     except Exception:
         logger.exception("Telegram: failed to schedule alert evaluation")
@@ -262,6 +279,9 @@ async def _process_and_reply(
 
     response: str | None = None
     async with _chat_lock(chat_id):
+        # Again under the lock: a /new queued behind an earlier turn may have
+        # started the next conversation since this message was picked up.
+        session_id = await asyncio.to_thread(conversation_for, f"telegram:{chat_id}")
         try:
             profile = load_or_create_profile()
             # See the note in slack_bot: lets an approval gate raised in
@@ -278,7 +298,7 @@ async def _process_and_reply(
             # Record this channel_ref as user-initiated so the Executive may
             # schedule follow-ups back to this chat.
             session.seen_channel_refs.add(("telegram", str(chat_id)))
-            retrieved_context = retrieve(query=message_text)
+            retrieved_context = retrieve(query=message_text, max_chars=get_settings().knowledge_chat_max_chars)
             episodic_context = format_for_prompt(session_id=session_id)
 
             # Look up the OE Person record so Honcho can key per-person
@@ -331,7 +351,9 @@ async def _process_and_reply(
                 channel_context_block=build_channel_context_block("telegram"),
                 person_id=person_id,
             )
-            await send_message(token, chat_id, response)
+            from openexecutive.orchestrator.disclosure import with_chat_line
+
+            await send_message(token, chat_id, with_chat_line(response, f"telegram:{session_id}"))
         except Exception:
             logger.exception("Telegram: handler error for message %s", message_id)
             try:
@@ -370,6 +392,26 @@ async def _process_and_reply(
             logger.exception(
                 "Telegram: failed to persist turn for session %s", session_id
             )
+        else:
+            from openexecutive.integrations.conversations import title_after_turn
+
+            title_after_turn(session_id, message_text, response)
+
+
+async def _start_fresh_and_reply(chat_id: int, token: str) -> None:
+    """Answer /new: start a new conversation in this chat and say so."""
+    from openexecutive.integrations.conversations import start_fresh
+    from openexecutive.people.store import find_person_by_telegram_chat_id
+
+    async with _chat_lock(chat_id):
+        person = await asyncio.to_thread(find_person_by_telegram_chat_id, str(chat_id))
+        reply = await asyncio.to_thread(
+            start_fresh, f"telegram:{chat_id}", person.id if person is not None else None
+        )
+    try:
+        await send_message(token, chat_id, reply)
+    except Exception:
+        logger.exception("Telegram: failed to confirm /new for chat %s", chat_id)
 
 
 # Known bot commands that should be stripped before passing to the Executive.
@@ -572,6 +614,14 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks) 
 
     # Require either text or at least one attachment to proceed.
     if not text and not attachment_file_ids:
+        return {}
+
+    from openexecutive.integrations.conversations import is_new_conversation_command
+
+    if not attachment_file_ids and is_new_conversation_command(text):
+        background_tasks.add_task(
+            _start_fresh_and_reply, chat_id=chat_id, token=settings.telegram_bot_token
+        )
         return {}
 
     background_tasks.add_task(

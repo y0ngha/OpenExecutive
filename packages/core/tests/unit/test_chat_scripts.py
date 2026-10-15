@@ -16,8 +16,25 @@ from unittest.mock import patch
 
 import pytest
 
+from openexecutive.orchestrator.content_trust import PRINCIPAL_ONLY_TOOLS
 from openexecutive.orchestrator.executive import Executive
 from openexecutive.workflows import step_script
+
+
+@pytest.fixture(autouse=True)
+def _principals_own_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test here is the principal's own verified turn unless it says so.
+
+    `_run` binds no session, and `principal_speaking` fails closed on `None`,
+    so without this the whole file would run as "somebody else's turn" — where
+    `run_script` is withheld (PRINCIPAL_ONLY_TOOLS) and none of the script
+    behaviour below is reachable. A test that wants the withheld side stubs
+    this again with the set it wants; the later monkeypatch wins.
+    """
+    monkeypatch.setattr(
+        "openexecutive.orchestrator.executive.principal_only_withheld",
+        lambda _s: frozenset(),
+    )
 
 
 class _TextBlock:
@@ -214,6 +231,51 @@ def test_a_private_turn_is_not_offered_it_and_is_refused(
     assert any(r["details"].get("refused") == "private_turn" for r in audit)
 
 
+def test_someone_elses_turn_is_not_offered_it_and_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`run_script` is the principal's own, like run_python_job beside it.
+
+    The real `PRINCIPAL_ONLY_TOOLS`, not a hand-written set: the point is what
+    that frozenset contains. `principal_only_withheld` returns it for any
+    speaker who is not the principal AND for every turn whose origin_channel
+    is email — which includes an inbound mail from an address on nobody's
+    People entry, a turn no `private_to_principal` flag covers. Without this
+    the model could be talked into writing a program that spends the turn's
+    whole call budget (CHAT_SCRIPT_MAX_CALLS) in one tool_use.
+    """
+    assert "run_script" in PRINCIPAL_ONLY_TOOLS
+    monkeypatch.setattr(
+        "openexecutive.orchestrator.executive.principal_only_withheld",
+        lambda _s: PRINCIPAL_ONLY_TOOLS,
+    )
+    gateway = _Gateway()
+    provider = _script_turn()
+    _run(provider, gateway)
+    assert "run_script" not in [t.get("name") for t in provider.calls[0]["tools"]]
+    assert "only the principal" in json.loads(_any_result(provider, "tu-s"))["error"]
+    assert gateway.calls == []
+
+
+def test_an_unattended_run_is_not_offered_it() -> None:
+    """Same tool, the other untrusted context: a scheduler trigger, reflection
+    or research pass, whose context is stored or inbound text with nobody
+    watching. `unattended_toolkit` drops the set from the offered list and the
+    loop refuses a call anyway, both already pinned for this set's other
+    members — what is pinned here is that run_script is in it.
+    """
+    from openexecutive.orchestrator.schedule_tools import (
+        UNATTENDED_WITHHELD_TOOLS,
+        unattended_toolkit,
+    )
+
+    assert "run_script" in UNATTENDED_WITHHELD_TOOLS
+    tools, _handlers = unattended_toolkit(
+        [step_script.CHAT_TOOL_DEFINITION, {"name": "create_alert"}], {}, "team"
+    )
+    assert [t.get("name") for t in tools] == ["create_alert"]
+
+
 def test_a_turn_that_read_the_owners_mail_refuses_the_whole_script(
     monkeypatch: pytest.MonkeyPatch, audit: list[dict[str, Any]]
 ) -> None:
@@ -229,18 +291,22 @@ def test_a_turn_that_read_the_owners_mail_refuses_the_whole_script(
     assert any(r["details"].get("refused") == "mail_touched" for r in audit)
 
 
-def test_a_later_turn_of_a_mail_conversation_refuses_scripts_and_outside_tools_but_sends(
+def test_a_later_turn_of_a_mail_conversation_is_not_locked_once_the_mail_is_out_of_view(
     monkeypatch: pytest.MonkeyPatch, audit: list[dict[str, Any]]
 ) -> None:
     # A later turn of a conversation that read the owner's mail: private
-    # (touched_mail) but not locked (read_mail). What reaches only the roster
-    # runs; a script or a gateway tool outside PRIVATE_TURN_MCP_TOOLS doesn't.
+    # (touched_mail) but not locked, so scripts, outside tools and sends all
+    # run.
     from types import SimpleNamespace
 
     from openexecutive.orchestrator import executive as ex
 
     pinned = SimpleNamespace(offered=False, touched_mail=True, read_mail=False)
     monkeypatch.setattr("openexecutive.orchestrator.executive.turn_delegation", lambda _s: pinned)
+    # The send passes the teammate-mail guard, which reads the roster and
+    # refuses when it can't: give it an empty one rather than whatever
+    # ./episodic_memory.db an earlier test left behind.
+    monkeypatch.setattr("openexecutive.people.store.list_people", lambda *a, **kw: [])
     slack: list[dict[str, Any]] = []
 
     async def send_slack_dm(tool_input: dict[str, Any]) -> str:
@@ -249,20 +315,20 @@ def test_a_later_turn_of_a_mail_conversation_refuses_scripts_and_outside_tools_b
 
     monkeypatch.setitem(ex._ALL_SKILL_HANDLERS, "send_slack_dm", send_slack_dm)
     gateway = _Gateway()
+    fetch = {"name": "fetch__fetch_url", "arguments": {"url": "https://x.example"}}
     send = {"name": "google_workspace__send_gmail_message", "arguments": {"to": "ben@co.example"}}
     provider = _ScriptedProvider([
         _FinalMsg([
             _ToolUseBlock("tu-s", "run_script", {"script": SCRIPT}),
-            _ToolUseBlock("tu-f", "call_tool", {"name": "fetch__fetch_url", "arguments": {"url": "https://x.example"}}),
+            _ToolUseBlock("tu-f", "call_tool", fetch),
             _ToolUseBlock("tu-g", "call_tool", send),
             _ToolUseBlock("tu-d", "send_slack_dm", {"slack_user_id": "U1", "text": "hi"}),
         ], "tool_use"),
         _FinalMsg([_TextBlock("Done.")], "end_turn"),
     ])
     _run(provider, gateway)
-    for refused in ("tu-s", "tu-f"):
-        assert "new conversation" in json.loads(_any_result(provider, refused))["error"]
-    assert gateway.calls == [send]
+    assert not any(r["details"].get("refused") == "mail_touched" for r in audit)
+    assert fetch in gateway.calls and send in gateway.calls
     assert slack == [{"slack_user_id": "U1", "text": "hi"}]
 
 

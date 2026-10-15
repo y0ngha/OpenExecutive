@@ -127,6 +127,7 @@ def _card(owner_id: int, monkeypatch: pytest.MonkeyPatch) -> tuple[FakeInbox, in
     monkeypatch.setattr(gw, "_call_model", composer)
     set_enabled(owner_id, True, updated_by="t")
     inbox.set_watch(owner_id, True, updated_by="t", now=datetime(2026, 9, 29, tzinfo=UTC))
+    inbox.set_mailbox_drafts(owner_id, True, updated_by="t")
     mailbox = FakeInbox()
     mailbox.add(_msg("m1", "t1"))
     person = people_store.get_person(owner_id)
@@ -201,3 +202,59 @@ def test_local_login_sends_with_no_caller_header(
     resp = client.post(f"/decisions/{card_id}/approve", json={})
     assert resp.status_code == 200 and resp.json()["status"] == "approved_unchanged"
     assert mailbox.sent == ["d1"]
+
+
+def test_send_and_allow_through_decisions(
+    client: TestClient, ids: dict[str, int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openexecutive.delegation import training
+
+    mailbox, card_id = _card(ids["principal"], monkeypatch)
+    monkeypatch.setattr("openexecutive.delegation.gmail.gmail_for", lambda email: mailbox)
+    monkeypatch.setenv("OE_LOCAL_LOGIN", "1")
+    # Not in training: refused, nothing sent.
+    resp = client.post(f"/decisions/{card_id}/approve", json={"edits": {"allow": True}}, headers=OWNER)
+    assert resp.status_code == 422 and resp.json()["detail"]["code"] == "cant_allow"
+    assert mailbox.sent == []
+    training.set_(ids["principal"], {training.REPLIES: True, training.DRAFTS: True}, updated_by="t")
+    assert client.get("/delegation/replies", headers=OWNER).json()["cards"][0]["can_allow"] is True
+    mailbox.edit("d1")
+    mailbox.drafts["d1"].message.text = "Dana, Friday is great."
+    resp = client.post(
+        f"/decisions/{card_id}/approve", json={"edits": {"allow": True, "example": True}}, headers=OWNER,
+    )
+    assert resp.status_code == 200 and mailbox.sent == ["d1"]
+    assert training.example_for(ids["principal"], "dana@northpeak.example") == "Dana, Friday is great."
+    assert training.allowed_sender(ids["principal"], "dana@northpeak.example") is not None
+
+
+def test_keeping_replies_in_the_mailbox_is_the_callers_own_choice_and_off_by_default(
+    client: TestClient, ids: dict[str, int]
+) -> None:
+    set_enabled(ids["principal"], True, updated_by="t")
+    body = client.put("/delegation/inbox", json={"enabled": True}, headers=OWNER).json()
+    assert body["inbox"]["mailbox_drafts"] is False
+    body = client.put("/delegation/inbox", json={"mailbox_drafts": True}, headers=OWNER).json()
+    assert body["inbox"]["mailbox_drafts"] is True and body["inbox"]["enabled"] is True
+    assert client.put("/delegation/inbox", json={}, headers=OWNER).status_code == 422
+    assert client.put("/delegation/inbox", json={"mailbox_drafts": True}, headers=TEAMMATE).status_code == 403
+    assert inbox.get_watch(ids["teammate"]).mailbox_drafts is False
+
+
+def test_changing_a_replys_words_on_its_card(
+    client: TestClient, ids: dict[str, int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mailbox, card_id = _card(ids["principal"], monkeypatch)
+    monkeypatch.setattr("openexecutive.delegation.gmail.gmail_for", lambda email: mailbox)
+    url = f"/delegation/replies/{card_id}/text"
+    # Like Send: only a caller the API can tie to the person.
+    resp = client.put(url, json={"text": "Friday at 10 works."}, headers=OWNER)
+    assert resp.status_code == 409 and resp.json()["detail"]["code"] == "caller_signing_required"
+    monkeypatch.setenv("OE_LOCAL_LOGIN", "1")
+    assert client.put(url, json={"text": "Friday at 10 works."}, headers=TEAMMATE).status_code == 403
+    resp = client.put(url, json={"text": "Friday at 10 works."}, headers=OWNER)
+    assert resp.status_code == 200 and resp.json()["draft_body"] == "Friday at 10 works."
+    # It was in their Drafts too (this test's setting): changed there as well.
+    assert mailbox.drafts["d1"].message.text == "Friday at 10 works."
+    assert client.put(url, json={"text": "x" * 20_001}, headers=OWNER).status_code == 422
+    assert client.put("/delegation/replies/9999/text", json={"text": "Hi"}, headers=OWNER).status_code == 404

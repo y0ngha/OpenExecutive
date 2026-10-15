@@ -13,7 +13,9 @@ named from a hash of the address and written by
 {refresh_token, client_id, client_secret, token_uri}}``. It is never in
 ``WORKSPACE_MCP_CREDENTIALS_DIR`` — workspace-mcp picks a credential there by
 address, which would hand the model this mailbox. Scopes: ``gmail.readonly``
-and ``gmail.compose``.
+and ``gmail.compose``, and ``calendar.readonly`` when they connected with
+``--calendar`` for Read my calendar (``delegation.calendar``; ``list_events``
+refuses with ``CalendarNotGranted`` without it).
 
 **One way to send.** It reads mail and saves or deletes drafts. The only
 send is ``send_draft``: an existing draft, by its id, exactly as it is in
@@ -63,6 +65,9 @@ DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 SCOPE_READONLY = "https://www.googleapis.com/auth/gmail.readonly"
 SCOPE_COMPOSE = "https://www.googleapis.com/auth/gmail.compose"
 SCOPES: tuple[str, ...] = (SCOPE_READONLY, SCOPE_COMPOSE)
+# Read my calendar (delegation.calendar): optional, so a mail-only sign-in still works.
+SCOPE_CALENDAR = "https://www.googleapis.com/auth/calendar.readonly"
+CALENDAR_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary"
 CREDENTIAL_VERSION = 1
 PROVIDER = "google"
 
@@ -95,7 +100,7 @@ STATUS_MESSAGES: dict[str, str] = {
     "connected": "Connected.",
     "not_configured": (
         "Your mailbox isn't connected. Run scripts/connect-own-gmail.py (Gmail) or "
-        "scripts/connect-own-outlook.py (Outlook) as yourself (Settings → Act as me "
+        "scripts/connect-own-outlook.py (Outlook) as yourself (Delegate → Act as me "
         "shows how)."
     ),
     "needs_reconnect": (
@@ -129,6 +134,10 @@ _FETCH_CONCURRENCY = 5
 
 # Access tokens by (address, refresh token) — never written anywhere.
 _TOKENS: dict[str, tuple[str, float]] = {}
+# The scopes Google said each of those tokens carries ("" when it didn't say).
+_GRANTED: dict[str, str] = {}
+# Events one calendar read returns, at most.
+MAX_EVENTS = 100
 
 
 class GmailError(Exception):
@@ -155,6 +164,21 @@ class GmailNotFound(GmailError):
     """No such message, thread or draft (404). For a draft: sent or deleted."""
 
 
+class DraftChanged(GmailError):
+    """A draft can't be rewritten from the card: it changed in the mailbox
+    since it was last read (``reason`` "changed"), or it holds more than plain
+    text, such as files ("not_plain")."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"draft {reason}")
+        self.reason = reason
+
+
+class CalendarNotGranted(GmailError):
+    """Their saved sign-in doesn't let the Executive read their calendar:
+    they connected without it (``--calendar``), or took it back."""
+
+
 class GmailAuthError(GmailError):
     """Google refused the credential: revoked, expired, or missing a scope."""
 
@@ -166,6 +190,74 @@ class GmailCredential:
     client_id: str
     client_secret: str
     token_uri: str = DEFAULT_TOKEN_URI
+
+
+@dataclass(frozen=True)
+class CalendarEvent:
+    """One event on someone's own calendar, as Read my calendar shows it.
+    ``start`` / ``end`` are ISO 8601 (a date alone for an all-day event)."""
+
+    id: str
+    title: str
+    start: str
+    end: str
+    all_day: bool = False
+    location: str = ""
+    organizer: str = ""
+    attendees: tuple[str, ...] = ()
+    # Their own answer: accepted, declined, tentative, needs_action, organizer.
+    response: str = ""
+
+
+_ATTENDEES_MAX = 25
+
+
+def _google_who(entry: Any) -> str:
+    if not isinstance(entry, dict):
+        return ""
+    name = clean_header(str(entry.get("displayName") or ""))
+    address = normalize_email(str(entry.get("email") or ""))
+    return f"{name} <{address}>" if name and address else (name or address)
+
+
+def _google_when(value: Any) -> tuple[str, bool]:
+    if not isinstance(value, dict):
+        return "", False
+    if value.get("dateTime"):
+        return str(value["dateTime"]), False
+    return str(value.get("date") or ""), True
+
+
+def parse_google_event(raw: dict[str, Any]) -> CalendarEvent | None:
+    """A Google Calendar event, or None for one that isn't on their day
+    (cancelled, or a working-location marker)."""
+    if raw.get("status") == "cancelled" or raw.get("eventType") == "workingLocation":
+        return None
+    start, all_day = _google_when(raw.get("start"))
+    end, _ = _google_when(raw.get("end"))
+    if not start:
+        return None
+    attendees = [a for a in raw.get("attendees") or [] if isinstance(a, dict)]
+    own = next((a for a in attendees if a.get("self")), None)
+    organizer_raw = raw.get("organizer")
+    organizer: dict[str, Any] = organizer_raw if isinstance(organizer_raw, dict) else {}
+    if organizer.get("self"):
+        response = "organizer"
+    else:
+        response = {
+            "accepted": "accepted", "declined": "declined", "tentative": "tentative", "needsAction": "needs_action",
+        }.get(str((own or {}).get("responseStatus") or ""), "")
+    return CalendarEvent(
+        id=str(raw.get("id") or ""),
+        title=clean_header(str(raw.get("summary") or "")) or "(no title)",
+        start=start,
+        end=end,
+        all_day=all_day,
+        location=clean_header(str(raw.get("location") or "")),
+        organizer=_google_who(organizer),
+        attendees=tuple(w for w in (_google_who(a) for a in attendees[:_ATTENDEES_MAX] if not a.get("self")) if w),
+        response=response,
+    )
 
 
 @dataclass
@@ -794,6 +886,7 @@ class DelegateGmail:
         if granted and not set(SCOPES) <= set(granted.split()):
             raise GmailAuthError("missing_scope")
         _TOKENS[key] = (token, time.time() + ttl)
+        _GRANTED[key] = granted
         return token
 
     async def _get(
@@ -809,12 +902,13 @@ class DelegateGmail:
         *,
         params: Any = None,
         json_body: dict[str, Any] | None = None,
+        base: str = GMAIL_BASE,
     ) -> dict[str, Any]:
         token = await self._access_token(client)
         try:
             resp = await client.request(
                 method,
-                f"{GMAIL_BASE}{path}",
+                f"{base}{path}",
                 params=params,
                 json=json_body,
                 headers={"Authorization": f"Bearer {token}"},
@@ -1041,6 +1135,46 @@ class DelegateGmail:
                 return False
         return True
 
+    async def update_draft_text(self, draft_id: str, expected_version: str, text: str) -> str:
+        """Replace the words of the draft ``draft_id`` with ``text``, keeping
+        every header (who it goes to, the subject, the thread), when it is
+        still the version ``expected_version``. Returns its new version (the
+        message id Gmail gives the edited draft). Raises ``GmailNotFound``
+        when it is gone and ``DraftChanged`` when it changed meanwhile or is
+        more than plain text. Nothing is sent."""
+        if not valid_id(draft_id):
+            raise GmailError("invalid draft id")
+        async with self._client() as client:
+            data = await self._get(client, f"/drafts/{draft_id}", {"format": "raw"})
+            current = data.get("message")
+            current = current if isinstance(current, dict) else {}
+            if str(current.get("id") or "") != expected_version:
+                raise DraftChanged("changed")
+            raw = current.get("raw")
+            if not isinstance(raw, str):
+                raise GmailError("gmail returned no draft")
+            try:
+                from email import message_from_bytes, policy
+
+                msg = message_from_bytes(_b64decode(raw), policy=policy.default)
+            except (ValueError, TypeError) as exc:
+                raise GmailError("gmail returned an unreadable draft") from exc
+            if not isinstance(msg, EmailMessage) or msg.is_multipart() or msg.get_content_type() != "text/plain":
+                raise DraftChanged("not_plain")
+            msg.set_content(text)
+            message: dict[str, Any] = {"raw": base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")}
+            thread_id = current.get("threadId")
+            if isinstance(thread_id, str) and valid_id(thread_id):
+                message["threadId"] = thread_id
+            updated = await self._request(
+                client, "PUT", f"/drafts/{draft_id}", json_body={"id": draft_id, "message": message},
+            )
+        saved = updated.get("message")
+        version = str(saved.get("id") or "") if isinstance(saved, dict) else ""
+        if not version:
+            raise GmailError("gmail returned no edited draft", maybe_done=True)
+        return version
+
     async def send_draft(self, draft_id: str) -> SentMessage:
         """Send the draft ``draft_id`` exactly as it is in Gmail now: the
         request body is its id and nothing else, so nothing here can change
@@ -1075,6 +1209,37 @@ class DelegateGmail:
             thread_id=str(created.get("threadId") or spec.thread_id or ""),
             skipped_attachments=skipped,
         )
+
+
+    async def list_events(self, start: datetime, end: datetime, *, max_results: int = MAX_EVENTS) -> list[CalendarEvent]:
+        """The events on their primary calendar between ``start`` and ``end``,
+        recurring ones expanded, in order. Read-only (``calendar.readonly``)."""
+        async with self._client() as client:
+            await self._access_token(client)
+            granted = _GRANTED.get(_token_key(self._cred()), "")
+            if granted and SCOPE_CALENDAR not in granted.split():
+                raise CalendarNotGranted("calendar.readonly not granted")
+            params = {
+                "timeMin": start.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+                "timeMax": end.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+                "singleEvents": "true",
+                "orderBy": "startTime",
+                "maxResults": str(max(1, min(max_results, MAX_EVENTS))),
+            }
+            try:
+                data = await self._request(client, "GET", "/events", params=params, base=CALENDAR_BASE)
+            except GmailAuthError as exc:
+                if str(exc) != "forbidden":
+                    raise
+                # With the scope granted, a refusal is the project's (the API
+                # not enabled, a quota), and reconnecting wouldn't fix it.
+                if SCOPE_CALENDAR in granted.split():
+                    raise GmailError("calendar read refused with the scope granted") from exc
+                raise CalendarNotGranted("calendar read refused") from exc
+        items_raw = data.get("items")
+        items: list[Any] = items_raw if isinstance(items_raw, list) else []
+        events = [parse_google_event(item) for item in items if isinstance(item, dict)]
+        return [e for e in events if e is not None]
 
 
 def gmail_for(email: str) -> Any:

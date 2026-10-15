@@ -29,12 +29,23 @@ memory and bytes, which ``GET /audit/usage`` sums (``python_jobs``).
 The sandbox is installed by the API image (``docker/Dockerfile``) under
 ``PYTHON_SANDBOX_DIR``; ``available()`` is false without it, and the tool
 is then not offered.
+
+A deployment can run jobs elsewhere instead: with ``PYTHON_JOB_RUNNER_URL``
+set, ``run_job`` POSTs each job there (``_run_remote``) and reads back the
+same result object the local worker prints, so files, caps, kept results and
+metering work the same. The runner is trusted to isolate jobs as the local
+sandbox does. A runner may turn a job away with ``{"run_locally": true}`` in a
+non-200 reply (for example, the deployment's quota for it is used up): the
+job then runs in the local sandbox when this machine has one
+(``_local_sandbox_ready``), and fails with the runner's reason otherwise.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import contextlib
+import functools
 import json
 import logging
 import os
@@ -48,6 +59,8 @@ import urllib.parse
 import uuid
 from pathlib import Path
 from typing import Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +95,8 @@ _MAX_INPUTS_CHARS = 20_000
 TOOL_DEFINITION: dict[str, Any] = {
     "name": TOOL_NAME,
     "description": (
-        "Run Python with real libraries on files, when a job needs more than your "
-        "tools: split or merge PDFs and read their pages (pypdf), read or build "
+        "Run Python with real libraries, on attached files or on data you have or "
+        "make up, when a job needs more than your tools: split or merge PDFs and read their pages (pypdf), read or build "
         "spreadsheets (openpyxl, pandas), analyse data (pandas, numpy), draw charts "
         "(matplotlib), work with images (Pillow), and make documents, from scratch "
         "or from files: Word (python-docx, imported as docx), PowerPoint "
@@ -152,11 +165,20 @@ def _sandbox_dir() -> Path:
 
 
 def available() -> bool:
-    """Whether the sandbox is installed and jobs are on."""
+    """Whether jobs are on and something can run them: a remote runner
+    (``PYTHON_JOB_RUNNER_URL``) or the local sandbox."""
     from openexecutive.config import get_settings
 
-    if not get_settings().python_jobs_enabled:
+    settings = get_settings()
+    if not settings.python_jobs_enabled:
         return False
+    if settings.python_job_runner_url:
+        return True
+    return _local_sandbox_ready()
+
+
+def _local_sandbox_ready() -> bool:
+    """Whether this machine has the local sandbox installed."""
     base = _sandbox_dir()
     return (base / "deno").is_file() and (base / "pyodide" / "pyodide.mjs").is_file()
 
@@ -229,7 +251,21 @@ async def run_job(
     """Run one job in a fresh sandbox process, which exits when the job ends.
     Never raises (cancellation aside, which kills the process). The reply
     carries ``_usage`` ({peak_mb, cpu_ms}, either None when unknown), read
-    from the process itself rather than from anything the job printed."""
+    from the process itself rather than from anything the job printed.
+    With ``PYTHON_JOB_RUNNER_URL`` set the job runs there instead."""
+    from openexecutive.config import get_settings
+
+    settings = get_settings()
+    if settings.python_job_runner_url:
+        result = await _run_remote(
+            settings.python_job_runner_url, settings.python_job_runner_key or "",
+            code, files, timeout_s=timeout_s, memory_mb=memory_mb, inputs=inputs,
+        )
+        if not result.pop("_run_locally", False):
+            return result
+        if not _local_sandbox_ready():
+            return result
+        logger.info("python job: the runner turned the job away; running it in the local sandbox")
     base = _sandbox_dir()
     wheels = sorted(str(p) for p in (base / "wheels").glob("*.whl"))
     job = json.dumps({
@@ -251,6 +287,117 @@ async def run_job(
             return await _run_in(base, job, deno_dir, timeout_s=timeout_s, memory_mb=memory_mb)
         finally:
             await asyncio.to_thread(shutil.rmtree, deno_dir, True)
+
+
+def _runner_client(timeout_s: float) -> httpx.AsyncClient:
+    # Proxies from the environment are fine; redirects are not followed, so
+    # the job and the key go to the configured URL only.
+    return httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=10.0), follow_redirects=False)
+
+
+def _text(value: Any, limit: int) -> str | None:
+    return value[:limit] if isinstance(value, str) and value else None
+
+
+async def _turned_away(resp: httpx.Response) -> str | None:
+    """For a non-200 reply: the runner's reason ("" when it gave none) if it
+    asked for the job to run locally (``{"run_locally": true}``), else None.
+    Reads at most a few KiB of the reply."""
+    raw = b""
+    async for chunk in resp.aiter_bytes():
+        raw += chunk
+        if len(raw) > 4096:
+            return None
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(body, dict) or body.get("run_locally") is not True:
+        return None
+    return _text(body.get("reason"), 300) or ""
+
+
+def _count(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < 2**40 else None
+
+
+async def _run_remote(
+    url: str, key: str, code: str, files: dict[str, bytes], *,
+    timeout_s: float, memory_mb: int, inputs: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Run one job on the remote runner. The request is the job the local
+    worker reads (less its sandbox paths) plus the time and memory limits;
+    the reply is the worker's result object, with ``usage`` ({peak_mb,
+    cpu_ms}) measured by the runner. Never raises (cancellation aside); the
+    reply is read only up to the cap a local job's stdout has, and only its
+    known fields are kept."""
+    job = {
+        "code": code,
+        "inputs": inputs or {},
+        "files": {n: base64.b64encode(b).decode() for n, b in files.items()},
+        "max_file_bytes": _MAX_OUTPUT_BYTES,
+        "max_total_bytes": _MAX_OUTPUT_BYTES,
+        "max_files": _MAX_OUTPUT_FILES,
+        "timeout_s": timeout_s,
+        "memory_mb": memory_mb,
+    }
+    usage: dict[str, int | None] = {"peak_mb": None, "cpu_ms": None}
+    try:
+        # The runner applies timeout_s to the job itself; the margin covers
+        # sending the files and getting the results back.
+        async with _runner_client(timeout_s + 60) as client, client.stream(
+            "POST", url, json=job, headers={"Authorization": f"Bearer {key}"},
+        ) as resp:
+            if resp.status_code != 200:
+                logger.warning("python job: runner answered HTTP %s", resp.status_code)
+                failed: dict[str, Any] = {
+                    "error": f"the job runner could not run the job (HTTP {resp.status_code})", "_usage": usage,
+                }
+                turned_away = await _turned_away(resp)
+                if turned_away is not None:
+                    failed["_run_locally"] = True
+                    if turned_away:
+                        failed["error"] = turned_away
+                return failed
+            raw = bytearray()
+            async for chunk in resp.aiter_bytes():
+                raw += chunk
+                if len(raw) > _MAX_STDOUT_BYTES:
+                    return {"error": "the job's output was too large; nothing was kept", "_usage": usage}
+    except httpx.TimeoutException:
+        return {"error": f"the job ran past its {int(timeout_s)} s limit", "_usage": usage}
+    except httpx.HTTPError as exc:
+        logger.warning("python job: runner unreachable: %s", type(exc).__name__)
+        return {"error": "the job runner could not be reached", "_usage": usage}
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return {"error": "the job runner sent back something unreadable", "_usage": usage}
+    reported = body.get("usage")
+    if not isinstance(reported, dict):
+        reported = {}
+    usage = {"peak_mb": _count(reported.get("peak_mb")), "cpu_ms": _count(reported.get("cpu_ms"))}
+    out: dict[str, Any] = {"_usage": usage}
+    for field, limit in (("result", _MAX_INPUTS_CHARS), ("error", 2000), ("printed", 8000)):
+        if (text := _text(body.get(field), limit)) is not None:
+            out[field] = text
+    sent = body.get("files")
+    if isinstance(sent, dict) and sent:
+        # The runner is another server: check every file is text that decodes
+        # as base64 before the handler decodes it for real.
+        try:
+            ok = all(isinstance(n, str) and isinstance(b, str) and base64.b64decode(b, validate=True) is not None
+                     for n, b in sent.items())
+        except (binascii.Error, ValueError):
+            ok = False
+        if not ok:
+            return {"error": "the job runner sent back a file it couldn't read", "_usage": usage}
+        out["files"] = sent
+    if isinstance(body.get("skipped"), list):
+        out["skipped"] = [n for n in body["skipped"] if isinstance(n, str)][:_MAX_OUTPUT_FILES]
+    return out
 
 
 def _proc_usage(pid: int) -> dict[str, int | None]:
@@ -597,6 +744,24 @@ def result_file(job_id: str, name: str) -> Path | None:
     root = jobs_dir().resolve()
     path = (root / job_id / name).resolve()
     return path if path.is_file() and path.is_relative_to(root) else None
+
+
+@functools.cache
+def offered_definition() -> dict[str, Any]:
+    """TOOL_DEFINITION as this instance offers it: a remote runner with more
+    libraries (PYTHON_JOB_EXTRA_LIBRARIES) names them, or the description's
+    "only the libraries listed" would have the model refuse jobs the runner
+    can do. Fixed per process, so the cached tool prefix stays stable."""
+    from openexecutive.config import get_settings
+
+    settings = get_settings()
+    extra = settings.python_job_extra_libraries
+    if not (settings.python_job_runner_url and extra):
+        return TOOL_DEFINITION
+    return {
+        **TOOL_DEFINITION,
+        "description": f"{TOOL_DEFINITION['description']} Also installed here: {extra}.",
+    }
 
 
 PYTHON_JOB_TOOLS: list[dict[str, Any]] = [TOOL_DEFINITION]

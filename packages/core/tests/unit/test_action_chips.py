@@ -261,7 +261,8 @@ def test_call_tool_chip_uses_underlying_name() -> None:
     assert chip is not None
     # `tool` field reflects the actual MCP tool, not "call_tool" — UI can map.
     assert chip["tool"] == "google_workspace__send_gmail_message"
-    assert "google_workspace__send_gmail_message" in chip["summary"]
+    # The chip reads in plain words, never the raw server__tool name.
+    assert chip["summary"] == "Sent an email"
 
 
 # ---------------------------------------------------------------------------
@@ -338,10 +339,12 @@ _KNOWN_READ_ONLY_TOOLS: frozenset[str] = frozenset({
     # workflow_run_tools — catalog read (run_workflow is in SIDE_EFFECTING_TOOLS)
     "list_workflows",
     # mail_read_tools — reads of the speaker's own mailbox (Act as me)
+    "my_calendar",
     "search_my_email",
     "read_my_email",
     "read_my_email_attachment",
     "my_email_awaiting_reply",
+    "my_email_read_before",
 })
 
 
@@ -409,24 +412,3 @@ def test_no_silent_omission_from_side_effecting_tools() -> None:
         f"(to emit a chip) or _KNOWN_READ_ONLY_TOOLS (to deliberately skip): "
         f"{sorted(unclassified)}"
     )
-
-
-@pytest.mark.parametrize(
-    ("tool_name", "result", "summary"),
-    [
-        ("create_skill", {"drafted": True}, "Drafted playbook: p"),
-        ("update_skill", {"drafted": True}, "Drafted a change to playbook: p"),
-        ("delete_skill", {"drafted": True}, "Proposed deleting playbook: p"),
-    ],
-)
-def test_skill_chips_say_playbook_and_link_to_tab(
-    tool_name: str, result: dict[str, object], summary: str
-) -> None:
-    payload = summarize_action(
-        tool_name=tool_name,
-        tool_input={"name": "p"},
-        tool_result=json.dumps(result),
-    )
-    assert payload is not None
-    assert payload["summary"] == summary
-    assert payload["link"] == "/jobs?tab=playbooks&draft=p"
