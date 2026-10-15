@@ -156,3 +156,77 @@ def test_rejects_when_pending_cap_exceeded(
         }
     )
     assert "too many pending" in second["error"]
+
+
+
+@pytest.fixture()
+def owner_on_slack(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Session]:
+    """A team member reachable by email and Slack, on an install that runs
+    Slack, in a session that has seen their email address."""
+    from openexecutive.people import store as people_store
+
+    monkeypatch.setattr(people_store, "DB_PATH", tmp_path / "people.db")
+    people_store.initialize_db()
+    people_store.upsert_person(
+        full_name="Owner Olivia", is_principal=True,
+        email="owner@example.com", slack_user_id="U123",
+    )
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    s = Session()
+    s.seen_channel_refs.add(("email", "owner@example.com"))
+    token = current_session.set(s)
+    yield s
+    current_session.reset(token)
+
+
+def _email_follow_up(ref: str = "owner@example.com") -> dict:
+    return _call(
+        {
+            "run_at": _future_iso(),
+            "channel": "email",
+            "channel_ref": ref,
+            "intent": "Morning to-do reminder.",
+        }
+    )
+
+
+def test_email_follow_up_moves_to_slack_when_email_is_not_set_up(
+    owner_on_slack: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # With no mail backend the scheduler would fail an email row at run time
+    # and the reminder would be lost; the person's Slack can deliver it.
+    monkeypatch.setattr("openexecutive.scheduler.runner.email_ready", lambda: False)
+    payload = _email_follow_up()
+    assert payload.get("status") == "scheduled", payload
+    assert payload["channel"] == "slack_dm"
+    from openexecutive.memory.episodic import list_scheduled_actions
+
+    row = next(a for a in list_scheduled_actions(limit=10) if a.id == payload["id"])
+    assert (row.channel, row.channel_ref) == ("slack_dm", "U123")
+
+
+def test_email_follow_up_refused_when_nothing_can_deliver(
+    owner_on_slack: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("openexecutive.scheduler.runner.email_ready", lambda: False)
+    monkeypatch.delenv("SLACK_BOT_TOKEN")
+    payload = _email_follow_up()
+    assert "error" in payload
+    assert "email is not set up" in payload["error"]
+
+
+def test_email_follow_up_stays_on_email_when_email_is_set_up(
+    owner_on_slack: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("openexecutive.scheduler.runner.email_ready", lambda: True)
+    payload = _email_follow_up()
+    assert payload["status"] == "scheduled"
+    assert payload["channel"] == "email"
+
+
+def test_moving_to_slack_still_needs_a_seen_address(
+    owner_on_slack: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("openexecutive.scheduler.runner.email_ready", lambda: False)
+    payload = _email_follow_up("someone-else@example.com")
+    assert "error" in payload
