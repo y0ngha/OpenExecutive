@@ -352,3 +352,27 @@ def test_ui_base_url_validator_rejects_bad_schemes() -> None:
     # Happy path still works.
     s = Settings(UI_BASE_URL="https://app.example.com")  # type: ignore[call-arg]
     assert s.ui_base_url == "https://app.example.com"
+
+
+
+def test_email_with_no_mail_backend_and_no_chat_channel_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("openexecutive.scheduler.runner.email_ready", lambda: False)
+    s = Session()
+    s.seen_channel_refs.add(("email", "nobody@example.com"))
+    token = current_session.set(s)
+    try:
+        payload = _call(
+            {
+                "workflow_name": "board_prep",
+                "run_at": _future_iso(),
+                "channel": "email",
+                "channel_ref": "nobody@example.com",
+                "reason": "Q2 ends in 2 weeks — want to draft the deck?",
+            }
+        )
+    finally:
+        current_session.reset(token)
+    assert "error" in payload
+    assert "email is not set up" in payload["error"]

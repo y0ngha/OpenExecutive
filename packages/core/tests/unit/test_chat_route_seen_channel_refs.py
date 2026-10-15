@@ -58,6 +58,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from openexecutive.knowledge import retriever as retriever_mod
 
     monkeypatch.setattr(retriever_mod, "retrieve", lambda **_: "")
+    # These turns schedule to the caller's email address; the install has a
+    # mail backend, or schedule_followup refuses email outright.
+    monkeypatch.setattr("openexecutive.scheduler.runner.email_ready", lambda: True)
 
     people_store.upsert_person(
         full_name="Alex", is_principal=True, email=_CALLER_EMAIL

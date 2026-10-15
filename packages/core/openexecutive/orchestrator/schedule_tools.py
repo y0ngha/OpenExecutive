@@ -678,6 +678,43 @@ def _is_principal_recipient(
     return own_ref == channel_ref.strip()
 
 
+def _deliverable(channel: str, channel_ref: str) -> tuple[str, str] | str:
+    """Where a follow-up should go: ``(channel, channel_ref)``, or the JSON
+    refusal when it can't go anywhere.
+
+    Unchanged unless it is email on an install with no mail backend — the
+    scheduler would fail that row at run time and the reminder would be lost.
+    Then it moves to the same person's chat channel the install runs (their
+    preferred one first, as the briefs do), and is refused only when they
+    have none, so the Executive can still say so while the user is there."""
+    if channel != "email":
+        return channel, channel_ref
+    from openexecutive.scheduler.runner import delivery_order, email_ready
+
+    if email_ready():
+        return channel, channel_ref
+    from openexecutive.config import get_settings
+    from openexecutive.people.store import find_person_by_channel_ref
+
+    settings = get_settings()
+    person = find_person_by_channel_ref("email", channel_ref)
+    if person is not None:
+        running = {
+            "slack_dm": (bool(settings.slack_bot_token), person.slack_user_id),
+            "telegram": (bool(settings.telegram_bot_token), person.telegram_chat_id),
+        }
+        for chat in delivery_order(person, email_ready=False):
+            on, ref = running.get(chat, (False, None))
+            if on and ref:
+                return chat, str(ref)
+    return json.dumps({
+        "error": (
+            "email is not set up on this install and this person has no chat "
+            "channel it runs, so the follow-up could never be sent; tell the user"
+        ),
+    })
+
+
 async def handle_schedule_followup(tool_input: dict[str, Any]) -> str:
     from openexecutive.delegation.lockdown import outside_reach_refusal
 
@@ -720,6 +757,9 @@ async def handle_schedule_followup(tool_input: dict[str, Any]) -> str:
 
     if channel not in {"email", "telegram", "slack_dm"}:
         return json.dumps({"error": f"unknown channel {channel!r}"})
+    target = _deliverable(channel, channel_ref)
+    if isinstance(target, str):
+        return target
 
     # Parse run_at as ISO8601, accept trailing "Z" as UTC.
     try:
@@ -755,6 +795,9 @@ async def handle_schedule_followup(tool_input: dict[str, Any]) -> str:
             ),
         })
 
+    # Checked against the seen gate as asked; an email moved to the same
+    # person's chat channel goes out there.
+    channel, channel_ref = target
     pending = count_pending_for_channel_ref(channel, channel_ref)
     if pending >= settings.max_pending_per_channel_ref:
         return json.dumps({
@@ -2095,6 +2138,9 @@ async def handle_suggest_workflow(tool_input: dict[str, Any]) -> str:
 
     if channel not in {"email", "telegram", "slack_dm"}:
         return json.dumps({"error": f"unknown channel {channel!r}"})
+    target = _deliverable(channel, channel_ref)
+    if isinstance(target, str):
+        return target
 
     try:
         parsed = datetime.fromisoformat(run_at_raw.replace("Z", "+00:00"))
@@ -2127,6 +2173,9 @@ async def handle_suggest_workflow(tool_input: dict[str, Any]) -> str:
             ),
         })
 
+    # Checked against the seen gate as asked; an email moved to the same
+    # person's chat channel goes out there.
+    channel, channel_ref = target
     pending = count_pending_for_channel_ref(channel, channel_ref)
     if pending >= settings.max_pending_per_channel_ref:
         return json.dumps({
