@@ -66,7 +66,7 @@ def test_activity_labels_are_korean(korean: None) -> None:
     # Must match the UI's own placeholder (lib.api.fallbackActivity).
     assert unknown is not None and unknown["label"] == "작업 중…"
     assert al.fallback_activity()["label"] == "작업 중…"
-    assert mcp is not None and mcp["label"] == "jira_search 사용 중…"
+    assert mcp is not None and mcp["label"] == "jira search 사용 중…"
 
 
 def test_korean_activity_labels_cover_every_tool(korean: None) -> None:

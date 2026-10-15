@@ -160,7 +160,7 @@ const ko: Partial<Record<keyof typeof en, string>> = {
   "misc.infoTip.moreInfo": "자세히 보기",
   "misc.feature.takeTheLead": "먼저 나서기",
   "misc.feature.actAsMe": "나 대신 작성",
-  "misc.feature.handleIt": "알아서 처리",
+  "misc.feature.handleIt": "대신 처리",
   "misc.feature.history": "기록",
   "misc.feature.agentCouncil": "에이전트 위원회",
   "misc.reviewStatus.pending": "대기 중",

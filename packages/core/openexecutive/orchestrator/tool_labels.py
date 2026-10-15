@@ -9,7 +9,9 @@ in-flight line, present tense) read their wording from here. Keeping the two
 tenses in one table is what keeps "Searching Drive…" and "Searched Drive"
 saying the same thing.
 
-A tool missing from `_LABELS` is not shown raw: `labels_for` turns its name
+Both tenses follow OE_LANGUAGE (`utils.i18n`).
+
+A tool missing from `_TOOLS` is not shown raw: `labels_for` turns its name
 into words ("list_task_lists" on Google -> "Listed task lists · Google").
 When a connected server gains a tool people will see often, add a row here.
 
@@ -24,120 +26,252 @@ import re
 from typing import Any
 
 from openexecutive.memory.drive_reads import parse_content_result
+from openexecutive.utils.i18n import MessageTable, tr
 
 # Underlying tool name (without its `server__` prefix, hyphens folded to
-# underscores) -> (done, doing). `doing` carries no ellipsis; the progress line
-# adds it. Google Workspace and Microsoft 365 names share the table: the two
-# servers do not reuse a name for different things.
-_LABELS: dict[str, tuple[str, str]] = {
+# underscores) -> the key of its (done, doing) phrases in `_DONE` / `_DOING`.
+# `doing` carries no ellipsis; the progress line adds it. Google Workspace and
+# Microsoft 365 names share the table: the two servers do not reuse a name for
+# different things.
+_TOOLS: dict[str, str] = {
     # Mail
-    "search_gmail_messages": ("Searched your mail", "Searching your mail"),
-    "list_mail_messages": ("Searched your mail", "Searching your mail"),
-    "list_mail_folder_messages": ("Searched your mail", "Searching your mail"),
-    "get_gmail_message_content": ("Read an email", "Reading an email"),
-    "get_gmail_messages_content_batch": ("Read an email", "Reading an email"),
-    "get_gmail_thread_content": ("Read an email", "Reading an email"),
-    "get_gmail_threads_content_batch": ("Read an email", "Reading an email"),
-    "get_mail_message": ("Read an email", "Reading an email"),
-    "get_gmail_attachment_content": ("Opened an attachment", "Opening an attachment"),
-    "get_mail_attachment": ("Opened an attachment", "Opening an attachment"),
-    "list_mail_attachments": ("Checked attachments", "Checking attachments"),
-    "draft_gmail_message": ("Drafted an email", "Drafting an email"),
-    "create_draft_email": ("Drafted an email", "Drafting an email"),
-    "create_reply_draft": ("Drafted a reply", "Drafting a reply"),
-    "create_reply_all_draft": ("Drafted a reply", "Drafting a reply"),
-    "create_forward_draft": ("Drafted a forward", "Drafting a forward"),
-    "send_gmail_message": ("Sent an email", "Sending an email"),
-    "send_mail": ("Sent an email", "Sending an email"),
-    "send_draft_message": ("Sent an email", "Sending an email"),
-    "reply_mail_message": ("Sent a reply", "Sending a reply"),
-    "reply_all_mail_message": ("Sent a reply", "Sending a reply"),
-    "forward_mail_message": ("Forwarded an email", "Forwarding an email"),
-    "move_mail_message": ("Filed an email", "Filing an email"),
-    "update_mail_message": ("Updated an email", "Updating an email"),
-    "delete_mail_message": ("Deleted an email", "Deleting an email"),
-    "modify_gmail_message_labels": ("Labeled an email", "Labeling an email"),
-    "list_gmail_labels": ("Checked your mail labels", "Checking your mail labels"),
+    "search_gmail_messages": "mail_search",
+    "list_mail_messages": "mail_search",
+    "list_mail_folder_messages": "mail_search",
+    "get_gmail_message_content": "mail_read",
+    "get_gmail_messages_content_batch": "mail_read",
+    "get_gmail_thread_content": "mail_read",
+    "get_gmail_threads_content_batch": "mail_read",
+    "get_mail_message": "mail_read",
+    "get_gmail_attachment_content": "attachment_open",
+    "get_mail_attachment": "attachment_open",
+    "list_mail_attachments": "attachments_check",
+    "draft_gmail_message": "mail_draft",
+    "create_draft_email": "mail_draft",
+    "create_reply_draft": "reply_draft",
+    "create_reply_all_draft": "reply_draft",
+    "create_forward_draft": "forward_draft",
+    "send_gmail_message": "mail_send",
+    "send_mail": "mail_send",
+    "send_draft_message": "mail_send",
+    "reply_mail_message": "reply_send",
+    "reply_all_mail_message": "reply_send",
+    "forward_mail_message": "mail_forward",
+    "move_mail_message": "mail_file",
+    "update_mail_message": "mail_update",
+    "delete_mail_message": "mail_delete",
+    "modify_gmail_message_labels": "mail_label",
+    "list_gmail_labels": "labels_check",
     # Files
-    "search_drive_files": ("Searched Drive", "Searching Drive"),
-    "list_drive_items": ("Searched Drive", "Searching Drive"),
-    "get_drive_file_content": ("Read a Drive file", "Reading a Drive file"),
-    "create_drive_file": ("Saved a file to Drive", "Saving a file to Drive"),
-    "search_onedrive_files": ("Searched OneDrive", "Searching OneDrive"),
-    "list_drives": ("Checked OneDrive", "Checking OneDrive"),
-    "list_folder_files": ("Searched OneDrive", "Searching OneDrive"),
-    "get_drive_item": ("Read a OneDrive file", "Reading a OneDrive file"),
-    "download_onedrive_file_content": ("Read a OneDrive file", "Reading a OneDrive file"),
-    "upload_file_content": ("Saved a file to OneDrive", "Saving a file to OneDrive"),
-    "copy_drive_item": ("Copied a file", "Copying a file"),
-    "move_rename_onedrive_item": ("Moved a file", "Moving a file"),
-    "share_drive_item": ("Shared a file", "Sharing a file"),
+    "search_drive_files": "drive_search",
+    "list_drive_items": "drive_search",
+    "get_drive_file_content": "drive_read",
+    "create_drive_file": "drive_save",
+    "search_onedrive_files": "onedrive_search",
+    "list_drives": "onedrive_check",
+    "list_folder_files": "onedrive_search",
+    "get_drive_item": "onedrive_read",
+    "download_onedrive_file_content": "onedrive_read",
+    "upload_file_content": "onedrive_save",
+    "copy_drive_item": "file_copy",
+    "move_rename_onedrive_item": "file_move",
+    "share_drive_item": "file_share",
     # Docs and sheets
-    "search_docs": ("Searched your docs", "Searching your docs"),
-    "get_doc_content": ("Read a doc", "Reading a doc"),
-    "create_doc": ("Created a doc", "Creating a doc"),
-    "modify_doc_text": ("Edited a doc", "Editing a doc"),
-    "read_sheet_values": ("Read a spreadsheet", "Reading a spreadsheet"),
-    "get_spreadsheet_info": ("Read a spreadsheet", "Reading a spreadsheet"),
-    "list_spreadsheets": ("Searched your spreadsheets", "Searching your spreadsheets"),
-    "modify_sheet_values": ("Updated a spreadsheet", "Updating a spreadsheet"),
-    "create_spreadsheet": ("Created a spreadsheet", "Creating a spreadsheet"),
+    "search_docs": "docs_search",
+    "get_doc_content": "doc_read",
+    "create_doc": "doc_create",
+    "modify_doc_text": "doc_edit",
+    "read_sheet_values": "sheet_read",
+    "get_spreadsheet_info": "sheet_read",
+    "list_spreadsheets": "sheets_search",
+    "modify_sheet_values": "sheet_update",
+    "create_spreadsheet": "sheet_create",
     # Calendar
-    "list_calendars": ("Checked your calendar", "Checking your calendar"),
-    "get_events": ("Checked your calendar", "Checking your calendar"),
-    "list_calendar_events": ("Checked your calendar", "Checking your calendar"),
-    "get_calendar_event": ("Checked your calendar", "Checking your calendar"),
-    "get_calendar_view": ("Checked your calendar", "Checking your calendar"),
-    "query_freebusy": ("Checked availability", "Checking availability"),
-    "find_meeting_times": ("Checked availability", "Checking availability"),
-    "manage_event": ("Updated your calendar", "Updating your calendar"),
-    "create_calendar_event": ("Updated your calendar", "Updating your calendar"),
-    "update_calendar_event": ("Updated your calendar", "Updating your calendar"),
-    "update_specific_calendar_event": ("Updated your calendar", "Updating your calendar"),
-    "delete_calendar_event": ("Removed a calendar event", "Removing a calendar event"),
-    "accept_calendar_event": ("Answered an invite", "Answering an invite"),
-    "decline_calendar_event": ("Answered an invite", "Answering an invite"),
-    "tentatively_accept_calendar_event": ("Answered an invite", "Answering an invite"),
-    "forward_calendar_event": ("Forwarded an invite", "Forwarding an invite"),
+    "list_calendars": "calendar_check",
+    "get_events": "calendar_check",
+    "list_calendar_events": "calendar_check",
+    "get_calendar_event": "calendar_check",
+    "get_calendar_view": "calendar_check",
+    "query_freebusy": "availability_check",
+    "find_meeting_times": "availability_check",
+    "manage_event": "calendar_update",
+    "create_calendar_event": "calendar_update",
+    "update_calendar_event": "calendar_update",
+    "update_specific_calendar_event": "calendar_update",
+    "delete_calendar_event": "event_remove",
+    "accept_calendar_event": "invite_answer",
+    "decline_calendar_event": "invite_answer",
+    "tentatively_accept_calendar_event": "invite_answer",
+    "forward_calendar_event": "invite_forward",
+}
+
+# Phrase key -> the finished chip's words (past tense).
+_DONE = MessageTable("tool_labels.done", {
+    "mail_search": "Searched your mail",
+    "mail_read": "Read an email",
+    "attachment_open": "Opened an attachment",
+    "attachments_check": "Checked attachments",
+    "mail_draft": "Drafted an email",
+    "reply_draft": "Drafted a reply",
+    "forward_draft": "Drafted a forward",
+    "mail_send": "Sent an email",
+    "reply_send": "Sent a reply",
+    "mail_forward": "Forwarded an email",
+    "mail_file": "Filed an email",
+    "mail_update": "Updated an email",
+    "mail_delete": "Deleted an email",
+    "mail_label": "Labeled an email",
+    "labels_check": "Checked your mail labels",
+    "drive_search": "Searched Drive",
+    "drive_read": "Read a Drive file",
+    "drive_save": "Saved a file to Drive",
+    "onedrive_search": "Searched OneDrive",
+    "onedrive_check": "Checked OneDrive",
+    "onedrive_read": "Read a OneDrive file",
+    "onedrive_save": "Saved a file to OneDrive",
+    "file_copy": "Copied a file",
+    "file_move": "Moved a file",
+    "file_share": "Shared a file",
+    "docs_search": "Searched your docs",
+    "doc_read": "Read a doc",
+    "doc_create": "Created a doc",
+    "doc_edit": "Edited a doc",
+    "sheet_read": "Read a spreadsheet",
+    "sheets_search": "Searched your spreadsheets",
+    "sheet_update": "Updated a spreadsheet",
+    "sheet_create": "Created a spreadsheet",
+    "calendar_check": "Checked your calendar",
+    "availability_check": "Checked availability",
+    "calendar_update": "Updated your calendar",
+    "event_remove": "Removed a calendar event",
+    "invite_answer": "Answered an invite",
+    "invite_forward": "Forwarded an invite",
+})
+
+# Phrase key -> the in-flight line's words (present progressive).
+_DOING = MessageTable("tool_labels.doing", {
+    "mail_search": "Searching your mail",
+    "mail_read": "Reading an email",
+    "attachment_open": "Opening an attachment",
+    "attachments_check": "Checking attachments",
+    "mail_draft": "Drafting an email",
+    "reply_draft": "Drafting a reply",
+    "forward_draft": "Drafting a forward",
+    "mail_send": "Sending an email",
+    "reply_send": "Sending a reply",
+    "mail_forward": "Forwarding an email",
+    "mail_file": "Filing an email",
+    "mail_update": "Updating an email",
+    "mail_delete": "Deleting an email",
+    "mail_label": "Labeling an email",
+    "labels_check": "Checking your mail labels",
+    "drive_search": "Searching Drive",
+    "drive_read": "Reading a Drive file",
+    "drive_save": "Saving a file to Drive",
+    "onedrive_search": "Searching OneDrive",
+    "onedrive_check": "Checking OneDrive",
+    "onedrive_read": "Reading a OneDrive file",
+    "onedrive_save": "Saving a file to OneDrive",
+    "file_copy": "Copying a file",
+    "file_move": "Moving a file",
+    "file_share": "Sharing a file",
+    "docs_search": "Searching your docs",
+    "doc_read": "Reading a doc",
+    "doc_create": "Creating a doc",
+    "doc_edit": "Editing a doc",
+    "sheet_read": "Reading a spreadsheet",
+    "sheets_search": "Searching your spreadsheets",
+    "sheet_update": "Updating a spreadsheet",
+    "sheet_create": "Creating a spreadsheet",
+    "calendar_check": "Checking your calendar",
+    "availability_check": "Checking availability",
+    "calendar_update": "Updating your calendar",
+    "event_remove": "Removing a calendar event",
+    "invite_answer": "Answering an invite",
+    "invite_forward": "Forwarding an invite",
+})
+
+# The English (done, doing) pair for each listed tool.
+_LABELS: dict[str, tuple[str, str]] = {
+    tool: (_DONE.english[key], _DOING.english[key]) for tool, key in _TOOLS.items()
 }
 
 # Server prefix -> the name people know it by, for the fallback's suffix.
+# Product names, so the same in every language.
 _SERVICES: dict[str, str] = {
     "google_workspace": "Google",
     "microsoft_365": "Microsoft 365",
     "oe": "Open Executive",
 }
 
-# First word of an unlisted tool -> (done, doing) verb for the fallback.
-_VERBS: dict[str, tuple[str, str]] = {
-    "search": ("Searched", "Searching"),
-    "find": ("Looked up", "Looking up"),
-    "query": ("Looked up", "Looking up"),
-    "get": ("Read", "Reading"),
-    "read": ("Read", "Reading"),
-    "fetch": ("Read", "Reading"),
-    "download": ("Read", "Reading"),
-    "list": ("Listed", "Listing"),
-    "create": ("Created", "Creating"),
-    "add": ("Added", "Adding"),
-    "update": ("Updated", "Updating"),
-    "modify": ("Updated", "Updating"),
-    "edit": ("Edited", "Editing"),
-    "set": ("Updated", "Updating"),
-    "delete": ("Deleted", "Deleting"),
-    "remove": ("Removed", "Removing"),
-    "send": ("Sent", "Sending"),
-    "reply": ("Replied to", "Replying to"),
-    "forward": ("Forwarded", "Forwarding"),
-    "draft": ("Drafted", "Drafting"),
-    "move": ("Moved", "Moving"),
-    "share": ("Shared", "Sharing"),
-    "upload": ("Uploaded", "Uploading"),
-    "copy": ("Copied", "Copying"),
-}
+# First word of an unlisted tool -> the done / doing verb for the fallback.
+_VERB_DONE = MessageTable("tool_labels.verb_done", {
+    "search": "Searched",
+    "find": "Looked up",
+    "query": "Looked up",
+    "get": "Read",
+    "read": "Read",
+    "fetch": "Read",
+    "download": "Read",
+    "list": "Listed",
+    "create": "Created",
+    "add": "Added",
+    "update": "Updated",
+    "modify": "Updated",
+    "edit": "Edited",
+    "set": "Updated",
+    "delete": "Deleted",
+    "remove": "Removed",
+    "send": "Sent",
+    "reply": "Replied to",
+    "forward": "Forwarded",
+    "draft": "Drafted",
+    "move": "Moved",
+    "share": "Shared",
+    "upload": "Uploaded",
+    "copy": "Copied",
+})
+_VERB_DOING = MessageTable("tool_labels.verb_doing", {
+    "search": "Searching",
+    "find": "Looking up",
+    "query": "Looking up",
+    "get": "Reading",
+    "read": "Reading",
+    "fetch": "Reading",
+    "download": "Reading",
+    "list": "Listing",
+    "create": "Creating",
+    "add": "Adding",
+    "update": "Updating",
+    "modify": "Updating",
+    "edit": "Editing",
+    "set": "Updating",
+    "delete": "Deleting",
+    "remove": "Removing",
+    "send": "Sending",
+    "reply": "Replying to",
+    "forward": "Forwarding",
+    "draft": "Drafting",
+    "move": "Moving",
+    "share": "Sharing",
+    "upload": "Uploading",
+    "copy": "Copying",
+})
 
+# The English generic phrases; `labels_for` returns them in OE_LANGUAGE.
 GENERIC_DONE = "Used a connected tool"
 GENERIC_DOING = "Using a connected tool"
+
+
+def _generic() -> tuple[str, str]:
+    return (
+        tr("tool_labels.generic.done", "Used a connected tool"),
+        tr("tool_labels.generic.doing", "Using a connected tool"),
+    )
+
+
+def _pair(key: str) -> tuple[str, str]:
+    return _DONE[key], _DOING[key]
 
 # Tool names and argument values are model- or server-authored text on their
 # way to the DOM: keep them to one short, plain line.
@@ -175,36 +309,45 @@ def _clean(text: str, limit: int) -> str:
 
 
 def labels_for(raw_name: Any, arguments: Any = None) -> tuple[str, str]:
-    """(done, doing) phrases for an MCP tool name. Never returns the raw name.
+    """(done, doing) phrases for an MCP tool name, in OE_LANGUAGE. Never
+    returns the raw name.
 
     `arguments` matters only for a tool whose action depends on them, such
     as Google's `manage_event`, which also deletes: a deletion must not read
     as "Updated your calendar".
     """
     if not isinstance(raw_name, str) or not raw_name.strip():
-        return GENERIC_DONE, GENERIC_DOING
+        return _generic()
     server, tool = _split(raw_name.strip())
     if (
         tool == "manage_event"
         and isinstance(arguments, dict)
         and str(arguments.get("action", "")).lower() == "delete"
     ):
-        return _LABELS["delete_calendar_event"]
-    if tool in _LABELS:
-        return _LABELS[tool]
+        return _pair(_TOOLS["delete_calendar_event"])
+    if tool in _TOOLS:
+        return _pair(_TOOLS[tool])
     words = [w for w in tool.split("_") if w]
     if not words:
-        return GENERIC_DONE, GENERIC_DOING
-    verb = _VERBS.get(words[0])
+        return _generic()
+    verb = words[0] if words[0] in _VERB_DONE else None
     rest = " ".join(words[1:] if verb else words)
     rest = _clean(rest, _WORDS_MAX)
     service = _SERVICES.get(server) or _clean(server.replace("_", " ").title(), 24)
     suffix = f" · {service}" if service else ""
     if verb and rest:
-        return f"{verb[0]} {rest}{suffix}", f"{verb[1]} {rest}{suffix}"
+        return (
+            tr("tool_labels.verb_rest.done", "{verb} {rest}{suffix}",
+               verb=_VERB_DONE[verb], rest=rest, suffix=suffix),
+            tr("tool_labels.verb_rest.doing", "{verb} {rest}{suffix}",
+               verb=_VERB_DOING[verb], rest=rest, suffix=suffix),
+        )
     if rest:
-        return f"Used {rest}{suffix}", f"Using {rest}{suffix}"
-    return GENERIC_DONE, GENERIC_DOING
+        return (
+            tr("tool_labels.used_rest.done", "Used {rest}{suffix}", rest=rest, suffix=suffix),
+            tr("tool_labels.used_rest.doing", "Using {rest}{suffix}", rest=rest, suffix=suffix),
+        )
+    return _generic()
 
 
 def detail_for(raw_name: Any, arguments: Any, result: str) -> str | None:

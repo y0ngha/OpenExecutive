@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from openexecutive.alerts import approvals, lifecycle, store
 from openexecutive.alerts.models import ARTIFACT_SOURCE, Alert, is_private_alert, visible_alert
+from openexecutive.utils.i18n import tr
 
 # The standalone alerts UI (panel, live toast stream, mute/severity settings,
 # feedback) was removed — those items now surface only through the briefing
@@ -225,8 +226,12 @@ def _audit_approval(
 
 def _finished(
     alert: Alert, approval: approvals.AlertApproval, status: str, outcome: str,
+    shown: str | None = None,
 ) -> approvals.AlertApproval:
-    done = approvals.finish(approval.id, status, outcome) or approval
+    """Record how an approval ended. ``outcome`` is the English the audit log
+    keeps; ``shown``, when given, is what the row keeps for the person to read
+    (in OE_LANGUAGE)."""
+    done = approvals.finish(approval.id, status, shown if shown is not None else outcome) or approval
     event = "alert_approval_done" if status == approvals.STATUS_DONE else "alert_approval_failed"
     _audit_approval(
         event, f"{'Did' if status == approvals.STATUS_DONE else 'Could not do'} the approved "
@@ -262,6 +267,9 @@ def _requeue_scheduled_action(alert: Alert, approval: approvals.AlertApproval, a
     return _finished(
         alert, approval, approvals.STATUS_DONE,
         f"Queued to go out now (scheduled action {new_id}, approving {action_id}).",
+        tr("alerts.approval.queued",
+           "Queued to go out now (scheduled action {new_id}, approving {action_id}).",
+           new_id=new_id, action_id=action_id),
     )
 
 
@@ -318,18 +326,27 @@ async def approve_alert(
             requeued = _requeue_scheduled_action(alert, approval, action_id)
         except Exception:
             logger.exception("alerts/approve: couldn't queue action %d for alert %d", action_id, alert_id)
-            return _finished(alert, approval, approvals.STATUS_FAILED, "It couldn't be queued.")
+            return _finished(
+                alert, approval, approvals.STATUS_FAILED, "It couldn't be queued.",
+                tr("alerts.approval.not_queued", "It couldn't be queued."),
+            )
         if requeued is not None:
             return requeued
 
     def _turn_finished(answered: bool) -> None:
         if answered:
-            _finished(alert, approval, approvals.STATUS_DONE, "The Executive did it in a new chat.")
+            _finished(
+                alert, approval, approvals.STATUS_DONE, "The Executive did it in a new chat.",
+                tr("alerts.approval.done", "The Executive did it in a new chat."),
+            )
         else:
             _finished(
                 alert, approval, approvals.STATUS_FAILED,
                 "The chat that does it ended on an error. It may have done part of it, so check "
                 "its chat before trying again.",
+                tr("alerts.approval.errored",
+                   "The chat that does it ended on an error. It may have done part of it, so check "
+                   "its chat before trying again."),
             )
 
     from openexecutive.api.routes.chat import start_background_turn
@@ -349,7 +366,10 @@ async def approve_alert(
         raise
     except Exception:
         logger.exception("alerts/approve: couldn't start the turn for alert %d", alert_id)
-        _finished(alert, approval, approvals.STATUS_FAILED, "It couldn't be started.")
+        _finished(
+            alert, approval, approvals.STATUS_FAILED, "It couldn't be started.",
+            tr("alerts.approval.not_started", "It couldn't be started."),
+        )
         raise HTTPException(status_code=500, detail="It couldn't be started. Try again.") from None
     approvals.set_session(approval.id, session_id)
     return approvals.get(approval.id) or approval

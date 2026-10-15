@@ -23,7 +23,7 @@ import re
 from typing import Any
 
 from openexecutive.orchestrator import tool_labels
-from openexecutive.utils.i18n import MessageTable, current_language, tr
+from openexecutive.utils.i18n import MessageTable, tr
 
 # Shown when a round contains only tools with no entry in `_LABELS`. Going
 # silent is not an option — a round with no label is the exact failure this
@@ -216,8 +216,9 @@ def _mcp_label(tool_input: Any) -> tuple[str, str]:
     The real tool name lives in `tool_input["name"]` — the same field
     `action_chips.summarize_action` reads. Both take their wording from
     `tool_labels`, so the line and the finished chip say the same thing in
-    plain words, never the raw `server__tool` name. The second element stays
-    the (sanitized) raw name so clients can still tell tools apart.
+    plain words (in OE_LANGUAGE), never the raw `server__tool` name. The
+    second element stays the (sanitized) raw name so clients can still tell
+    tools apart.
     """
     generic = tr("activity.mcp.generic", "Using a connected tool…")
     raw = tool_input.get("name") if isinstance(tool_input, dict) else None
@@ -226,10 +227,6 @@ def _mcp_label(tool_input: Any) -> tuple[str, str]:
     name = _MCP_NAME_UNSAFE.sub("", raw).strip()[:_MCP_NAME_MAX].strip()
     if not name:
         return generic, "call_tool"
-    if current_language() != "en":
-        # tool_labels' plain-word wording is English only; elsewhere the line
-        # names the tool in the deployment's language.
-        return tr("activity.mcp.named", "Using {name}…", name=name), name
     # Label from the full name: the 48-char cut is for `tool` only, and a
     # cut name would miss the table the chip reads (and the two would differ).
     doing = tool_labels.labels_for(raw, tool_input.get("arguments"))[1]

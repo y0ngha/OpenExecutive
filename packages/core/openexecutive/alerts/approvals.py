@@ -26,6 +26,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from openexecutive.alerts.store import _get_conn
+from openexecutive.utils.i18n import tr
 
 STATUS_RUNNING = "running"
 STATUS_DONE = "done"
@@ -34,12 +35,15 @@ STATUS_FAILED = "failed"
 # Alert statuses a card can be approved from: still in the queue.
 _OPEN_ALERT_STATUSES = ("unread", "read")
 
-# A turn that stopped may already have sent something, so a failed row says
-# to look before approving again.
-RESTARTED_OUTCOME = (
-    "It stopped when the server restarted. It may have done part of it, so check its chat "
-    "before trying again."
-)
+
+def restarted_outcome() -> str:
+    """A turn that stopped may already have sent something, so a failed row
+    says to look before approving again. In OE_LANGUAGE: a person reads it."""
+    return tr(
+        "approvals.restarted",
+        "It stopped when the server restarted. It may have done part of it, so check its chat "
+        "before trying again.",
+    )
 
 # Bounds on what a row keeps.
 _OUTCOME_MAX = 500
@@ -206,6 +210,6 @@ def fail_stale_running(*, db_path: Path | None = None) -> int:
         ensure_schema(conn)
         cursor = conn.execute(
             "UPDATE alert_approvals SET status = ?, outcome = ?, finished_at = ? WHERE status = ?",
-            (STATUS_FAILED, RESTARTED_OUTCOME, now, STATUS_RUNNING),
+            (STATUS_FAILED, restarted_outcome(), now, STATUS_RUNNING),
         )
         return cursor.rowcount

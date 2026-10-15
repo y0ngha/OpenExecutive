@@ -45,6 +45,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from openexecutive.utils.i18n import MessageTable, tr
+
 logger = logging.getLogger(__name__)
 
 Period = Literal["month", "week"]
@@ -131,6 +133,19 @@ def _month_start(day: date, months_back: int) -> date:
     return date(index // 12, index % 12 + 1, 1)
 
 
+def _month_name(day: date) -> str:
+    # Month names in the deployment's language; English as ``%B`` gives them.
+    return MessageTable("value.month", {
+        "1": "January", "2": "February", "3": "March", "4": "April",
+        "5": "May", "6": "June", "7": "July", "8": "August",
+        "9": "September", "10": "October", "11": "November", "12": "December",
+    })[str(day.month)]
+
+
+def _month_label(first: date) -> str:
+    return tr("value.period.month", "{month} {year}", month=_month_name(first), year=first.year)
+
+
 def period_window(period: Period, offset: int, *, now: datetime, zone: tzinfo) -> _Window:
     """The calendar month or week (Monday first) ``offset`` periods before the
     current one, in ``zone``. ``offset`` 0 is the period ``now`` is in."""
@@ -138,11 +153,13 @@ def period_window(period: Period, offset: int, *, now: datetime, zone: tzinfo) -
     if period == "month":
         first = _month_start(today, offset)
         nxt = _month_start(first, -1)
-        label = f"{first:%B} {first.year}"
+        label = _month_label(first)
     else:
         first = today - timedelta(days=today.weekday()) - timedelta(weeks=offset)
         nxt = first + timedelta(days=7)
-        label = f"Week of {first.day} {first:%B}"
+        label = tr(
+            "value.period.week", "Week of {day} {month}", day=first.day, month=_month_name(first),
+        )
     start = datetime(first.year, first.month, first.day, tzinfo=zone)
     end = datetime(nxt.year, nxt.month, nxt.day, tzinfo=zone)
     return _Window(start, end, label)
@@ -303,7 +320,7 @@ def _counts(audit: sqlite3.Connection | None, db: sqlite3.Connection | None,
     }
 
 
-_LABELS: dict[str, str] = {
+_LABELS = MessageTable("value.line", {
     "messages_sent": "Messages sent for you",
     "inbox_drafted": "Replies drafted in your inbox",
     "inbox_sent": "Replies sent from your inbox",
@@ -316,7 +333,7 @@ _LABELS: dict[str, str] = {
     "decisions": "Proposals decided",
     "alerts": "Things it flagged",
     "answered": "Requests answered",
-}
+})
 
 
 def _deliverables(db: sqlite3.Connection | None, bounds: tuple[str, str]) -> list[Deliverable]:
@@ -396,15 +413,15 @@ _HEADLINE_KEYS = (
 def render_message(summary: ValueSummary, *, link: str = "") -> str:
     """The short monthly message: the counted lines that aren't zero and
     where to see the rest. Deterministic text."""
-    lines = [f"**What your Executive did in {summary.label}**", ""]
+    lines = [tr("value.message.title", "**What your Executive did in {period}**", period=summary.label), ""]
     shown = [summary.line(k) for k in _HEADLINE_KEYS]
     for line in shown:
         if line is not None and line.count:
-            lines.append(f"- {line.label}: {line.count}")
+            lines.append(tr("value.message.line", "- {label}: {count}", label=line.label, count=line.count))
     if len(lines) == 2:
-        lines.append("- Nothing to report this time.")
+        lines.append(tr("value.message.empty", "- Nothing to report this time."))
     if link:
-        lines += ["", f"The full breakdown: {link}"]
+        lines += ["", tr("value.message.link", "The full breakdown: {link}", link=link)]
     return "\n".join(lines)
 
 
@@ -472,18 +489,23 @@ async def send_monthly(now: datetime) -> bool:
         if local.date() != _first_weekday(local.date()) or not FIRST_HOUR <= local.hour < LAST_HOUR:
             return False
         summary = summarize("month", 1, now=now, zone=zone)
-        month = _month_start(local.date(), 1).isoformat()[:7]
+        first = _month_start(local.date(), 1)
+        month = first.isoformat()[:7]
+        # The audit log stays English, whatever the deployment's language.
+        audit_label = f"{first:%B} {first.year}"
         if summary.is_empty() or not _claim_month(month, now):
             return False
         text = render_message(summary, link=value_link())
         with private_rows():
-            delivery = await _deliver_to_principal(text, label="Your month")
+            delivery = await _deliver_to_principal(
+                text, label=tr("value.message.subject", "Your month"),
+            )
     except Exception:
         logger.warning("value_summary: monthly message failed", exc_info=True)
         return False
     log_event(
         "value_summary_sent" if delivery.ok else "value_summary_not_sent",
-        f"Monthly summary for {summary.label}: {delivery.reason}",
+        f"Monthly summary for {audit_label}: {delivery.reason}",
         actor="scheduler",
         details={"month": month, "channel": delivery.channel, "reason": delivery.reason},
         private=True,

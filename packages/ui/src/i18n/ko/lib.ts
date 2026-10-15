@@ -371,7 +371,7 @@ const ko: Partial<Record<keyof typeof en, string>> = {
   "lib.api.changeActAsMeFailed": "나 대신 작성 설정을 바꾸지 못했어요.",
   "lib.api.changeActAsMeTeamFailed": "팀의 나 대신 작성 설정을 바꾸지 못했어요.",
   "lib.api.changeInboxDraftsFailed": "'받은편지함 답장 초안 쓰기' 설정을 바꾸지 못했어요.",
-  "lib.api.changeHandleItFailed": "알아서 처리 설정을 바꾸지 못했어요.",
+  "lib.api.changeHandleItFailed": "대신 처리 설정을 바꾸지 못했어요.",
   "lib.api.loadHandledFailed": "대신 처리한 내역을 불러오지 못했어요.",
   "lib.api.checkInboxFailed": "받은편지함을 확인하지 못했어요.",
   "lib.api.loadWaitingRepliesFailed": "대기 중인 답장을 불러오지 못했어요.",

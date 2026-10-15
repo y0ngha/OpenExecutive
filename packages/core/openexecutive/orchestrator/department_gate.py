@@ -40,6 +40,7 @@ from typing import Any
 from openexecutive.departments.models import AuthorityLevel
 from openexecutive.orchestrator import take_the_lead
 from openexecutive.people.models import AuthorityScope, Person
+from openexecutive.utils.i18n import tr
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,15 @@ class Verdict:
     department: str = ""
     level: str = ""
     approver_person_id: int | None = None
+    # English: what the model is told ("Not done yet: … because <reason>")
+    # and the audit log keeps.
     reason: str = ""
+    # The same in the deployment's language, for people; empty means ``reason``.
+    shown: str = ""
+
+    @property
+    def display(self) -> str:
+        return self.shown or self.reason
 
 
 def speaker(session: Any) -> Person | None:
@@ -217,22 +226,33 @@ def decide(
         # Someone outside the team is the principal's to approve: only their
         # approval opens contact egress, and contacts are theirs alone.
         approver = take_the_lead._principal_id()
+    reason, shown = _why(slug, level)
     return Verdict(
         run=False, department=slug, level=level.value, approver_person_id=approver,
-        reason=_why(slug, level),
+        reason=reason, shown=shown,
     )
 
 
-def _why(slug: str, level: AuthorityLevel) -> str:
+def _why(slug: str, level: AuthorityLevel) -> tuple[str, str]:
+    """Why it's held: in English (the model, the audit log) and for people."""
     if not slug:
-        return "they aren't in a department, so it waits for approval"
+        return (
+            "they aren't in a department, so it waits for approval",
+            tr("department_gate.why.no_department", "they aren't in a department, so it waits for approval"),
+        )
     from openexecutive.departments import registry as dept_registry
 
     state = dept_registry.get_state(slug)
     name = (state.config.title if state is not None else "") or slug
     if level == AuthorityLevel.ESCALATE:
-        return f"{name} escalates everything it does to a person"
-    return f"{name} proposes before it acts"
+        return (
+            f"{name} escalates everything it does to a person",
+            tr("department_gate.why.escalate", "{name} escalates everything it does to a person", name=name),
+        )
+    return (
+        f"{name} proposes before it acts",
+        tr("department_gate.why.propose", "{name} proposes before it acts", name=name),
+    )
 
 
 def hold(
@@ -280,13 +300,14 @@ def hold(
     # shows only the plain line; the approver opens the decision for the rest.
     shown = summary if private else take_the_lead.summarize(tool, tool_input, mcp=mcp, quote=False)
     who = person.full_name or (
-        "Someone on the team" if person.id is not None else "Someone who isn't on People"
+        tr("department_gate.who.team", "Someone on the team") if person.id is not None
+        else tr("department_gate.who.unknown", "Someone who isn't on People")
     )
     escalated = verdict.level == AuthorityLevel.ESCALATE.value
     payload = {
         "tool": tool, "input": tool_input, "mcp": mcp, "summary": summary,
         "requested_by_person_id": person.id, "requested_by": who,
-        "department": verdict.department, "level": verdict.level, "reason": verdict.reason,
+        "department": verdict.department, "level": verdict.level, "reason": verdict.display,
         "fields": take_the_lead.editable_fields(tool, tool_input, mcp=mcp),
         # Everything the call says, in full: the card shows this before it
         # can be approved, since the summary keeps only the start.
@@ -309,8 +330,10 @@ def hold(
             source=DECISION_ALERT_SOURCE,
             external_id=external_id,
             severity=AlertSeverity.HIGH.value if escalated else AlertSeverity.MEDIUM.value,
-            headline=f"{who} asked the Executive to: {shown}"[:160],
-            body=f"{shown}\n\nIt waited because {verdict.reason}.",
+            headline=tr("department_gate.headline", "{who} asked the Executive to: {action}",
+                        who=who, action=shown)[:160],
+            body=tr("department_gate.body", "{action}\n\nIt waited because {reason}.",
+                    action=shown, reason=verdict.display),
             suggested_action=shown,
             topic_tags=[
                 decision_instance_tag(decision_id),
@@ -325,7 +348,7 @@ def hold(
         logger.exception("department_gate: couldn't put decision %d on Today", decision_id)
     log_event(
         "department_action_held",
-        f"Held for approval: {take_the_lead.summarize(tool, tool_input, mcp=mcp, quote=False)}",
+        f"Held for approval: {take_the_lead.summarize(tool, tool_input, mcp=mcp, quote=False, en=True)}",
         actor=f"person:{person.id}" if person.id is not None else "user",
         details={
             "decision_id": decision_id, "tool": tool, "mcp": mcp,
@@ -386,6 +409,7 @@ async def _gated(
         verdict = Verdict(
             run=False, approver_person_id=take_the_lead._principal_id(),
             reason="its department's authority couldn't be read",
+            shown=tr("department_gate.why.unreadable", "its department's authority couldn't be read"),
         )
     if verdict.run:
         return await inner(tool_input)

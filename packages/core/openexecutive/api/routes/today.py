@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from openexecutive.briefing.value_summary import ValueSummary
 from openexecutive.clients.cockpit import ClientCockpitCard, format_practice_for_today
+from openexecutive.utils.i18n import MessageTable, tr
 
 if TYPE_CHECKING:
     from openexecutive.alerts.models import Alert
@@ -1041,7 +1042,7 @@ TAKE_THE_LEAD_CLASS = "take_the_lead_action"
 DEPARTMENT_ACTION_CLASS = "department_action"
 
 # Terminal decision-instance status → human verb for the activity rail.
-_DECISION_STATUS_LABEL = {
+_DECISION_STATUS_LABEL = MessageTable("today.decision", {
     "approved_unchanged": "Approved",
     "approved_with_edit": "Approved (edited)",
     "rejected": "Rejected",
@@ -1050,7 +1051,7 @@ _DECISION_STATUS_LABEL = {
     "executed": "Executed",
     "failed": "Failed",
     "closed_externally": "Closed",
-}
+})
 
 
 def _payload_is_private(payload_json: str | None) -> bool:
@@ -1226,7 +1227,7 @@ def _build_activity(
             continue
         items.append(ActivityItem(
             kind="workflow_done",
-            summary=run.get("title") or run.get("workflow_name") or "Workflow",
+            summary=run.get("title") or run.get("workflow_name") or tr("today.activity.workflow", "Workflow"),
             actor="Executive",
             target=None,
             department=None,
@@ -1257,7 +1258,11 @@ def _build_activity(
             continue  # its card quotes the message: the Take the lead rows below say what it did
         if instance.decision_class == DEPARTMENT_ACTION_CLASS:
             continue  # it quotes a teammate's conversation; the audit log keeps who approved it
-        label = _DECISION_STATUS_LABEL.get(instance.status, "Resolved")
+        label = (
+            _DECISION_STATUS_LABEL[instance.status]
+            if instance.status in _DECISION_STATUS_LABEL
+            else tr("today.decision.resolved_other", "Resolved")
+        )
         detail = (
             _payload_headline(instance.final_payload_json)
             or _payload_headline(instance.proposed_payload_json)
@@ -1287,7 +1292,10 @@ def _build_activity(
             continue
         items.append(ActivityItem(
             kind="took_the_lead",
-            summary=row.summary if row.status == "done" else f"{row.summary} (after a yes)",
+            summary=(
+                row.summary if row.status == "done"
+                else tr("today.activity.after_a_yes", "{summary} (after a yes)", summary=row.summary)
+            ),
             actor="Executive",
             target=None,
             department=None,
