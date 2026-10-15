@@ -37,6 +37,45 @@ _TEMPLATE = (
     "to a colleague) follows the language of the thread it answers."
 )
 
+# How to write in a language, beyond picking it: added after the template for
+# the languages listed here. Condensed from a Korean editing guide (no-ai-slop)
+# for what the Executive writes to people: plain words, the point first, no
+# filler. Like the template, it is a constant, so the cached prefix still hits.
+_STYLE: dict[str, str] = {
+    "ko": (
+        "Writing style for Korean, for everything a person reads. Never change "
+        "a fact, number, name, condition, owner, date or degree of certainty to "
+        "make a sentence read better.\n"
+        "- Lead with the answer, decision or ask, then only the context needed "
+        "to act on it. Stop when the job is done: no recap, closing slogan or "
+        "sales line.\n"
+        "- Use familiar, precise words. Drop inflated adjectives (혁신적인, "
+        "획기적인, 체계적인, 다양한, 실질적인) unless the sentence says what they "
+        "mean, and officialese (당사, 금번, 상기, 제고). Keep established terms, "
+        "product names and the English technical words the reader uses; don't "
+        "mix in English where plain Korean works.\n"
+        "- Let verbs carry the action: 검토했어요, not 검토를 진행했어요; 파일이 "
+        "있어요, not 파일을 가지고 있는 상태예요. Untangle stacked ~의 / ~에 대한 / "
+        "~에 있어서 / ~을 통해, avoid double passives (보여집니다 → 보입니다), and "
+        "never honor things (5만 원이세요 → 5만 원이에요).\n"
+        "- Split a sentence when its conditions hide who does what; keep clear "
+        "long sentences as they are.\n"
+        "- No empty framing or emphasis: 결론부터 말하자면, 시사하는 바가 큽니다, "
+        "단순한 X를 넘어 Y, 'X가 아닙니다. Y입니다' that only restates. Keep a "
+        "contrast that corrects a likely misunderstanding, and give the real "
+        "reason instead of saying something is important.\n"
+        "- Don't open sentence after sentence with 또한, 한편, 따라서; keep a "
+        "connective when it shows cause, contrast or order.\n"
+        "- Keep the conversation's register (polite 해요체 by default). Don't "
+        "add slang, jokes or made-up anecdotes to sound friendly.\n"
+        "- In plans and requests, say who does what and by when. Keep real "
+        "uncertainty (~일 수 있어요) and open items (미정) as they are.\n"
+        "- Format for chat: a short list only when it is easier to scan, no "
+        "decorative bold, and commas, parentheses or a new sentence instead of "
+        "dashes in the middle of a Korean sentence."
+    ),
+}
+
 _internal: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "output_language_internal", default=False
 )
@@ -63,7 +102,9 @@ def instruction(code: str) -> str | None:
 
     if code == DEFAULT_LANGUAGE or code not in LANGUAGES:
         return None
-    return _TEMPLATE.format(language=LANGUAGES[code])
+    text = _TEMPLATE.format(language=LANGUAGES[code])
+    style = _STYLE.get(code)
+    return f"{text}\n\n{style}" if style else text
 
 
 def apply_output_language(kwargs: dict[str, Any]) -> dict[str, Any]:
