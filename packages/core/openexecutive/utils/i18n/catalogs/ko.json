@@ -417,7 +417,7 @@
   "may_do.as_you.sensitive.what": "돈, 계약, 법무, 채용, 급여, 이사회, 언론, 건강, 비밀번호에 관한 일",
   "may_do.as_you.sensitive.why": "끌 수 없어요. 원래 메일을 받지 않은 사람에게는 절대 쓰지 않아요.",
   "may_do.as_you.title": "내 이름으로, 내 메일함에서",
-  "may_do.as_you.unavailable": "여기서는 나 대신 작성을 쓸 수 없어요. 이 Open Executive의 소유자가 팀원에게 켜 줄 수 있어요.",
+  "may_do.as_you.unavailable": "여기서는 나 대신 작성을 쓸 수 없어요. 이 Hoiv Executive의 소유자가 팀원에게 켜 줄 수 있어요.",
   "may_do.department_level.auto_execute": "스스로 실행",
   "may_do.department_level.escalate": "사람에게 넘김",
   "may_do.department_level.propose_only": "제안 후 승인",
