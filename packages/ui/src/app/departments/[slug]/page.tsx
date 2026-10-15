@@ -27,6 +27,7 @@ import {
   describeCheckIn,
   formatNextCheckIn,
   parseCheckIn,
+  weekdayLabel,
   withKind,
   type CheckInChoice,
   type Weekday,
@@ -143,7 +144,7 @@ function CheckInPicker({
                 className={FIELD_CLS}
               >
                 {WEEKDAYS.map((d) => (
-                  <option key={d.id} value={d.id}>{d.label}</option>
+                  <option key={d} value={d}>{weekdayLabel(d)}</option>
                 ))}
               </select>
             </label>

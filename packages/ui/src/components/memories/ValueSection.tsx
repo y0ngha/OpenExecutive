@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Icon from "@/components/Icon";
+import { displayLocale, t } from "@/i18n/index.ts";
 import { getValueSummary, type ValueSummary } from "@/lib/api";
 import { deltaLabel, headline, visibleLines } from "@/lib/valueSummary";
 import { Skeleton } from "./shared";
@@ -51,14 +52,14 @@ export function YourMonthCard() {
       className="group flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface-elevated p-4 sm:p-6 hover:border-accent/50 hover:bg-surface-overlay transition-colors"
     >
       <div className="min-w-0">
-        <h2 className="text-lg font-semibold text-fg">Your month</h2>
+        <h2 className="text-lg font-semibold text-fg">{t("people.pulse.screen.value.title")}</h2>
         {summary === undefined ? (
           <Skeleton className="h-5 w-64 mt-2" />
         ) : (
           <p className="text-[15px] text-fg-muted mt-1">
             {line
-              ? `${summary.label}: ${line}.`
-              : `Nothing counted yet for ${summary.label}. What it does for you adds up here.`}
+              ? t("people.value.cardLine", { label: summary.label, line })
+              : t("people.value.cardEmpty", { label: summary.label })}
           </p>
         )}
       </div>
@@ -72,7 +73,6 @@ export function ValueScreen() {
   const [period, setPeriod] = useState<Period>("month");
   const [offset, setOffset] = useState(0);
   const { summary, error } = useValueSummary(period, offset);
-  const before = period === "month" ? "last month" : "last week";
 
   function pick(next: Period) {
     setPeriod(next);
@@ -82,7 +82,7 @@ export function ValueScreen() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-xl border border-line p-1" role="group" aria-label="Period">
+        <div className="inline-flex rounded-xl border border-line p-1" role="group" aria-label={t("people.value.period")}>
           {(["month", "week"] as const).map((p) => (
             <button
               key={p}
@@ -93,7 +93,7 @@ export function ValueScreen() {
                 period === p ? "bg-accent text-white" : "text-fg-muted hover:bg-surface-overlay"
               }`}
             >
-              {p === "month" ? "Month" : "Week"}
+              {p === "month" ? t("people.value.month") : t("people.value.week")}
             </button>
           ))}
         </div>
@@ -102,7 +102,7 @@ export function ValueScreen() {
             type="button"
             onClick={() => setOffset((o) => o + 1)}
             className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-line hover:bg-surface-overlay"
-            aria-label={`Previous ${period}`}
+            aria-label={period === "month" ? t("people.value.previousMonth") : t("people.value.previousWeek")}
           >
             <Icon name="chevron-left" size="w-4 h-4" />
           </button>
@@ -114,7 +114,7 @@ export function ValueScreen() {
             onClick={() => setOffset((o) => Math.max(0, o - 1))}
             disabled={offset === 0}
             className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-line hover:bg-surface-overlay disabled:opacity-40"
-            aria-label={`Next ${period}`}
+            aria-label={period === "month" ? t("people.value.nextMonth") : t("people.value.nextWeek")}
           >
             <Icon name="chevron-right" size="w-4 h-4" />
           </button>
@@ -125,20 +125,22 @@ export function ValueScreen() {
         <Skeleton className="h-48 w-full" />
       ) : summary === null ? (
         <p className="text-[15px] text-fg-muted">
-          {error ? "Couldn't load the summary. Try again in a moment." : "Only the owner sees this summary."}
+          {error ? t("people.value.loadError") : t("people.value.ownerOnly")}
         </p>
       ) : (
         <>
           <section className="rounded-2xl border border-line bg-surface-elevated p-4 sm:p-6">
             {visibleLines(summary.lines).length === 0 ? (
-              <p className="text-[15px] text-fg-muted">Nothing counted for {summary.label}.</p>
+              <p className="text-[15px] text-fg-muted">{t("people.value.nothingCounted", { label: summary.label })}</p>
             ) : (
               <table className="w-full text-[15px]">
                 <thead>
                   <tr className="text-left text-sm text-fg-subtle">
-                    <th className="font-medium pb-2">What it did</th>
-                    <th className="font-medium pb-2 text-right">Count</th>
-                    <th className="font-medium pb-2 text-right">vs {before}</th>
+                    <th className="font-medium pb-2">{t("people.value.whatItDid")}</th>
+                    <th className="font-medium pb-2 text-right">{t("people.value.count")}</th>
+                    <th className="font-medium pb-2 text-right">
+                      {period === "month" ? t("people.value.vsLastMonth") : t("people.value.vsLastWeek")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -158,9 +160,12 @@ export function ValueScreen() {
           {summary.deliverables.length > 0 && (
             <section className="rounded-2xl border border-line bg-surface-elevated p-4 sm:p-6">
               <h2 className="text-lg font-semibold text-fg mb-2">
-                Reports and documents
+                {t("people.value.deliverables")}
                 {summary.deliverables_total > summary.deliverables.length &&
-                  ` (latest ${summary.deliverables.length} of ${summary.deliverables_total})`}
+                  t("people.value.deliverablesLatest", {
+                    shown: summary.deliverables.length,
+                    total: summary.deliverables_total,
+                  })}
               </h2>
               <ul>
                 {summary.deliverables.map((d) => (
@@ -171,7 +176,7 @@ export function ValueScreen() {
                     >
                       <span className="min-w-0 truncate">{d.title}</span>
                       <span className="shrink-0 text-sm text-fg-subtle tabular-nums">
-                        {new Date(d.finished_at).toLocaleDateString()}
+                        {new Date(d.finished_at).toLocaleDateString(displayLocale())}
                       </span>
                     </Link>
                   </li>
@@ -180,8 +185,7 @@ export function ValueScreen() {
             </section>
           )}
           <p className="text-sm text-fg-subtle">
-            Counted from what was recorded: messages that went out, replies, meetings, briefs,
-            reports and tasks. Nothing here is estimated.
+            {t("people.value.footnote")}
           </p>
         </>
       )}

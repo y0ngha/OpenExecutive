@@ -58,9 +58,9 @@ export default function RunDetailPage() {
     setRerunBusy(true);
     try {
       await rerunWorkflowRun(run.run_id);
-      setRerunMsg("Running it again now. The result goes where it normally would.");
+      setRerunMsg(t("jobs.run.rerunStarted"));
     } catch (e) {
-      setRerunMsg(e instanceof Error ? e.message : "Couldn't run it again.");
+      setRerunMsg(e instanceof Error ? e.message : t("jobs.run.rerunFailed"));
     } finally {
       setRerunBusy(false);
     }
@@ -245,11 +245,11 @@ export default function RunDetailPage() {
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 {run.rerunnable && (
                   <Button variant="secondary" onClick={handleRerun} disabled={rerunBusy}>
-                    Run again
+                    {t("jobs.run.rerun")}
                   </Button>
                 )}
                 <Link href={`/jobs/${run.workflow_name}`} className="text-xs text-accent hover:underline">
-                  Start a new run instead
+                  {t("jobs.run.startNewInstead")}
                 </Link>
               </div>
               {rerunMsg && (

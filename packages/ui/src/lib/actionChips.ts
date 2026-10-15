@@ -4,6 +4,8 @@
 // (see scripts/actionChips.test.mjs). The wording comes from the backend
 // (orchestrator/action_chips.py and tool_labels.py); this file only groups.
 
+import { t } from "../i18n/index.ts";
+
 export interface ChipAction {
   tool: string;
   summary: string;
@@ -33,7 +35,7 @@ export function chipSummary(summary: string): string {
   if (!m) return summary;
   const tool = m[1].slice(m[1].indexOf("__") + 2);
   const words = tool.replace(/[_-]+/g, " ").trim();
-  return words ? `Used ${words}` : "Used a connected tool";
+  return words ? t("lib.actionChips.used", { words }) : t("lib.actionChips.usedTool");
 }
 
 /** One chip per distinct wording, in the order each first appeared. */

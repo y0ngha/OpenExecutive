@@ -2,6 +2,8 @@
 // short "when" labels on its Coming up and Done recently lists. Kept free of
 // React so scripts/pulseView.test.mjs can run them under plain node.
 
+import { displayLocale, t } from "../i18n/index.ts";
+
 /** The Pulse overview, or one of the focused screens it links to. */
 export type PulseView =
   | "overview"
@@ -49,8 +51,6 @@ export function isMemoryView(view: PulseView): view is MemoryView {
   return (MEMORY_VIEWS as readonly string[]).includes(view);
 }
 
-const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_MS = 86_400_000;
 
 /** "9 am", "6:30 pm" in local time; a no-break space keeps "am" with its time. */
@@ -58,7 +58,11 @@ export function clockLabel(d: Date): string {
   const h = d.getHours();
   const m = d.getMinutes();
   const hour = h % 12 === 0 ? 12 : h % 12;
-  return `${hour}${m ? `:${String(m).padStart(2, "0")}` : ""}\u00a0${h < 12 ? "am" : "pm"}`;
+  if (m) {
+    const vars = { h: hour, mm: String(m).padStart(2, "0") };
+    return h < 12 ? t("people.when.amHourMinute", vars) : t("people.when.pmHourMinute", vars);
+  }
+  return h < 12 ? t("people.when.amHour", { h: hour }) : t("people.when.pmHour", { h: hour });
 }
 
 function startOfDay(d: Date): number {
@@ -76,15 +80,16 @@ export function whenLabel(iso: string, now: Date = new Date()): string {
   if (Number.isNaN(d.getTime())) return "";
   const days = Math.round((startOfDay(d) - startOfDay(now)) / DAY_MS);
   if (days === 0) return clockLabel(d);
-  if (days === -1) return "Yesterday";
-  if (days > 0 && days < 7) return `${WEEKDAY[d.getDay()]} ${clockLabel(d)}`;
-  if (days < 0 && days > -7) return WEEKDAY[d.getDay()];
-  return `${MONTH[d.getMonth()]} ${d.getDate()}`;
+  if (days === -1) return t("people.when.yesterday");
+  const weekday = d.toLocaleDateString(displayLocale(), { weekday: "short" });
+  if (days > 0 && days < 7) return t("people.when.weekdayTime", { weekday, time: clockLabel(d) });
+  if (days < 0 && days > -7) return weekday;
+  return d.toLocaleDateString(displayLocale(), { month: "short", day: "numeric" });
 }
 
 /** whenLabel for something still to come: one already due reads "Now". */
 export function upcomingLabel(iso: string, now: Date = new Date()): string {
   const at = new Date(iso).getTime();
-  if (!Number.isNaN(at) && at <= now.getTime()) return "Now";
+  if (!Number.isNaN(at) && at <= now.getTime()) return t("people.pulse.now");
   return whenLabel(iso, now);
 }

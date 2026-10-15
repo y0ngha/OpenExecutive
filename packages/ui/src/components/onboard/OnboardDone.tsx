@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import ExecEmailRow from "@/components/onboard/ExecEmailRow";
 import { buttonClass } from "@/components/ui/Button";
 import { getCompanyProfile, listPeople } from "@/lib/api";
-import { FIRST_RUN_LINKS, OWN_MAILBOX_SENDS, STORAGE_KEYS, firstQuestion, remember } from "@/lib/firstRun";
+import { t } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
+import { FIRST_RUN_LINKS, STORAGE_KEYS, firstQuestion, ownMailboxSends, remember } from "@/lib/firstRun";
 
 interface Props {
   /** Personal (one person) or a team; sets the wording. */
@@ -49,10 +51,14 @@ export default function OnboardDone({ solo, onDone }: Props) {
 
   const knows = [
     companyName,
-    !solo && peopleCount !== null && peopleCount > 1 ? `your ${peopleCount} people` : null,
-    "this year's priorities",
+    !solo && peopleCount !== null && peopleCount > 1 ? t("chat.done.knowsPeople", { n: peopleCount }) : null,
+    t("chat.done.knowsPriorities"),
   ].filter(Boolean) as string[];
-  const knowsLine = `It knows ${knows.length > 1 ? `${knows.slice(0, -1).join(", ")} and ${knows[knows.length - 1]}` : knows[0]}.`;
+  const knowsList =
+    knows.length > 1
+      ? `${knows.slice(0, -1).join(t("chat.done.listSep"))}${t("chat.done.listAnd")}${knows[knows.length - 1]}`
+      : knows[0];
+  const knowsLine = t("chat.done.knows", { list: knowsList });
 
   function ask() {
     const text = question.trim();
@@ -66,8 +72,8 @@ export default function OnboardDone({ solo, onDone }: Props) {
       <div className="text-4xl leading-none text-emerald-400" aria-hidden>
         ✓
       </div>
-      <h1 className="mt-3 text-2xl font-bold tracking-tight text-fg">Your Executive is ready</h1>
-      <p className="text-sm text-fg-muted mt-1">{knowsLine} Everything stays editable in Settings.</p>
+      <h1 className="mt-3 text-2xl font-bold tracking-tight text-fg">{t("chat.done.title")}</h1>
+      <p className="text-sm text-fg-muted mt-1">{knowsLine} {t("chat.done.editable")}</p>
 
       <form
         onSubmit={(e) => {
@@ -77,7 +83,7 @@ export default function OnboardDone({ solo, onDone }: Props) {
         className="mt-6 rounded-2xl border border-accent/30 bg-accent/5 p-4"
       >
         <label htmlFor="first-question" className="text-xs font-semibold uppercase tracking-wider text-accent">
-          Start here
+          {t("chat.done.startHere")}
         </label>
         <textarea
           id="first-question"
@@ -96,23 +102,23 @@ export default function OnboardDone({ solo, onDone }: Props) {
           className="mt-2 w-full resize-none rounded-xl border border-line-strong bg-surface-elevated px-3 py-2 text-[15px] text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
         />
         <p className="mt-1 text-xs text-fg-muted">
-          Built from what you just saved. Change it, or ask anything else.
+          {t("chat.done.builtFrom")}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           <button type="submit" disabled={!question.trim()} className={buttonClass("primary", "md")}>
-            Ask your first question
+            {t("chat.done.ask")}
           </button>
           <button
             type="button"
             onClick={onDone}
             className="text-sm font-semibold text-accent hover:underline cursor-pointer"
           >
-            Open Home instead
+            {t("chat.done.openHome")}
           </button>
         </div>
       </form>
 
-      <h2 className="mt-8 text-xs font-semibold uppercase tracking-wider text-fg-subtle">It can already</h2>
+      <h2 className="mt-8 text-xs font-semibold uppercase tracking-wider text-fg-subtle">{t("chat.done.canAlready")}</h2>
       <ul className="mt-2 rounded-2xl border border-line bg-surface-elevated px-4">
         <ExecEmailRow />
         <li className="flex items-baseline gap-3 border-b border-line py-3 last:border-0">
@@ -120,8 +126,7 @@ export default function OnboardDone({ solo, onDone }: Props) {
             ☀
           </span>
           <p className="min-w-0 text-[15px] text-fg-muted leading-snug">
-            <span className="font-semibold text-fg">Brief you.</span> Your first brief is on Home now, and a new one
-            is written every morning.
+            <span className="font-semibold text-fg">{t("chat.done.briefTitle")}</span> {t("chat.done.briefBody")}
           </p>
         </li>
         <li className="flex items-baseline gap-3 border-b border-line py-3 last:border-0">
@@ -129,11 +134,15 @@ export default function OnboardDone({ solo, onDone }: Props) {
             ✎
           </span>
           <p className="min-w-0 text-[15px] text-fg-muted leading-snug">
-            <span className="font-semibold text-fg">Draft replies as you.</span>{" "}
-            <Link href={FIRST_RUN_LINKS.ownMailbox} className="font-semibold text-accent hover:underline">
-              Let it read your own mailbox
-            </Link>
-            . {OWN_MAILBOX_SENDS}
+            <span className="font-semibold text-fg">{t("chat.done.draftTitle")}</span>{" "}
+            {tRich("chat.done.draftBody", {
+              link: (
+                <Link href={FIRST_RUN_LINKS.ownMailbox} className="font-semibold text-accent hover:underline">
+                  {t("chat.done.ownMailboxLink")}
+                </Link>
+              ),
+              sends: ownMailboxSends(),
+            })}
           </p>
         </li>
       </ul>

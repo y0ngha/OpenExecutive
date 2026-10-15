@@ -4,6 +4,7 @@
 // component so `npm test` can check it (see scripts/chatTurns.test.mjs).
 
 import type { ChatMessage } from "@/lib/api";
+import { t } from "../i18n/index.ts";
 
 export interface LastTurn {
   /** Index of the last message when it is a saved assistant reply. */
@@ -63,6 +64,6 @@ export function dropLastTurn(messages: ChatMessage[]): ChatMessage[] {
 /** The question asked before redoing a reply that already did something. */
 export function confirmRedoText(actions: { summary: string }[] | undefined): string {
   const first = actions?.find((a) => a.summary.trim())?.summary.trim();
-  const what = first ? `("${first}")` : "(sent a message, booked a meeting or filed a card)";
-  return `That answer already did something ${what}. Doing it again could repeat it. Go ahead?`;
+  const what = first ? `"${first}"` : t("chat.redo.confirmGeneric");
+  return t("chat.redo.confirm", { what });
 }

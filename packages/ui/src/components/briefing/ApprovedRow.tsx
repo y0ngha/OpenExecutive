@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { t } from "@/i18n/index.ts";
 import { getAlertApproval } from "@/lib/api";
 import {
   APPROVAL_POLL_MAX_MS,
@@ -72,14 +73,14 @@ export default function ApprovedRow({
         )}
         {line.canRetry && (
           <button type="button" onClick={onRetry} className={buttonClass("secondary", "sm")}>
-            Try again
+            {t("common.retry")}
           </button>
         )}
         {approval.status !== "running" && (
           <button
             type="button"
             onClick={onClose}
-            aria-label="Hide"
+            aria-label={t("briefing.approved.hide")}
             className="min-h-[40px] rounded-xl px-3 text-sm text-fg-muted hover:bg-surface-hover"
           >
             ✕

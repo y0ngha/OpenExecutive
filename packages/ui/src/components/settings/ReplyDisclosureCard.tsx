@@ -3,20 +3,21 @@
 import { useState } from "react";
 
 import SettingsCard from "@/components/settings/SettingsCard";
+import { t, type MessageKey } from "@/i18n/index.ts";
 import { setReplyDisclosure, type DelegationSettings, type ReplyDisclosure } from "@/lib/api";
 
 type Switch = "handle_it" | "approved_sends";
 
-const SWITCHES: { key: Switch; label: string; help: string }[] = [
+const SWITCHES: { key: Switch; label: MessageKey; help: MessageKey }[] = [
   {
     key: "handle_it",
-    label: "Sent on their own (Handle it for me)",
-    help: "No one reads these before they go.",
+    label: "settings.disclosure.handleIt.label",
+    help: "settings.disclosure.handleIt.help",
   },
   {
     key: "approved_sends",
-    label: "Drafts you approve and send",
-    help: "You read these first, so they go out as you wrote them unless you turn this on.",
+    label: "settings.disclosure.approved.label",
+    help: "settings.disclosure.approved.help",
   },
 ];
 
@@ -45,7 +46,7 @@ export default function ReplyDisclosureCard({
       onSettings(await setReplyDisclosure({ [key]: value }));
       setConfirmOff(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the setting.");
+      setError(err instanceof Error ? err.message : t("settings.reach.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -61,8 +62,8 @@ export default function ReplyDisclosureCard({
 
   return (
     <SettingsCard
-      title="Replies sent from your mailbox"
-      description={`Choose which replies end with “${disclosure.line}”, so people can tell your AI assistant wrote them.`}
+      title={t("settings.disclosure.title")}
+      description={t("settings.disclosure.description", { line: disclosure.line })}
     >
       <div className="flex flex-col gap-4">
         {SWITCHES.map((s) => (
@@ -76,16 +77,14 @@ export default function ReplyDisclosureCard({
               className="mt-0.5 h-5 w-5 flex-shrink-0 accent-indigo-500"
             />
             <span>
-              <span className="block text-[15px] font-semibold text-fg">{s.label}</span>
-              <span className="mt-0.5 block text-sm text-fg-muted leading-snug">{s.help}</span>
+              <span className="block text-[15px] font-semibold text-fg">{t(s.label)}</span>
+              <span className="mt-0.5 block text-sm text-fg-muted leading-snug">{t(s.help)}</span>
             </span>
           </label>
         ))}
         {confirmOff && (
           <div className="rounded-md border border-line p-3 text-sm">
-            <p className="text-fg">
-              Replies Handle it for me sends on their own will no longer say your AI assistant wrote them.
-            </p>
+            <p className="text-fg">{t("settings.disclosure.confirmOff")}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -93,7 +92,7 @@ export default function ReplyDisclosureCard({
                 onClick={() => void save("handle_it", false)}
                 className="rounded-md border border-line px-3 py-1.5 font-medium text-fg"
               >
-                Turn it off
+                {t("settings.disclosure.turnOff")}
               </button>
               <button
                 type="button"
@@ -101,12 +100,12 @@ export default function ReplyDisclosureCard({
                 onClick={() => setConfirmOff(false)}
                 className="rounded-md px-3 py-1.5 text-fg-muted"
               >
-                Keep it on
+                {t("settings.disclosure.keepOn")}
               </button>
             </div>
           </div>
         )}
-        <p className="text-sm text-fg-muted">A change applies to the next reply it writes.</p>
+        <p className="text-sm text-fg-muted">{t("settings.disclosure.appliesNext")}</p>
       </div>
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
     </SettingsCard>

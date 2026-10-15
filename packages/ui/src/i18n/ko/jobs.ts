@@ -214,6 +214,10 @@ const ko: Partial<Record<keyof typeof en, string>> = {
   "jobs.run.timedOutTitle": "기한 내에 답이 없었어요",
   "jobs.run.timedOutBody": "이 단계의 시간 초과 정책에 따라 실행이 끝나지 않고 멈췄어요.",
   "jobs.run.failed": "실행이 실패했어요",
+  "jobs.run.rerun": "다시 실행",
+  "jobs.run.rerunStarted": "지금 다시 실행하고 있어요. 결과는 평소처럼 전달돼요.",
+  "jobs.run.rerunFailed": "다시 실행하지 못했어요.",
+  "jobs.run.startNewInstead": "대신 새로 실행하기",
   "jobs.run.inputs": "입력값",
   "jobs.run.deliverySent": "질문을 보냈어요.",
   "jobs.run.deliverySelf": "대화에서 직접 질문했어요.",
@@ -487,8 +491,13 @@ const ko: Partial<Record<keyof typeof en, string>> = {
   "jobs.changes.removedStep": "“{title}” 단계를 삭제했어요",
   "jobs.changes.reordered": "단계 순서를 바꿨어요",
   "jobs.changes.other": "다른 설정을 바꿨어요",
-  "jobs.guide.skills.title": "진행 방식",
-  "jobs.guide.skills.sub": "각 워크플로의 바탕이 되는 방법이에요. Executive는 채팅에서도 이 방법을 따라요. 워크플로 화면에서 수정할 수 있어요.",
+  "jobs.howItsDone.title": "진행 방식",
+  "jobs.howItsDone.intro": "Executive는 {workflowTitle} 작업을 할 때 여기서도, 채팅에서도 이 방식을 따라요.",
+  "jobs.howItsDone.resetConfirm": "원래 방식으로 되돌릴까요? 바꾼 내용은 사라져요.",
+  "jobs.howItsDone.customized": "수정됨",
+  "jobs.howItsDone.showAll": "모두 보기",
+  "jobs.howItsDone.showLess": "접기",
+  "jobs.howItsDone.reset": "원래대로 되돌리기",
 };
 
 export default ko;

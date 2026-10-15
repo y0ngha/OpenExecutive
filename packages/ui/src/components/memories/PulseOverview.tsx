@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getActivity, getHistory, listStandingFacts, type ActivityItem } from "@/lib/api";
 import Icon from "@/components/Icon";
+import { t } from "@/i18n/index.ts";
 import { upcomingLabel, whenLabel, type MemoryView } from "@/lib/pulseView";
 import { SUMMARY_KINDS, activityLine } from "./CadenceSection";
 import type { PulseData } from "./PulseHeader";
@@ -114,11 +115,15 @@ export function ComingUp({ pulse }: { pulse: PulseData }) {
   );
 
   return (
-    <PreviewCard title="Coming up" href="/memories?tab=schedule" linkLabel="Full schedule">
+    <PreviewCard
+      title={t("people.overview.comingUp")}
+      href="/memories?tab=schedule"
+      linkLabel={t("people.overview.fullSchedule")}
+    >
       {loading ? (
         <RowsSkeleton />
       ) : next.length === 0 ? (
-        <Empty>Nothing scheduled yet. Briefs and check-ins appear here once they&apos;re set up.</Empty>
+        <Empty>{t("people.overview.comingUpEmpty")}</Empty>
       ) : (
         <ul>
           {next.map((a) => {
@@ -133,11 +138,11 @@ export function ComingUp({ pulse }: { pulse: PulseData }) {
                   followUp
                     ? a.intent_text
                     : meta.group === "departments" && a.department
-                      ? `${meta.label}: ${a.department}`
+                      ? t("people.overview.deptItem", { label: meta.label, department: a.department })
                       : meta.label
                 }
                 detail={followUp ? undefined : meta.blurb}
-                chip={followUp ? "Follow-up" : undefined}
+                chip={followUp ? t("people.overview.followUpChip") : undefined}
               />
             );
           })}
@@ -170,11 +175,15 @@ export function DoneRecently() {
   }, []);
 
   return (
-    <PreviewCard title="Done recently" href="/memories?tab=activity" linkLabel="All activity">
+    <PreviewCard
+      title={t("people.overview.doneRecently")}
+      href="/memories?tab=activity"
+      linkLabel={t("people.overview.allActivity")}
+    >
       {items === null ? (
         <RowsSkeleton />
       ) : items.length === 0 ? (
-        <Empty>Nothing yet. What it does on its own shows up here as it happens.</Empty>
+        <Empty>{t("people.overview.doneRecentlyEmpty")}</Empty>
       ) : (
         <ul>
           {items.map((it, i) => {
@@ -281,50 +290,52 @@ export function MemoryTiles({ pulse }: { pulse: PulseData }) {
   const tiles: TileSpec[] = [
     {
       view: "decisions",
-      label: "Decisions",
+      label: t("people.pulse.screen.decisions.title"),
       count: data ? data.decisions.length : null,
-      detail: latestDecision ? `Latest: ${latestDecision.summary}` : undefined,
+      detail: latestDecision ? t("people.overview.latest", { summary: latestDecision.summary }) : undefined,
     },
     {
       view: "initiatives",
-      label: "Projects",
+      label: t("people.pulse.screen.initiatives.title"),
       count: data ? data.initiatives.length : null,
       detail: data
-        ? `${data.initiatives.filter((i) => i.status === "active").length} active`
+        ? t("people.overview.activeCount", {
+            n: data.initiatives.filter((i) => i.status === "active").length,
+          })
         : undefined,
     },
     {
       view: "advice",
-      label: "Advice",
+      label: t("people.pulse.screen.advice.title"),
       count: data ? data.advice.length : null,
-      detail: latestAdvice ? `Latest: ${latestAdvice.query_summary}` : undefined,
+      detail: latestAdvice ? t("people.overview.latest", { summary: latestAdvice.query_summary }) : undefined,
     },
     {
       view: "corrections",
-      label: "Facts you taught it",
+      label: t("people.pulse.screen.corrections.title"),
       count: facts ? facts.active : null,
-      flag: facts && facts.toApprove > 0 ? `${facts.toApprove} to approve` : undefined,
-      detail: "Used in every answer",
+      flag: facts && facts.toApprove > 0 ? t("people.overview.toApprove", { n: facts.toApprove }) : undefined,
+      detail: t("people.overview.usedInEveryAnswer"),
     },
   ];
   if (notes !== null) {
     tiles.push({
       view: "history",
-      label: "Your notes",
+      label: t("people.pulse.screen.history.title"),
       count: notes ?? null,
-      detail: "Only you see these",
+      detail: t("people.overview.onlyYou"),
     });
   }
 
   return (
     <section aria-labelledby="pulse-memory-heading">
       <h2 id="pulse-memory-heading" className="text-lg font-semibold text-fg mb-3">
-        What it remembers
+        {t("people.overview.whatItRemembers")}
       </h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {tiles.map((t, i) => (
+        {tiles.map((tile, i) => (
           // An odd last tile spans the phone's two columns.
-          <Tile key={t.view} spec={t} wide={tiles.length % 2 === 1 && i === tiles.length - 1} />
+          <Tile key={tile.view} spec={tile} wide={tiles.length % 2 === 1 && i === tiles.length - 1} />
         ))}
       </div>
     </section>
@@ -349,7 +360,7 @@ export function FocusedScreen({
           className="inline-flex h-10 items-center gap-1 rounded-xl px-2 -ml-2 text-sm font-semibold text-accent hover:bg-surface-overlay transition-colors"
         >
           <Icon name="arrow-left" size="w-4 h-4" />
-          Pulse
+          {t("people.pulse.title")}
         </Link>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg mt-1">{title}</h1>
         <p className="text-[15px] text-fg-muted mt-1.5 max-w-2xl">{description}</p>

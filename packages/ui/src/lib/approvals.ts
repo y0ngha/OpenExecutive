@@ -3,6 +3,8 @@
 // page and polls it until the work has finished. These helpers decide what
 // that row says; ApprovedRow renders it.
 
+import { t } from "../i18n/index.ts";
+
 export type ApprovalStatus = "running" | "done" | "failed";
 
 export interface AlertApproval {
@@ -40,26 +42,30 @@ export function approvalLine(approval: AlertApproval, headline: string): Approva
   if (approval.status === "running") {
     return {
       tone: "muted",
-      text: `Working on it: ${headline}`,
+      text: t("lib.approvals.working", { headline }),
       chatHref: href,
-      chatLabel: href ? "Watch it" : null,
+      chatLabel: href ? t("lib.approvals.watch") : null,
       canRetry: false,
     };
   }
   if (approval.status === "done") {
     return {
       tone: "emerald",
-      text: href ? `Done: ${headline}` : `Done: ${headline}. ${approval.outcome}`.trim(),
+      text: href
+        ? t("lib.approvals.done", { headline })
+        : t("lib.approvals.doneOutcome", { headline, outcome: approval.outcome }).trim(),
       chatHref: href,
-      chatLabel: href ? "See what it did" : null,
+      chatLabel: href ? t("lib.approvals.seeWhatItDid") : null,
       canRetry: false,
     };
   }
   return {
     tone: "rose",
-    text: `Didn't work: ${headline}${approval.outcome ? `. ${approval.outcome}` : ""}`,
+    text: approval.outcome
+      ? t("lib.approvals.failedOutcome", { headline, outcome: approval.outcome })
+      : t("lib.approvals.failed", { headline }),
     chatHref: href,
-    chatLabel: href ? "Open the chat" : null,
+    chatLabel: href ? t("lib.approvals.openChat") : null,
     canRetry: true,
   };
 }

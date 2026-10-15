@@ -544,6 +544,21 @@ const ko: Partial<Record<keyof typeof en, string>> = {
   "lib.api.removeItFailed": "삭제하지 못했어요.",
   "lib.api.loadCardFailed": "이 카드를 불러오지 못했어요.",
   "lib.api.approveItFailed": "승인하지 못했어요.",
+  "lib.snooze.laterToday": "{time}까지 미루기",
+  "lib.snooze.tomorrow": "내일 {time}까지 미루기",
+  "lib.snooze.tomorrowShort": "내일 {time}",
+  "lib.snooze.monday": "월요일 {time}까지 미루기",
+  "lib.snooze.mondayShort": "월요일 {time}",
+  "lib.approvals.working": "진행 중: {headline}",
+  "lib.approvals.watch": "지켜보기",
+  "lib.approvals.done": "완료: {headline}",
+  "lib.approvals.doneOutcome": "완료: {headline}. {outcome}",
+  "lib.approvals.seeWhatItDid": "한 일 보기",
+  "lib.approvals.failed": "실패: {headline}",
+  "lib.approvals.failedOutcome": "실패: {headline}. {outcome}",
+  "lib.approvals.openChat": "대화 열기",
+  "lib.actionChips.used": "{words} 사용",
+  "lib.actionChips.usedTool": "연결된 도구 사용",
 };
 
 export default ko;

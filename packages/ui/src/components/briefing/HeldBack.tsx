@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { displayLocale, t } from "@/i18n/index.ts";
 import type { HeldBackItem } from "@/lib/api";
 
 // "Left out of your brief": the lines the grounding check held back from the
@@ -30,8 +31,10 @@ function writeHidden(ids: number[]): void {
 }
 
 function whenLabel(item: HeldBackItem): string {
-  const day = new Date(item.at).toLocaleDateString(undefined, { weekday: "long" });
-  return item.surface === "end-of-day digest" ? `${day}'s end-of-day digest` : `${day}'s morning brief`;
+  const day = new Date(item.at).toLocaleDateString(displayLocale(), { weekday: "long" });
+  return item.surface === "end-of-day digest"
+    ? t("briefing.heldBack.eod", { day })
+    : t("briefing.heldBack.morning", { day });
 }
 
 export default function HeldBack({ items }: { items: HeldBackItem[] }) {
@@ -47,18 +50,18 @@ export default function HeldBack({ items }: { items: HeldBackItem[] }) {
     <section aria-labelledby="held-back-title" className="mb-8 rounded-2xl border border-line bg-surface-overlay/40 p-4">
       <div className="mb-2 flex items-center gap-2">
         <h2 id="held-back-title" className="text-base font-semibold text-fg">
-          Left out of your brief
+          {t("briefing.heldBack.title")}
         </h2>
         <button
           type="button"
           onClick={hide}
           className="ml-auto rounded-lg px-2 py-1 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg"
         >
-          Hide
+          {t("briefing.heldBack.hide")}
         </button>
       </div>
       <p className="mb-3 text-sm text-fg-muted">
-        These lines named people or figures I couldn&apos;t match to your data, so I didn&apos;t send them.
+        {t("briefing.heldBack.intro")}
       </p>
       <div className="space-y-3">
         {shown.map((item) => (

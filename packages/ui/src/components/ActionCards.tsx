@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import Button from "@/components/ui/Button";
 import FeatureName from "@/components/FeatureName";
+import { t, type MessageKey } from "@/i18n/index.ts";
 import {
   approveActionCard,
   dismissActionCard,
@@ -39,23 +40,27 @@ export function useActionCards() {
 }
 
 // What the action cards are, for the Needs you header's tip.
-export const ACTION_CARDS_TIP =
-  "Things your email called for that the Executive can't do on its own after reading it: " +
-  "a meeting, a message to someone, a new contact. Each is shown exactly as it will happen, " +
-  "and nothing happens until you tap Approve. Untick anything you don't want. Only you see these.";
+export function actionCardsTip(): string {
+  return t("briefing.actionCards.tip");
+}
 
-const KIND_LABEL: Record<string, string> = {
-  invite: "Meeting",
-  message: "Message",
-  add_contact: "New contact",
+const KIND_LABEL: Record<string, MessageKey> = {
+  invite: "briefing.actionCards.kind.invite",
+  message: "briefing.actionCards.kind.message",
+  add_contact: "briefing.actionCards.kind.addContact",
 };
 
-const RESULT_LABEL: Record<string, string> = {
-  done: "Done",
-  waiting: "Waiting for approval",
-  failed: "Didn't happen",
-  skipped: "Left out",
+const RESULT_LABEL: Record<string, MessageKey> = {
+  done: "briefing.actionCards.result.done",
+  waiting: "briefing.actionCards.result.waiting",
+  failed: "briefing.actionCards.result.failed",
+  skipped: "briefing.actionCards.result.skipped",
 };
+
+function labelFor(table: Record<string, MessageKey>, code: string): string {
+  const key = table[code];
+  return key ? t(key) : code;
+}
 
 function resultTone(status: string): string {
   if (status === "done") return "text-emerald-700 dark:text-emerald-300";
@@ -89,26 +94,26 @@ export function ActionCardItem({
   // `allow`: Approve + allow, with Suggested actions in training.
   const [allowed, setAllowed] = useState(false);
   const approve = async (allow = false) => {
-    setBusy("Doing it…");
+    setBusy(t("briefing.actionCards.doing"));
     setError(null);
     try {
       setResults(await approveActionCard(card.decision_id, [...ticked].sort((a, b) => a - b), allow));
       setAllowed(allow);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't do that.");
+      setError(err instanceof Error ? err.message : t("briefing.actionCards.doFailed"));
     } finally {
       setBusy(null);
     }
   };
 
   const dismiss = async () => {
-    setBusy("Dismissing…");
+    setBusy(t("briefing.replies.dismissing"));
     setError(null);
     try {
       await dismissActionCard(card.decision_id);
       onGone(card.decision_id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't dismiss that card.");
+      setError(err instanceof Error ? err.message : t("lib.api.dismissCardFailed"));
       setBusy(null);
     }
   };
@@ -122,7 +127,7 @@ export function ActionCardItem({
     >
       <div className="mb-2 flex items-center gap-2">
         <span className="inline-flex items-center rounded-lg bg-surface-overlay px-2 py-0.5 text-[13px] font-medium text-fg-muted">
-          To approve
+          {t("briefing.actionCards.toApprove")}
         </span>
         <FeatureName feature="act_as_me" className="text-[12px]" />
         {created && <span className="text-sm text-fg-subtle tabular-nums">{created}</span>}
@@ -144,12 +149,12 @@ export function ActionCardItem({
                     checked={ticked.has(action.index)}
                     onChange={() => toggle(action.index)}
                     disabled={busy !== null}
-                    aria-label={`Include: ${action.summary}`}
+                    aria-label={t("briefing.actionCards.include", { summary: action.summary })}
                   />
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                    {KIND_LABEL[action.kind] ?? action.kind}
+                    {labelFor(KIND_LABEL, action.kind)}
                   </span>
                   <span className="block text-sm text-fg break-words">{action.summary}</span>
                   {/* Plain text: shown exactly as it will be sent, never as markup. */}
@@ -160,7 +165,7 @@ export function ActionCardItem({
                   )}
                   {result && (
                     <span className={`mt-1 block text-sm ${resultTone(result.status)}`}>
-                      {RESULT_LABEL[result.status] ?? result.status}
+                      {labelFor(RESULT_LABEL, result.status)}
                       {result.status !== "done" && result.status !== "skipped" && result.detail ? `: ${result.detail}` : ""}
                     </span>
                   )}
@@ -173,27 +178,27 @@ export function ActionCardItem({
 
       {results && allowed && (
         <p className="mt-3 text-sm text-fg-muted">
-          From now on, the same kind with the same people happens on its own, without asking.
+          {t("briefing.actionCards.allowedNote")}
         </p>
       )}
       {results ? (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button variant="secondary" onClick={() => onGone(card.decision_id)}>
-            Close
+            {t("common.close")}
           </Button>
         </div>
       ) : (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button variant="primary" onClick={() => void approve()} disabled={busy !== null || ticked.size === 0}>
-            {busy ?? (ticked.size === card.actions.length ? "Approve" : `Approve ${ticked.size}`)}
+            {busy ?? (ticked.size === card.actions.length ? t("common.approve") : t("briefing.actionCards.approveN", { n: ticked.size }))}
           </Button>
           {card.can_allow && busy === null && (
             <Button variant="secondary" onClick={() => void approve(true)} disabled={ticked.size === 0}>
-              Approve + allow
+              {t("briefing.actionCards.approveAllow")}
             </Button>
           )}
           <Button variant="ghost" className="ml-auto" onClick={() => void dismiss()} disabled={busy !== null}>
-            Dismiss
+            {t("briefing.card.dismiss")}
           </Button>
         </div>
       )}

@@ -2,6 +2,8 @@
 // (components/memories/ValueSection.tsx). Kept free of React so
 // scripts/valueSummary.test.mjs can run them under plain node.
 
+import { t, tp, type PluralKey } from "../i18n/index.ts";
+
 export interface ValueLineLike {
   key: string;
   label: string;
@@ -11,14 +13,14 @@ export interface ValueLineLike {
 
 // The lines the overview card's one sentence names, in order, and how each
 // reads with its number in front.
-const HEADLINE: { key: string; one: string; many: string }[] = [
-  { key: "messages_sent", one: "message sent", many: "messages sent" },
-  { key: "inbox_sent", one: "inbox reply sent", many: "inbox replies sent" },
-  { key: "meetings_booked", one: "meeting booked", many: "meetings booked" },
-  { key: "reports", one: "report", many: "reports" },
-  { key: "follow_ups", one: "follow-up", many: "follow-ups" },
-  { key: "tasks_closed", one: "task closed", many: "tasks closed" },
-  { key: "answered", one: "request answered", many: "requests answered" },
+const HEADLINE: { key: string; label: PluralKey }[] = [
+  { key: "messages_sent", label: "people.value.headline.messagesSent" },
+  { key: "inbox_sent", label: "people.value.headline.inboxSent" },
+  { key: "meetings_booked", label: "people.value.headline.meetingsBooked" },
+  { key: "reports", label: "people.value.headline.reports" },
+  { key: "follow_ups", label: "people.value.headline.followUps" },
+  { key: "tasks_closed", label: "people.value.headline.tasksClosed" },
+  { key: "answered", label: "people.value.headline.answered" },
 ];
 
 /** "42 messages sent, 6 reports, 3 meetings booked": up to `max` non-zero
@@ -29,7 +31,7 @@ export function headline(lines: ValueLineLike[], max = 3): string {
   for (const h of HEADLINE) {
     const line = byKey.get(h.key);
     if (!line || line.count <= 0) continue;
-    parts.push(`${line.count} ${line.count === 1 ? h.one : h.many}`);
+    parts.push(tp(h.label, line.count));
     if (parts.length >= max) break;
   }
   return parts.join(", ");
@@ -39,7 +41,7 @@ export function headline(lines: ValueLineLike[], max = 3): string {
 export function deltaLabel(count: number, previous: number): string {
   if (count === 0 && previous === 0) return "";
   const diff = count - previous;
-  if (diff === 0) return "same";
+  if (diff === 0) return t("people.value.same");
   return diff > 0 ? `+${diff}` : `−${Math.abs(diff)}`;
 }
 

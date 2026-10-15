@@ -4,6 +4,7 @@
 // tests in scripts/firstRun.test.mjs pin them.
 
 import type { SetupCheck } from "@/lib/setupStatus";
+import { t } from "../i18n/index.ts";
 
 // Browser-side memory of a setup in progress. The interview itself is kept
 // on the server (GET /onboard/interview/{id}); the browser only keeps which
@@ -68,7 +69,9 @@ export function clearSetupMemory(): void {
 
 /** What reading your own mailbox does, in the one wording every screen uses:
  * Handle it for me can send, so "never sends" would be untrue. */
-export const OWN_MAILBOX_SENDS = "Drafts replies as you. Sends only if you turn on Handle it for me.";
+export function ownMailboxSends(): string {
+  return t("chat.firstRun.ownMailboxSends");
+}
 
 const FIRST_QUESTION_MAX = 160;
 
@@ -85,8 +88,8 @@ export function firstQuestion(
   const first = (priorities?.current_year ?? []).map(tidy).find(Boolean);
   const star = tidy(priorities?.north_star_metric);
   const pick = (first || star).slice(0, FIRST_QUESTION_MAX).trim();
-  if (pick) return `Where should I start this week on "${pick}"?`;
-  return solo ? "What should I focus on this week?" : "What should the team focus on this week?";
+  if (pick) return t("chat.firstRun.questionOn", { pick });
+  return solo ? t("chat.firstRun.questionSolo") : t("chat.firstRun.questionTeam");
 }
 
 export interface RedirectInput {
@@ -154,55 +157,57 @@ export function gettingStartedItems(input: ChecklistInput): ChecklistItem[] {
   const items: ChecklistItem[] = [
     {
       id: "profile",
-      title: "Profile set up",
+      title: t("chat.firstRun.profile.title"),
       detail: input.profileLoaded
-        ? `${input.companyName?.trim() || "Saved"} · you are the owner`
-        : "A few lines about your work; the Executive fills in the rest.",
+        ? t("chat.firstRun.profile.done", { name: input.companyName?.trim() || t("chat.firstRun.profile.saved") })
+        : t("chat.firstRun.profile.detail"),
       done: input.profileLoaded,
       optional: false,
       href: FIRST_RUN_LINKS.setup,
-      action: "Set up",
+      action: t("chat.firstRun.profile.action"),
     },
     {
       id: "ask",
-      title: "Ask your Executive something",
-      detail: input.hasAsked ? "First conversation saved" : "Try “What should I focus on this week?”",
+      title: t("chat.firstRun.ask.title"),
+      detail: input.hasAsked
+        ? t("chat.firstRun.ask.done")
+        : t("chat.firstRun.ask.detail", { question: t("chat.firstRun.questionSolo") }),
       done: input.hasAsked,
       optional: false,
       href: "/?new=1",
-      action: "Ask",
+      action: t("chat.firstRun.ask.action"),
     },
     {
       id: "exec_mailbox",
-      title: "Give your Executive its own email",
-      detail: "A Google or Microsoft account just for it. Powers the morning brief.",
+      title: t("chat.firstRun.execMailbox.title"),
+      detail: t("chat.firstRun.execMailbox.detail"),
       done: execMail === "ok",
       optional: false,
       href: FIRST_RUN_LINKS.execMailbox,
-      action: "Connect",
+      action: t("chat.firstRun.connect"),
     },
     {
       id: "own_mailbox",
-      title: "Let it read your own mailbox",
-      detail: `Optional. ${OWN_MAILBOX_SENDS}`,
+      title: t("chat.firstRun.ownMailbox.title"),
+      detail: t("chat.firstRun.ownMailbox.detail", { sends: ownMailboxSends() }),
       done: ownMail === "ok",
       optional: true,
       href: FIRST_RUN_LINKS.ownMailbox,
-      action: "Connect",
+      action: t("chat.firstRun.connect"),
     },
   ];
   if (input.team) {
     items.push({
       id: "team",
-      title: "Add your team",
+      title: t("chat.firstRun.team.title"),
       detail:
         input.teamSize > 1
-          ? `${input.teamSize} people on the People page`
-          : "Who the Executive works with, and who reports to whom.",
+          ? t("chat.firstRun.team.done", { n: input.teamSize })
+          : t("chat.firstRun.team.detail"),
       done: input.teamSize > 1,
       optional: false,
       href: FIRST_RUN_LINKS.people,
-      action: "Add",
+      action: t("chat.firstRun.team.action"),
     });
   }
   return items;

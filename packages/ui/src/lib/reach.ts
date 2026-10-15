@@ -1,3 +1,4 @@
+import { t, tp } from "../i18n/index.ts";
 import type { DelegationSettings, HandleItMode, ReachStep } from "@/lib/api";
 
 // How far it goes as you: the one dial for everything Act as me does from
@@ -9,29 +10,32 @@ export const REACH_HREF = "/delegate/act-as-me#how-far";
 export const REACH_ANCHOR = "how-far";
 
 // The sending steps, which are Handle it for me.
-export const HANDLE_IT_MODES: { mode: HandleItMode; label: string; replies: string; followUps: string }[] = [
-  {
-    mode: "careful",
-    label: "Easy ones",
-    replies: "Only short replies to people you know, when it's very sure.",
-    followUps: "Written for you, and they wait on Today for you to send.",
-  },
-  {
-    mode: "balanced",
-    label: "People I know",
-    replies: "Replies to people you know. Strangers, links and amounts wait for you.",
-    followUps: "Sent to your team and contacts when they haven't answered a question of yours in a few days.",
-  },
-  {
-    mode: "bold",
-    label: "Most mail",
-    replies: "Also strangers and longer replies, and links or amounts when it's very sure.",
-    followUps: "Sent to anyone you wrote to who hasn't answered a question of yours in a few days.",
-  },
-];
+export function handleItModes(): { mode: HandleItMode; label: string; replies: string; followUps: string }[] {
+  return [
+    {
+      mode: "careful",
+      label: t("settings.handleIt.careful.label"),
+      replies: t("settings.handleIt.careful.replies"),
+      followUps: t("settings.handleIt.careful.followUps"),
+    },
+    {
+      mode: "balanced",
+      label: t("settings.handleIt.balanced.label"),
+      replies: t("settings.handleIt.balanced.replies"),
+      followUps: t("settings.handleIt.balanced.followUps"),
+    },
+    {
+      mode: "bold",
+      label: t("settings.handleIt.bold.label"),
+      replies: t("settings.handleIt.bold.replies"),
+      followUps: t("settings.handleIt.bold.followUps"),
+    },
+  ];
+}
 
-export const LEAD_LINE =
-  "It decides what to send as you. Replies with a link, the topics that always wait and your rules still hold it back.";
+export function leadLine(): string {
+  return t("settings.reach.leadLine");
+}
 
 export function reachOf(settings: DelegationSettings): ReachStep {
   if (!settings.enabled) return "off";
@@ -43,11 +47,11 @@ export function reachOf(settings: DelegationSettings): ReachStep {
 }
 
 export function stepLabel(step: ReachStep): string {
-  if (step === "off") return "Off";
-  if (step === "when_asked") return "Drafts when I ask";
-  if (step === "inbox") return "Drafts for my inbox";
-  if (step === "everything") return "Everything";
-  return HANDLE_IT_MODES.find((m) => m.mode === step)?.label ?? step;
+  if (step === "off") return t("settings.reach.step.off");
+  if (step === "when_asked") return t("settings.reach.step.whenAsked");
+  if (step === "inbox") return t("settings.reach.step.inbox");
+  if (step === "everything") return t("settings.handleIt.lead.label");
+  return handleItModes().find((m) => m.mode === step)?.label ?? step;
 }
 
 // Where the dial is, for the Handle it for me tab: the step, whether that
@@ -59,17 +63,17 @@ export function reachSummary(settings: DelegationSettings): {
   line: string;
 } {
   const step = reachOf(settings);
-  const mode = HANDLE_IT_MODES.find((m) => m.mode === step);
+  const mode = handleItModes().find((m) => m.mode === step);
   const sends = Boolean(mode) || step === "everything";
   const training = sends && step !== "everything" && Boolean(settings.training?.replies || settings.training?.follow_ups);
   const line = mode
     ? mode.replies
     : step === "everything"
-      ? LEAD_LINE
-      : "Handle it for me is off. Every reply waits for you to tap Send.";
+      ? leadLine()
+      : t("settings.reach.handleItOff");
   return { label: stepLabel(step), sends, training, line };
 }
 
 export function sentTodayLine(n: number): string {
-  return n === 1 ? "Sent 1 reply on its own today." : `Sent ${n} replies on its own today.`;
+  return tp("settings.handleIt.sentToday", n);
 }

@@ -6,10 +6,13 @@ import { useEffect, useMemo, useState } from "react";
 import SettingsCard from "@/components/settings/SettingsCard";
 import Switch from "@/components/Switch";
 import Button from "@/components/ui/Button";
+import { t } from "@/i18n/index.ts";
+import { tRich } from "@/i18n/rich.tsx";
 import { getNotificationSettings, updateNotificationSettings, type NotificationSettings } from "@/lib/api";
 import {
-  DAYS_LABEL,
-  DELIVERY_LABEL,
+  QUIET_DAYS,
+  daysLabel,
+  deliveryLabel,
   digestDescription,
   heldLine,
   quietError,
@@ -62,17 +65,15 @@ export default function NotificationsCard() {
   if (state === "loading") return null;
   if (state === "error") {
     return (
-      <SettingsCard title="Notifications">
-        <p className="text-[15px] text-fg-muted">Couldn&apos;t load your notification settings.</p>
+      <SettingsCard title={t("settings.notifications.title")}>
+        <p className="text-[15px] text-fg-muted">{t("settings.notifications.loadFailed")}</p>
       </SettingsCard>
     );
   }
   if (state === null) {
     return (
-      <SettingsCard title="Notifications">
-        <p className="text-[15px] text-fg-muted">
-          Notification settings are for people on the People list. Sign in as one of them to set yours.
-        </p>
+      <SettingsCard title={t("settings.notifications.title")}>
+        <p className="text-[15px] text-fg-muted">{t("settings.notifications.notOnPeople")}</p>
       </SettingsCard>
     );
   }
@@ -90,7 +91,7 @@ export default function NotificationsCard() {
       setState(next);
       setDraft(next.quiet_hours);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the change.");
+      setError(err instanceof Error ? err.message : t("settings.notifications.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -113,7 +114,7 @@ export default function NotificationsCard() {
       )}
 
       <SettingsCard
-        title="Quiet hours"
+        title={t("settings.notifications.quietTitle")}
         titleId="quiet-hours-label"
         description={quietSummary(current.quiet_hours)}
         action={
@@ -127,13 +128,10 @@ export default function NotificationsCard() {
       >
         {current.quiet_hours.enabled && (
           <div className="space-y-4">
-            <p className="text-[15px] text-fg-muted leading-relaxed">
-              What the Executive would send you on its own (nudges, check-ins on your work, alerts) waits
-              until your quiet hours end. Replies when you message it still come straight away.
-            </p>
+            <p className="text-[15px] text-fg-muted leading-relaxed">{t("settings.notifications.quietExplain")}</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
-                From
+                {t("settings.notifications.from")}
                 <input
                   type="time"
                   value={quiet.start}
@@ -143,7 +141,7 @@ export default function NotificationsCard() {
                 />
               </label>
               <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
-                To
+                {t("settings.notifications.to")}
                 <input
                   type="time"
                   value={quiet.end}
@@ -153,16 +151,16 @@ export default function NotificationsCard() {
                 />
               </label>
               <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
-                Days
+                {t("settings.notifications.days")}
                 <select
                   value={quiet.days}
                   disabled={busy}
                   onChange={(e) => setDraft({ ...quiet, days: e.target.value as QuietDays })}
                   className={INPUT}
                 >
-                  {(Object.keys(DAYS_LABEL) as QuietDays[]).map((d) => (
+                  {QUIET_DAYS.map((d) => (
                     <option key={d} value={d}>
-                      {DAYS_LABEL[d]}
+                      {daysLabel(d)}
                     </option>
                   ))}
                 </select>
@@ -175,16 +173,16 @@ export default function NotificationsCard() {
                 disabled={busy || !dirty || draftError !== null}
                 onClick={() => void save({ quiet_hours: quiet })}
               >
-                {busy ? "Saving…" : "Save quiet hours"}
+                {busy ? t("common.saving") : t("settings.notifications.saveQuiet")}
               </Button>
               {dirty && (
                 <Button variant="ghost" disabled={busy} onClick={() => setDraft(current.quiet_hours)}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               )}
             </div>
             <p className="text-[13px] text-fg-subtle">
-              Times are in {zone}.
+              {t("settings.notifications.timesIn", { zone })}
               {browserZone && browserZone !== zone && (
                 <>
                   {" "}
@@ -194,7 +192,7 @@ export default function NotificationsCard() {
                     onClick={() => void save({ timezone: browserZone })}
                     className="font-medium text-accent hover:underline cursor-pointer disabled:opacity-50"
                   >
-                    Use {browserZone} instead
+                    {t("settings.notifications.useZone", { zone: browserZone })}
                   </button>
                 </>
               )}
@@ -204,9 +202,9 @@ export default function NotificationsCard() {
       </SettingsCard>
 
       <SettingsCard
-        title="How things reach you"
+        title={t("settings.notifications.deliveryTitle")}
         titleId="delivery-label"
-        description="For what the Executive sends you on its own: nudges, check-ins on your work and alerts."
+        description={t("settings.notifications.deliveryDescription")}
       >
         <div role="radiogroup" aria-labelledby="delivery-label" className="flex flex-col gap-2">
           {(["instant", "digest"] as Delivery[]).map((d) => {
@@ -225,9 +223,9 @@ export default function NotificationsCard() {
                   selected ? "border-accent bg-accent/5" : "border-line bg-surface hover:border-line-strong"
                 }`}
               >
-                <span className="block text-[15px] font-semibold text-fg">{DELIVERY_LABEL[d]}</span>
+                <span className="block text-[15px] font-semibold text-fg">{deliveryLabel(d)}</span>
                 <span className="mt-0.5 block text-sm text-fg-muted leading-relaxed">
-                  {d === "instant" ? "Sent to you as soon as there's something." : digestDescription(current.gets_briefs)}
+                  {d === "instant" ? t("settings.notifications.instantDescription") : digestDescription(current.gets_briefs)}
                 </span>
               </button>
             );
@@ -236,12 +234,12 @@ export default function NotificationsCard() {
       </SettingsCard>
 
       <SettingsCard
-        title="Let urgent things through"
+        title={t("settings.notifications.urgentTitle")}
         titleId="urgent-through-label"
         description={
           current.urgent_through
-            ? "On: reminders about things waiting on your approval, and critical alerts, reach you right away, even in quiet hours or when you get things in your briefs."
-            : "Off: those wait with everything else. A question a workflow is waiting on you to answer always comes straight away."
+            ? t("settings.notifications.urgentOn")
+            : t("settings.notifications.urgentOff")
         }
         action={
           <Switch
@@ -255,11 +253,13 @@ export default function NotificationsCard() {
 
       {current.gets_briefs && (
         <p className="text-[15px] text-fg-muted">
-          Your morning brief and end-of-day digest still come at their usual times. They&apos;re under{" "}
-          <Link href="/settings/executive" className="font-medium text-accent underline-offset-2 hover:underline">
-            Your Executive
-          </Link>
-          .
+          {tRich("settings.notifications.briefsNote", {
+            link: (
+              <Link href="/settings/executive" className="font-medium text-accent underline-offset-2 hover:underline">
+                {t("settings.notifications.yourExecutive")}
+              </Link>
+            ),
+          })}
         </p>
       )}
     </>

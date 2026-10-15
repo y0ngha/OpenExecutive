@@ -6,7 +6,7 @@ import {
   checklistVisible,
   firstQuestion,
   gettingStartedItems,
-  OWN_MAILBOX_SENDS,
+  ownMailboxSends,
   shouldRedirectToOnboard,
 } from "../src/lib/firstRun.ts";
 
@@ -92,7 +92,7 @@ test("the first question comes from what setup saved", () => {
 test("the mailbox row says when it sends", () => {
   const items = gettingStartedItems(base);
   const own = items.find((i) => i.id === "own_mailbox");
-  assert.ok(own.detail.includes(OWN_MAILBOX_SENDS));
+  assert.ok(own.detail.includes(ownMailboxSends()));
   assert.ok(!/never sends/i.test(own.detail));
 });
 

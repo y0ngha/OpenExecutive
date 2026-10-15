@@ -2,6 +2,8 @@
 // person was told (the `notified` the assign endpoint returns). Kept free of
 // React so scripts/assignNotice.test.mjs can import it.
 
+import { t } from "../i18n/index.ts";
+
 export interface AssignNoticeLike {
   status: string;
   channel: string | null;
@@ -15,16 +17,20 @@ const CHANNEL_NAMES: Record<string, string> = {
 };
 
 export function assignNoticeLine(notice: AssignNoticeLike | null | undefined): string {
-  const followUp = "They'll be followed up if it isn't done by then.";
+  const followUp = t("people.assign.followUp");
   if (!notice || notice.status === "skipped") return followUp;
   if (notice.status === "sent") {
-    const where = notice.channel ? CHANNEL_NAMES[notice.channel] : undefined;
-    return `${where ? `They were told on ${where}.` : "They were told."} ${followUp}`;
+    const name = notice.channel ? CHANNEL_NAMES[notice.channel] : undefined;
+    const where = name === "email" ? t("people.reach.name.email") : name;
+    const told = where ? t("people.assign.toldOn", { where }) : t("people.assign.told");
+    return t("people.assign.withFollowUp", { line: told, followUp });
   }
   if (notice.status === "held") {
-    return `They'll be told when their quiet hours end, or in their brief. ${followUp}`;
+    return t("people.assign.withFollowUp", { line: t("people.assign.held"), followUp });
   }
   // A teammate assigning isn't told why it waits: that's the person's own setting.
-  if (notice.status === "later") return `They'll be told a little later. ${followUp}`;
-  return `They couldn't be reached, so they haven't been told yet. ${followUp}`;
+  if (notice.status === "later") {
+    return t("people.assign.withFollowUp", { line: t("people.assign.later"), followUp });
+  }
+  return t("people.assign.withFollowUp", { line: t("people.assign.notReached"), followUp });
 }

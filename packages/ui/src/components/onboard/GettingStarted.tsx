@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSessions } from "@/components/sessions/SessionsContext";
 import { buttonClass } from "@/components/ui/Button";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { t } from "@/i18n/index.ts";
 import { getSetupStatus, listPeople } from "@/lib/api";
 import {
   checklistVisible,
@@ -82,19 +83,19 @@ export function GettingStartedCard({ items, hide }: GettingStartedState) {
   const progress = checklistProgress(items);
   return (
     <section
-      aria-label="Getting started"
+      aria-label={t("chat.firstRun.card.label")}
       className="rounded-2xl border border-line bg-surface-elevated px-4 pb-1 pt-3"
     >
       <div className="flex items-center justify-between gap-3 pb-1">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
-          Getting started · {progress.done} of {progress.total}
+          {t("chat.firstRun.card.heading", { done: progress.done, total: progress.total })}
         </h2>
         <button
           type="button"
           onClick={hide}
           className="text-xs text-fg-muted hover:text-fg cursor-pointer"
         >
-          Hide
+          {t("chat.firstRun.card.hide")}
         </button>
       </div>
       <ul>
@@ -114,7 +115,7 @@ export function GettingStartedCard({ items, hide }: GettingStartedState) {
             <div className="min-w-0 flex-1">
               <p className="text-[15px] font-semibold text-fg">
                 {item.title}
-                <span className="sr-only">{item.done ? " (done)" : ""}</span>
+                <span className="sr-only">{item.done ? t("chat.firstRun.card.doneSr") : ""}</span>
               </p>
               <p className="text-[13px] text-fg-muted leading-snug">{item.detail}</p>
             </div>

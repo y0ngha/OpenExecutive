@@ -541,6 +541,21 @@ const en = {
   "lib.api.removeItFailed": "Couldn't remove it.",
   "lib.api.loadCardFailed": "Couldn't load this card.",
   "lib.api.approveItFailed": "Couldn't approve it.",
+  "lib.snooze.laterToday": "Snooze until {time}",
+  "lib.snooze.tomorrow": "Snooze until tomorrow {time}",
+  "lib.snooze.tomorrowShort": "tomorrow {time}",
+  "lib.snooze.monday": "Snooze until Monday {time}",
+  "lib.snooze.mondayShort": "Monday {time}",
+  "lib.approvals.working": "Working on it: {headline}",
+  "lib.approvals.watch": "Watch it",
+  "lib.approvals.done": "Done: {headline}",
+  "lib.approvals.doneOutcome": "Done: {headline}. {outcome}",
+  "lib.approvals.seeWhatItDid": "See what it did",
+  "lib.approvals.failed": "Didn't work: {headline}",
+  "lib.approvals.failedOutcome": "Didn't work: {headline}. {outcome}",
+  "lib.approvals.openChat": "Open the chat",
+  "lib.actionChips.used": "Used {words}",
+  "lib.actionChips.usedTool": "Used a connected tool",
 };
 
 export default en;

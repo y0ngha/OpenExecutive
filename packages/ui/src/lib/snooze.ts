@@ -4,6 +4,8 @@
  * comes back on its own at that time (POST /alerts/{id}/snooze).
  */
 
+import { displayLocale, t } from "../i18n/index.ts";
+
 export interface SnoozeChoice {
   /** Menu label, e.g. "Snooze until tomorrow 9:00". */
   label: string;
@@ -16,7 +18,7 @@ const MORNING_HOUR = 9;
 const LATER_TODAY_HOURS = 3;
 
 function clock(d: Date): string {
-  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleTimeString(displayLocale(), { hour: "numeric", minute: "2-digit" });
 }
 
 function atMorning(d: Date, daysAhead: number): Date {
@@ -34,12 +36,12 @@ export function snoozeChoices(now: Date = new Date()): SnoozeChoice[] {
   later.setSeconds(0, 0);
   later.setMinutes(Math.ceil(later.getMinutes() / 15) * 15);
   if (later.getDate() === now.getDate()) {
-    choices.push({ label: `Snooze until ${clock(later)}`, short: clock(later), until: later });
+    choices.push({ label: t("lib.snooze.laterToday", { time: clock(later) }), short: clock(later), until: later });
   }
   const tomorrow = atMorning(now, 1);
   choices.push({
-    label: `Snooze until tomorrow ${clock(tomorrow)}`,
-    short: `tomorrow ${clock(tomorrow)}`,
+    label: t("lib.snooze.tomorrow", { time: clock(tomorrow) }),
+    short: t("lib.snooze.tomorrowShort", { time: clock(tomorrow) }),
     until: tomorrow,
   });
   // Next Monday; a week on when today is Monday. Left out on a Sunday, where
@@ -48,8 +50,8 @@ export function snoozeChoices(now: Date = new Date()): SnoozeChoice[] {
   if (toMonday > 1) {
     const monday = atMorning(now, toMonday);
     choices.push({
-      label: `Snooze until Monday ${clock(monday)}`,
-      short: `Monday ${clock(monday)}`,
+      label: t("lib.snooze.monday", { time: clock(monday) }),
+      short: t("lib.snooze.mondayShort", { time: clock(monday) }),
       until: monday,
     });
   }

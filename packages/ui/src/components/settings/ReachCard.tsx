@@ -16,7 +16,8 @@ import {
   type LeadRule,
   type ReachStep,
 } from "@/lib/api";
-import { HANDLE_IT_MODES, LEAD_LINE, REACH_ANCHOR, reachOf, sentTodayLine } from "@/lib/reach";
+import { t } from "@/i18n/index.ts";
+import { REACH_ANCHOR, handleItModes, leadLine, reachOf, sentTodayLine, stepLabel } from "@/lib/reach";
 
 // How far it goes as you: the one dial for everything Act as me does from
 // your own mailbox (PUT /delegation/reach). It replaces three switches that
@@ -36,29 +37,29 @@ type Step = {
 };
 
 function stepsFor(settings: DelegationSettings, mailbox: string): Step[] {
-  const sending: Step[] = HANDLE_IT_MODES.map((m) => ({
+  const sending: Step[] = handleItModes().map((m) => ({
     value: m.mode,
     label: m.label,
-    line: `${m.replies} Follow-ups: ${m.followUps}`,
+    line: t("settings.reach.sendingLine", { replies: m.replies, followUps: m.followUps }),
     sends: true,
   }));
   return [
-    { value: "off", label: "Off", line: "The Executive only ever writes as itself.", sends: false },
+    { value: "off", label: stepLabel("off"), line: t("settings.reach.line.off"), sends: false },
     {
       value: "when_asked",
-      label: "Drafts when I ask",
-      line: `Ask in chat, “reply to Dana as me: yes to the 5th”, and the draft waits in your ${mailbox} Drafts.`,
+      label: stepLabel("when_asked"),
+      line: t("settings.reach.line.whenAsked", { mailbox }),
       sends: false,
     },
     {
       value: "inbox",
-      label: "Drafts for my inbox",
-      line: "It also writes a first reply to mail that needs you and puts it on Today. You tap Send.",
+      label: stepLabel("inbox"),
+      line: t("settings.reach.line.inbox"),
       sends: false,
     },
     ...sending,
     ...(settings.handle_it?.lead_available
-      ? [{ value: "everything" as ReachStep, label: "Everything", line: LEAD_LINE, sends: true }]
+      ? [{ value: "everything" as ReachStep, label: stepLabel("everything"), line: leadLine(), sends: true }]
       : []),
   ];
 }
@@ -69,11 +70,11 @@ function whatStops(steps: Step[], from: ReachStep, to: ReachStep): string {
   const j = steps.findIndex((s) => s.value === to);
   if (j >= i) return "";
   const target = steps[j];
-  if (from === "everything" && target.sends) return "It goes back to sending only what this level allows.";
-  if (steps[i].sends && target.sends) return "It sends less on its own: only what this level allows.";
-  if (steps[i].sends && to === "inbox") return "It stops sending replies and follow-ups on its own. Every reply waits for you.";
-  if (to === "when_asked") return "It stops writing replies to your inbox, and sends nothing on its own.";
-  return "It stops writing anything as you, and turns Read my calendar off too.";
+  if (from === "everything" && target.sends) return t("settings.reach.stops.fromEverything");
+  if (steps[i].sends && target.sends) return t("settings.reach.stops.sendsLess");
+  if (steps[i].sends && to === "inbox") return t("settings.reach.stops.toInbox");
+  if (to === "when_asked") return t("settings.reach.stops.toWhenAsked");
+  return t("settings.reach.stops.toOff");
 }
 
 export default function ReachCard({
@@ -113,7 +114,7 @@ export default function ReachCard({
       onSettings(await work());
       setConfirming(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the setting.");
+      setError(err instanceof Error ? err.message : t("settings.reach.saveFailed"));
       // A refused move up can stop part way, at a lower step: show where it is.
       try {
         const now = await getDelegation();
@@ -139,23 +140,23 @@ export default function ReachCard({
 
   const disabledReason = (step: Step): string | null => {
     if (step.value === "off") return null;
-    if (!connected && current === "off") return "Connect your mailbox first.";
-    if (step.sends && !canSend) return "Needs signed sign-ins on this server.";
-    if (step.value === "everything" && (training || followUpsTraining)) return "Opens up once it's out of training.";
+    if (!connected && current === "off") return t("settings.reach.disabled.connectFirst");
+    if (step.sends && !canSend) return t("settings.reach.disabled.needsSignedSignIns");
+    if (step.value === "everything" && (training || followUpsTraining)) return t("settings.reach.disabled.inTraining");
     return null;
   };
 
   const groups: { title: string; steps: Step[] }[] = [
-    { title: "Writes as you, never sends", steps: steps.filter((s) => !s.sends) },
-    { title: "Handle it for me sends as you", steps: steps.filter((s) => s.sends) },
+    { title: t("settings.reach.group.writes"), steps: steps.filter((s) => !s.sends) },
+    { title: t("settings.reach.group.sends"), steps: steps.filter((s) => s.sends) },
   ];
 
   return (
     <div id={REACH_ANCHOR} className="scroll-mt-24">
     <SettingsCard
-      title="How far it goes as you"
+      title={t("settings.handleIt.reachLabel")}
       titleId="reach-label"
-      description="One setting for everything it writes or sends from your own mailbox. Each step adds to the one above it."
+      description={t("settings.reach.description")}
     >
       <div role="radiogroup" aria-labelledby="reach-label" className="flex flex-col gap-5">
         {groups.map((group) => (
@@ -198,7 +199,10 @@ export default function ReachCard({
       {confirming && (
         <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
           <p className="text-sm text-fg leading-relaxed">
-            Move to {steps.find((s) => s.value === confirming)?.label}? {whatStops(steps, current, confirming)}
+            {t("settings.reach.confirmMove", {
+              step: steps.find((s) => s.value === confirming)?.label ?? "",
+              stops: whatStops(steps, current, confirming),
+            })}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -207,7 +211,7 @@ export default function ReachCard({
               onClick={() => void save(() => setReach(confirming))}
               className="h-9 rounded-lg bg-fg px-3 text-sm font-medium text-fg-inverse disabled:opacity-50"
             >
-              {busy ? "Saving…" : "Move down"}
+              {busy ? t("common.saving") : t("settings.reach.moveDown")}
             </button>
             <button
               type="button"
@@ -215,7 +219,7 @@ export default function ReachCard({
               onClick={() => setConfirming(null)}
               className="h-9 rounded-lg border border-line px-3 text-sm font-medium text-fg"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </div>
@@ -237,13 +241,13 @@ export default function ReachCard({
               className="mt-0.5 h-5 w-5 flex-shrink-0 accent-indigo-500"
             />
             <span>
-              <span className="block text-[15px] font-semibold text-fg">In training</span>
+              <span className="block text-[15px] font-semibold text-fg">{t("settings.handleIt.inTraining")}</span>
               <span className="mt-0.5 block text-sm text-fg-muted leading-snug">
                 {current === "everything"
-                  ? "Move to Most mail or below to train it."
+                  ? t("settings.reach.training.atEverything")
                   : !sending
-                    ? "Tick this before moving to a step that sends, and every reply comes to you first until you allow that person."
-                    : "Every reply comes to you first. Tap Send + allow and it handles that person on its own from then on, within this step."}
+                    ? t("settings.reach.training.beforeSending")
+                    : t("settings.reach.training.sending")}
               </span>
             </span>
           </label>
@@ -260,17 +264,14 @@ export default function ReachCard({
                 className="mt-0.5 h-5 w-5 flex-shrink-0 accent-indigo-500"
               />
               <span>
-                <span className="block text-[15px] font-semibold text-fg">Train follow-ups too</span>
+                <span className="block text-[15px] font-semibold text-fg">{t("settings.reach.trainFollowUps")}</span>
                 <span className="mt-0.5 block text-sm text-fg-muted leading-snug">
-                  Untick to let follow-ups go out at this step while replies stay in training.
+                  {t("settings.reach.trainFollowUpsHelp")}
                 </span>
               </span>
             </label>
           )}
-          <p className="text-sm text-fg-muted">
-            Money, contracts, legal, hiring, the press and passwords always wait for you, and it never writes to anyone
-            the email didn&apos;t go to.
-          </p>
+          <p className="text-sm text-fg-muted">{t("settings.handleIt.alwaysWait")}</p>
         </div>
       )}
       {current !== "off" && (
@@ -286,11 +287,8 @@ export default function ReachCard({
             className="mt-0.5 h-5 w-5 flex-shrink-0 accent-indigo-500"
           />
           <span>
-            <span className="block text-[15px] font-semibold text-fg">Learn from my edits</span>
-            <span className="mt-0.5 block text-sm text-fg-muted leading-snug">
-              When you change a draft before sending, tick Do it like this next time and it learns how you write to
-              that person. Nothing more is sent.
-            </span>
+            <span className="block text-[15px] font-semibold text-fg">{t("settings.reach.learnTitle")}</span>
+            <span className="mt-0.5 block text-sm text-fg-muted leading-snug">{t("settings.reach.learnHelp")}</span>
           </span>
         </label>
       )}
@@ -299,7 +297,7 @@ export default function ReachCard({
         <p className="mt-5 border-t border-line pt-4 text-sm text-fg-muted">
           {sentTodayLine(settings.handle_it?.sent_today ?? 0)}{" "}
           <Link href="/delegate/handle-it" className="font-medium text-accent underline-offset-2 hover:underline">
-            What it sent
+            {t("settings.handleIt.whatItSent")}
           </Link>
         </p>
       )}
@@ -324,13 +322,11 @@ function YourRules() {
 
   return (
     <div className="mt-5 border-t border-line pt-4">
-      <h3 className="text-[15px] font-semibold text-fg">Your rules</h3>
-      <p className="mt-1 mb-3 text-sm text-fg-muted">
-        Replies matching one of these wait for you, on top of your company&apos;s rules.
-      </p>
+      <h3 className="text-[15px] font-semibold text-fg">{t("settings.handleIt.yourRules")}</h3>
+      <p className="mt-1 mb-3 text-sm text-fg-muted">{t("settings.handleIt.yourRulesDescription")}</p>
       <LeadRulesEditor
         rules={rules ?? []}
-        emptyText="No rules of your own yet."
+        emptyText={t("settings.handleIt.noRules")}
         onAdd={async (kind, value) => setRules(await addMyLeadRule(kind, value))}
         onDelete={async (id) => setRules(await deleteMyLeadRule(id))}
       />

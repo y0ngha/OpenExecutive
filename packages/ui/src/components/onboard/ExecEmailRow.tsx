@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { t } from "@/i18n/index.ts";
 import { FIRST_RUN_LINKS } from "@/lib/firstRun";
 
 // The last setup screen's line about the Executive's own email: an account
@@ -13,10 +14,9 @@ export default function ExecEmailRow() {
         ✉
       </span>
       <p className="min-w-0 text-[15px] text-fg-muted leading-snug">
-        <span className="font-semibold text-fg">Give it its own email.</span> A Google or Microsoft account just
-        for it, so it can send, keep a calendar and email your morning brief.{" "}
+        <span className="font-semibold text-fg">{t("chat.done.execEmailTitle")}</span> {t("chat.done.execEmailBody")}{" "}
         <Link href={FIRST_RUN_LINKS.execMailbox} className="font-semibold text-accent hover:underline">
-          Connect its account
+          {t("chat.done.execEmailLink")}
         </Link>
       </p>
     </li>

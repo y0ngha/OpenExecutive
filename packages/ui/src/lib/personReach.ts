@@ -1,9 +1,10 @@
 // The plain lines on a person's Overview: how the Executive reaches them and
 // whether they are away. The ids behind them are edited under Advanced.
 //
-// Type-only imports, so `npm test` can exercise this under
-// `node --experimental-strip-types` (see scripts/personReach.test.mjs).
+// Type-only imports (and i18n by relative path), so `npm test` can exercise
+// this under `node --experimental-strip-types` (see scripts/personReach.test.mjs).
 
+import { displayLocale, t, type MessageKey } from "../i18n/index.ts";
 import type { Person } from "@/lib/api";
 
 type ReachFields = Pick<
@@ -11,20 +12,32 @@ type ReachFields = Pick<
   "email" | "slack_user_id" | "discord_user_id" | "telegram_chat_id" | "preferred_channel" | "response_sla_hours"
 >;
 
-const CHANNEL_NAMES: Record<string, string> = {
-  email: "email",
+// How each channel reads after "Reaches them" when it is the only one named.
+const VIA: Record<string, MessageKey> = {
+  email: "people.reach.via.email",
+  slack: "people.reach.via.slack",
+  discord: "people.reach.via.discord",
+  telegram: "people.reach.via.telegram",
+};
+
+const BRAND_NAMES: Record<string, string> = {
   slack: "Slack",
   discord: "Discord",
   telegram: "Telegram",
 };
 
+function channelName(channel: string): string {
+  return channel === "email" ? t("people.reach.name.email") : (BRAND_NAMES[channel] ?? channel);
+}
+
 function channelPhrase(channel: string): string {
-  return channel === "email" ? "by email" : `on ${CHANNEL_NAMES[channel] ?? channel}`;
+  const key = VIA[channel];
+  return key ? t(key) : t("people.reach.via.other", { channel });
 }
 
 function joinOr(items: string[]): string {
   if (items.length <= 1) return items.join("");
-  return `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
+  return t("people.reach.joinOr", { rest: items.slice(0, -1).join(", "), last: items[items.length - 1] });
 }
 
 /** The channels this person has an address or id for, in a fixed order. */
@@ -42,23 +55,26 @@ export function availableChannels(p: ReachFields): string[] {
  * own card; a contact has no reply time.
  */
 export function reachLine(p: ReachFields, opts: { self?: boolean; contact?: boolean } = {}): string {
-  const who = opts.self ? "you" : "them";
   const have = availableChannels(p);
-  let how: string;
+  let via: string;
   // Delivery tries the preferred channel first among those with an address
   // or id, so a preferred channel with nothing set reads like "any".
   if (p.preferred_channel && p.preferred_channel !== "any" && have.includes(p.preferred_channel)) {
-    how = `Reaches ${who} ${channelPhrase(p.preferred_channel)}`;
+    via = channelPhrase(p.preferred_channel);
+  } else if (have.length === 0) {
+    return opts.self ? t("people.reach.noneYou") : t("people.reach.noneThem");
+  } else if (have.length === 1) {
+    via = channelPhrase(have[0]);
   } else {
-    if (have.length === 0) return opts.self ? "No email or chat app set for you yet" : "No email or chat app set for them yet";
     // "by email or Telegram", "on Slack or Discord"
-    const [first, ...rest] = have;
-    how = `Reaches ${who} ${joinOr([channelPhrase(first), ...rest.map((c) => CHANNEL_NAMES[c] ?? c)])}`;
+    const list = joinOr(have.map(channelName));
+    via = have[0] === "email"
+      ? t("people.reach.viaListEmail", { list })
+      : t("people.reach.viaList", { list });
   }
-  return opts.contact ? how : `${how}, replies within ${p.response_sla_hours}h`;
+  const how = opts.self ? t("people.reach.reachesYou", { via }) : t("people.reach.reachesThem", { via });
+  return opts.contact ? how : t("people.reach.withReplyTime", { how, n: p.response_sla_hours });
 }
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "On leave until 24 Oct" for a YYYY-MM-DD date, with the year when it isn't this year. */
 export function onLeaveLine(date: string | null | undefined, today: Date = new Date()): string | null {
@@ -69,6 +85,10 @@ export function onLeaveLine(date: string | null | undefined, today: Date = new D
   const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   // A date that has passed means they are back.
   if (ymd < todayYmd) return null;
-  const yearPart = year === today.getFullYear() ? "" : ` ${year}`;
-  return `On leave until ${day} ${MONTHS[month - 1]}${yearPart}`;
+  const monthName = new Date(year, month - 1, 1).toLocaleDateString(displayLocale(), { month: "short" });
+  const when =
+    year === today.getFullYear()
+      ? t("people.reach.leaveDate", { day, month: monthName })
+      : t("people.reach.leaveDateYear", { day, month: monthName, year });
+  return t("people.reach.onLeave", { date: when });
 }

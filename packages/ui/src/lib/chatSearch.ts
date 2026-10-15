@@ -1,6 +1,8 @@
 // Searching inside chats: the Chats page shows where the words were found,
 // and an opened chat steps through the messages that contain them.
 
+import { t, tp } from "../i18n/index.ts";
+
 export interface TextPart {
   text: string;
   match: boolean;
@@ -27,8 +29,8 @@ export function highlightParts(text: string, query: string): TextPart[] {
 /** What a search result row says under its title, or null outside a search. */
 export function matchLabel(matchCount: number | undefined): string | null {
   if (matchCount === undefined) return null;
-  if (matchCount === 0) return "title match";
-  return `${matchCount} match${matchCount === 1 ? "" : "es"}`;
+  if (matchCount === 0) return t("chat.history.titleMatch");
+  return tp("chat.history.matches", matchCount);
 }
 
 /** Indexes of the messages whose text contains `query`, in order. */

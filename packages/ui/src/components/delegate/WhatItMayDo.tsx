@@ -6,6 +6,7 @@ import { useEffect, useId, useState } from "react";
 import SettingsCard from "@/components/settings/SettingsCard";
 import SectionTabs, { sectionPanelProps } from "@/components/ui/SectionTabs";
 import { getWhatItMayDo, type MayDoOutcome, type MayDoRow, type MayDoSection, type WhatItMayDo } from "@/lib/api";
+import { t, type MessageKey } from "@/i18n/index.ts";
 import { REACH_HREF } from "@/lib/reach";
 
 // Delegate → What it may do: read-only. One row per thing that can go out
@@ -14,10 +15,10 @@ import { REACH_HREF } from "@/lib/reach";
 // behind pills so the page stays one screen. Everything is worked out on the
 // server from the settings the gates themselves read (delegation/may_do.py).
 
-const TAB_LABELS: Record<MayDoSection["key"], string> = {
-  as_you: "As you",
-  executive: "As the Executive",
-  departments: "Departments",
+const TAB_LABELS: Record<MayDoSection["key"], MessageKey> = {
+  as_you: "settings.mayDo.tab.asYou",
+  executive: "settings.mayDo.tab.executive",
+  departments: "settings.mayDo.tab.departments",
 };
 
 const OUTCOME_DOT: Record<MayDoOutcome, string> = {
@@ -30,12 +31,12 @@ const OUTCOME_DOT: Record<MayDoOutcome, string> = {
 
 function settingHref(setting: string): { href: string; label: string } | null {
   // Both are set by How far it goes as you, which lives on Act as me only.
-  if (setting === "act_as_me" || setting === "handle_it") return { href: REACH_HREF, label: "Act as me" };
-  if (setting === "take_the_lead") return { href: "/delegate/take-the-lead", label: "Take the lead" };
-  if (setting === "pause") return { href: "/settings/executive", label: "Your Executive" };
+  if (setting === "act_as_me" || setting === "handle_it") return { href: REACH_HREF, label: t("settings.actAsMe.title") };
+  if (setting === "take_the_lead") return { href: "/delegate/take-the-lead", label: t("settings.mayDo.link.takeTheLead") };
+  if (setting === "pause") return { href: "/settings/executive", label: t("settings.notifications.yourExecutive") };
   if (setting.startsWith("department:")) {
     const slug = setting.slice("department:".length);
-    return { href: `/departments/${encodeURIComponent(slug)}`, label: "Department settings" };
+    return { href: `/departments/${encodeURIComponent(slug)}`, label: t("settings.mayDo.link.department") };
   }
   return null;
 }
@@ -107,12 +108,12 @@ function Section({ section }: { section: MayDoSection }) {
           aria-hidden
           className="hidden border-b border-line bg-surface-overlay px-4 py-2 text-xs font-medium uppercase tracking-wider text-fg-subtle sm:grid sm:grid-cols-[minmax(0,1.1fr)_11rem_minmax(0,1.3fr)] sm:gap-4"
         >
-          <span>What</span>
-          <span>Then</span>
-          <span>Why</span>
+          <span>{t("settings.mayDo.col.what")}</span>
+          <span>{t("settings.mayDo.col.then")}</span>
+          <span>{t("settings.mayDo.col.why")}</span>
         </div>
         {section.rows.length === 0 ? (
-          <p className="px-4 py-4 text-sm text-fg-muted">There&apos;s nothing here yet.</p>
+          <p className="px-4 py-4 text-sm text-fg-muted">{t("settings.mayDo.empty")}</p>
         ) : (
           <ul className="divide-y divide-line">
             {section.rows.map((row) => (
@@ -147,18 +148,18 @@ export default function WhatItMayDoView() {
     return () => controller.abort();
   }, []);
 
-  if (state === "loading") return <p className="text-sm text-fg-muted">Loading…</p>;
+  if (state === "loading") return <p className="text-sm text-fg-muted">{t("common.loading")}</p>;
   if (state === "error") {
     return (
       <SettingsCard>
-        <p className="text-[15px] text-fg-muted">Couldn&apos;t load this. Reload the page to try again.</p>
+        <p className="text-[15px] text-fg-muted">{t("settings.mayDo.loadFailed")}</p>
       </SettingsCard>
     );
   }
   if (state === "hidden" || !data) {
     return (
       <SettingsCard>
-        <p className="text-[15px] text-fg-muted">Only people on the team can see this.</p>
+        <p className="text-[15px] text-fg-muted">{t("settings.mayDo.teamOnly")}</p>
       </SettingsCard>
     );
   }
@@ -171,21 +172,20 @@ export default function WhatItMayDoView() {
     <div className="space-y-5">
       {data.paused && (
         <p className="rounded-xl border border-line bg-surface-overlay px-4 py-3 text-sm text-fg leading-relaxed">
-          The Executive is paused, so nothing below runs on its own until it resumes. What you send or approve
-          yourself still goes.{" "}
+          {t("settings.mayDo.paused")}{" "}
           <Link href="/settings/executive" className="font-medium text-accent underline-offset-2 hover:underline">
-            Resume
+            {t("settings.executive.resume")}
           </Link>
         </p>
       )}
       <SectionTabs
-        label="What it may do"
+        label={t("settings.mayDo.title")}
         idBase={idBase}
         active={current.key}
         onChange={setActive}
         tabs={sections.map((s) => ({
           id: s.key,
-          label: TAB_LABELS[s.key],
+          label: t(TAB_LABELS[s.key]),
           badge: s.available ? s.goes : null,
         }))}
       />
@@ -193,7 +193,7 @@ export default function WhatItMayDoView() {
         <Section section={current} />
       </div>
       <p className="px-1 text-xs text-fg-subtle">
-        The number on each pill is how many things go out without asking. Nothing on this page changes a setting.
+        {t("settings.mayDo.pillNote")}
       </p>
     </div>
   );

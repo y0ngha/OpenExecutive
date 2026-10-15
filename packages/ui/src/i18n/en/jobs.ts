@@ -212,6 +212,10 @@ const en = {
   "jobs.run.timedOutTitle": "No reply before the deadline",
   "jobs.run.timedOutBody": "The step's timeout policy was applied, so this run stopped without finishing.",
   "jobs.run.failed": "Run failed",
+  "jobs.run.rerun": "Run again",
+  "jobs.run.rerunStarted": "Running it again now. The result goes where it normally would.",
+  "jobs.run.rerunFailed": "Couldn't run it again.",
+  "jobs.run.startNewInstead": "Start a new run instead",
   "jobs.run.inputs": "Inputs",
   "jobs.run.deliverySent": "The question was sent to them.",
   "jobs.run.deliverySelf": "The question was put to them directly in the conversation.",
@@ -485,8 +489,13 @@ const en = {
   "jobs.changes.removedStep": "Removed step “{title}”",
   "jobs.changes.reordered": "Changed the order of the steps",
   "jobs.changes.other": "Changed other settings",
-  "jobs.guide.skills.title": "How it's done",
-  "jobs.guide.skills.sub": "The method behind each workflow, which the Executive also follows in chat. Edit it on the workflow's page.",
+  "jobs.howItsDone.title": "How it’s done",
+  "jobs.howItsDone.intro": "Your Executive follows this for {workflowTitle}, here and in chat.",
+  "jobs.howItsDone.resetConfirm": "Go back to the original method? Your changes to it will be lost.",
+  "jobs.howItsDone.customized": "Customized",
+  "jobs.howItsDone.showAll": "Show all",
+  "jobs.howItsDone.showLess": "Show less",
+  "jobs.howItsDone.reset": "Reset to original",
 };
 
 export default en;

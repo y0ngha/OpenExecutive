@@ -3,6 +3,8 @@
 // /notifications/settings). Types and wording only, kept free of React so
 // scripts/ can test it.
 
+import { t, tp } from "../i18n/index.ts";
+
 export type QuietDays = "every_day" | "weekdays";
 export type Delivery = "instant" | "digest";
 
@@ -35,17 +37,18 @@ export interface NotificationSettingsUpdate {
   timezone: string;
 }
 
-export const DAYS_LABEL: Record<QuietDays, string> = {
-  every_day: "Every day",
-  weekdays: "Weekdays (weekends quiet all day)",
-};
+export const QUIET_DAYS: QuietDays[] = ["every_day", "weekdays"];
+
+export function daysLabel(days: QuietDays): string {
+  return days === "weekdays" ? t("settings.notifications.days.weekdays") : t("settings.notifications.days.everyDay");
+}
 
 /** "10:00 pm" for "22:00". */
 export function clockLabel(hhmm: string): string {
   const [h, m] = hhmm.split(":").map(Number);
   if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
-  const suffix = h < 12 ? "am" : "pm";
-  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
+  const time = `${h % 12 || 12}:${String(m).padStart(2, "0")}`;
+  return h < 12 ? t("settings.notifications.clock.am", { time }) : t("settings.notifications.clock.pm", { time });
 }
 
 /** Whether the quiet hours run past midnight (22:00 → 07:00). */
@@ -55,18 +58,20 @@ export function crossesMidnight(q: Pick<QuietHours, "start" | "end">): boolean {
 
 /** One line saying what the quiet hours do, from the person's side. */
 export function quietSummary(q: QuietHours): string {
-  if (!q.enabled) return "Off. Messages can reach you at any hour.";
-  const span = `${clockLabel(q.start)} to ${clockLabel(q.end)}${crossesMidnight(q) ? " the next morning" : ""}`;
+  if (!q.enabled) return t("settings.notifications.quiet.off");
+  const span = crossesMidnight(q)
+    ? t("settings.notifications.quiet.spanOvernight", { start: clockLabel(q.start), end: clockLabel(q.end) })
+    : t("settings.notifications.quiet.span", { start: clockLabel(q.start), end: clockLabel(q.end) });
   return q.days === "weekdays"
-    ? `Quiet from ${span} on weekdays, and all weekend.`
-    : `Quiet from ${span}, every day.`;
+    ? t("settings.notifications.quiet.weekdays", { span })
+    : t("settings.notifications.quiet.everyDay", { span });
 }
 
 /** Why the form can't be saved yet, or null. */
 export function quietError(q: QuietHours): string | null {
   if (!q.enabled) return null;
-  if (!/^\d{2}:\d{2}$/.test(q.start) || !/^\d{2}:\d{2}$/.test(q.end)) return "Pick a start and end time.";
-  if (q.start === q.end) return "Quiet hours need to start and end at different times.";
+  if (!/^\d{2}:\d{2}$/.test(q.start) || !/^\d{2}:\d{2}$/.test(q.end)) return t("settings.notifications.error.pickTimes");
+  if (q.start === q.end) return t("settings.notifications.error.sameTimes");
   return null;
 }
 
@@ -74,17 +79,16 @@ export function quietError(q: QuietHours): string | null {
  * else gets the held messages on their own when the briefs go out. */
 export function digestDescription(getsBriefs: boolean): string {
   return getsBriefs
-    ? "Held and added to your next morning brief or end-of-day digest, under “While you were away”."
-    : "Held and sent to you together, in one message, when the morning and end-of-day briefs go out.";
+    ? t("settings.notifications.digest.owner")
+    : t("settings.notifications.digest.member");
 }
 
 /** "2 messages are waiting for you", or null when none are. */
 export function heldLine(count: number, delivery: Delivery): string | null {
   if (count <= 0) return null;
-  const what = count === 1 ? "1 message is" : `${count} messages are`;
   return delivery === "digest"
-    ? `${what} waiting for your next brief.`
-    : `${what} waiting for your quiet hours to end.`;
+    ? tp("settings.notifications.held.brief", count)
+    : tp("settings.notifications.held.quiet", count);
 }
 
 /** The PUT body for a form state; the browser's zone fills an unset one, so
@@ -101,14 +105,15 @@ export function toUpdate(
   };
 }
 
-export const DELIVERY_LABEL: Record<Delivery, string> = {
-  instant: "As they happen",
-  digest: "In my briefs",
-};
+export function deliveryLabel(delivery: Delivery): string {
+  return delivery === "digest" ? t("settings.notifications.delivery.digest") : t("settings.notifications.delivery.instant");
+}
 
 /** The Settings hub tile's one-line status. */
 export function tileStatus(s: Pick<NotificationSettings, "quiet_hours" | "delivery">): string {
   const q = s.quiet_hours;
-  const quiet = q.enabled ? `Quiet ${clockLabel(q.start)}–${clockLabel(q.end)}` : "Quiet hours off";
-  return `${quiet} · ${DELIVERY_LABEL[s.delivery]}`;
+  const quiet = q.enabled
+    ? t("settings.notifications.tile.quiet", { start: clockLabel(q.start), end: clockLabel(q.end) })
+    : t("settings.notifications.tile.quietOff");
+  return `${quiet} · ${deliveryLabel(s.delivery)}`;
 }

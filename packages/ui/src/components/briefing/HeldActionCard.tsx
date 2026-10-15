@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 
 import Button from "@/components/ui/Button";
+import { t } from "@/i18n/index.ts";
 import {
   approveDecision,
   getHeldAction,
@@ -46,7 +47,7 @@ export default function HeldActionCard({
     getHeldAction(decisionId, controller.signal)
       .then(setHeld)
       .catch((err) => {
-        if ((err as Error)?.name !== "AbortError") setError("Couldn't load what it would do.");
+        if ((err as Error)?.name !== "AbortError") setError(t("briefing.heldAction.loadFailed"));
       });
     return () => controller.abort();
   }, [decisionId]);
@@ -60,7 +61,7 @@ export default function HeldActionCard({
       await action();
       onResolved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(err instanceof Error ? err.message : t("briefing.leadTraining.error"));
       setBusy(false);
     }
   }
@@ -77,11 +78,11 @@ export default function HeldActionCard({
           {proposal.headline}
         </div>
         <span className="flex-shrink-0">
-          <Chip tone="amber">Waiting on you</Chip>
+          <Chip tone="amber">{t("briefing.heldAction.chip")}</Chip>
         </span>
       </div>
       {held?.reason && (
-        <p className="mt-1.5 text-[15px] leading-relaxed text-fg-muted">It waited because {held.reason}.</p>
+        <p className="mt-1.5 text-[15px] leading-relaxed text-fg-muted">{t("briefing.heldAction.reason", { reason: held.reason })}</p>
       )}
       {held && held.details.length > 0 && (
         <dl className="mt-3 flex flex-col gap-2 rounded-xl border border-line bg-surface p-3">
@@ -99,10 +100,10 @@ export default function HeldActionCard({
           disabled={busy || held == null}
           onClick={() => void run(() => approveDecision(decisionId))}
         >
-          Approve
+          {t("common.approve")}
         </Button>
         <Button variant="ghost" disabled={busy} onClick={() => void run(() => rejectDecision(decisionId))}>
-          Decline
+          {t("briefing.leadTraining.decline")}
         </Button>
       </div>
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}

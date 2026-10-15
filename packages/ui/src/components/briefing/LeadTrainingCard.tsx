@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 
 import Button from "@/components/ui/Button";
+import { t } from "@/i18n/index.ts";
 import {
   approveLeadCard,
   getLeadCard,
@@ -53,7 +54,7 @@ export default function LeadTrainingCard({
         setValues(Object.fromEntries(next.fields.map((f) => [f.field, f.value])));
       })
       .catch((err) => {
-        if ((err as Error)?.name !== "AbortError") setError("Couldn't load the details of this card.");
+        if ((err as Error)?.name !== "AbortError") setError(t("briefing.leadTraining.loadFailed"));
       });
     return () => controller.abort();
   }, [decisionId]);
@@ -67,7 +68,7 @@ export default function LeadTrainingCard({
       await action();
       onResolved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(err instanceof Error ? err.message : t("briefing.leadTraining.error"));
       setBusy(false);
     }
   }
@@ -90,11 +91,11 @@ export default function LeadTrainingCard({
           {headline}
         </div>
         <span className="flex-shrink-0">
-          <Chip tone="amber">Training</Chip>
+          <Chip tone="amber">{t("briefing.leadTraining.chip")}</Chip>
         </span>
       </div>
       <p className="mt-1.5 text-[15px] leading-relaxed text-fg-muted">
-        It&apos;s in training, so it asks before doing anything you haven&apos;t allowed yet.
+        {t("briefing.leadTraining.intro")}
       </p>
 
       {editing ? (
@@ -137,16 +138,16 @@ export default function LeadTrainingCard({
                 className="mt-1 h-4 w-4 flex-shrink-0 accent-[rgb(var(--accent-strong))]"
               />
               <span>
-                <span className="block text-[15px] font-semibold text-fg">Do it like this next time</span>
+                <span className="block text-[15px] font-semibold text-fg">{t("briefing.leadTraining.learnTitle")}</span>
                 <span className="mt-0.5 block text-sm leading-snug text-fg-muted">
-                  It learns from your edit and does this on its own from now on: {allowLabel}.
+                  {t("briefing.leadTraining.learnBody", { allow: allowLabel })}
                 </span>
               </span>
             </label>
           )}
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => setEditing(false)} disabled={busy}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="primary"
@@ -160,7 +161,7 @@ export default function LeadTrainingCard({
                 )
               }
             >
-              Approve
+              {t("common.approve")}
             </Button>
           </div>
         </div>
@@ -168,7 +169,7 @@ export default function LeadTrainingCard({
         <>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <Button variant="primary" disabled={busy} onClick={() => void run(() => approveLeadCard(decisionId, {}))}>
-              Approve
+              {t("common.approve")}
             </Button>
             {allowLabel && (
               <Button
@@ -176,21 +177,21 @@ export default function LeadTrainingCard({
                 disabled={busy}
                 onClick={() => void run(() => approveLeadCard(decisionId, { allow: true }))}
               >
-                Approve + allow
+                {t("briefing.actionCards.approveAllow")}
               </Button>
             )}
             {(card?.fields.length ?? 0) > 0 && (
               <Button variant="secondary" disabled={busy} onClick={() => setEditing(true)}>
-                Edit
+                {t("common.edit")}
               </Button>
             )}
             <Button variant="ghost" disabled={busy} onClick={() => void run(() => rejectDecision(decisionId))}>
-              Decline
+              {t("briefing.leadTraining.decline")}
             </Button>
           </div>
           {allowLabel && (
             <p className="mt-2 text-[13px] leading-snug text-fg-muted">
-              Approve + allow: from now on it does this without asking: {allowLabel}.
+              {t("briefing.leadTraining.allowNote", { allow: allowLabel })}
             </p>
           )}
         </>

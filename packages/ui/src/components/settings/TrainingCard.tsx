@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import ModePicker from "@/components/settings/ModePicker";
 import SettingsCard from "@/components/settings/SettingsCard";
+import { displayLocale, t, type MessageKey } from "@/i18n/index.ts";
 import {
   removeTrainingLearned,
   setTraining,
@@ -23,11 +24,11 @@ import {
 // (DELETE /delegation/learned/{id}).
 
 // The job each learned item came from, as its card is titled.
-const JOB_NAMES: Record<TrainingSetting, string> = {
-  replies: "Handle it for me, replies",
-  follow_ups: "Handle it for me, follow-ups",
-  actions: "Suggested actions",
-  drafts: "Write drafts as me",
+const JOB_NAMES: Record<TrainingSetting, MessageKey> = {
+  replies: "settings.training.job.replies",
+  follow_ups: "settings.training.job.followUps",
+  actions: "settings.training.job.actions",
+  drafts: "settings.training.job.drafts",
 };
 
 function useSave(onSettings: (next: DelegationSettings) => void) {
@@ -50,11 +51,8 @@ function useSave(onSettings: (next: DelegationSettings) => void) {
 export function TrainingNote() {
   return (
     <section className="rounded-2xl border border-accent/30 bg-accent/5 p-5 sm:p-6">
-      <h2 className="text-base sm:text-lg font-semibold text-fg">Start it in training</h2>
-      <p className="mt-1 text-sm text-fg leading-relaxed">
-        Like anyone you hire, it can start each job in training: it brings you its work first and learns from what you
-        approve. When you trust it with a job, move that job to On.
-      </p>
+      <h2 className="text-base sm:text-lg font-semibold text-fg">{t("settings.training.noteTitle")}</h2>
+      <p className="mt-1 text-sm text-fg leading-relaxed">{t("settings.training.noteText")}</p>
     </section>
   );
 }
@@ -72,24 +70,24 @@ export function SuggestedActionsCard({
   const mode: ActionsMode = training.actions ? "training" : "ask";
   return (
     <SettingsCard
-      title="Suggested actions"
+      title={t("settings.training.job.actions")}
       titleId="act-as-me-actions-label"
-      description="Meeting invites and messages your mail calls for."
+      description={t("settings.training.actionsDescription")}
     >
       <ModePicker<ActionsMode>
         labelledBy="act-as-me-actions-label"
         value={mode}
         disabled={busy}
         options={[
-          { value: "ask", label: "Always ask" },
-          { value: "training", label: "In training" },
+          { value: "ask", label: t("settings.training.alwaysAsk") },
+          { value: "training", label: t("settings.handleIt.inTraining") },
         ]}
-        onPick={(next) => void run(() => setTraining({ actions: next === "training" }), "Could not change training.")}
+        onPick={(next) => void run(() => setTraining({ actions: next === "training" }), t("settings.training.changeFailed"))}
       />
       <p className="mt-3 text-sm text-fg-muted leading-relaxed">
         {mode === "training"
-          ? "Each one comes to you as a card. Tap Approve + allow and it does that kind, with those people, on its own next time."
-          : "Each one comes to you as a card, every time."}
+          ? t("settings.training.actionsTraining")
+          : t("settings.training.actionsAsk")}
       </p>
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
     </SettingsCard>
@@ -97,15 +95,22 @@ export function SuggestedActionsCard({
 }
 
 function times(n: number): string {
-  return n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
+  return n === 1
+    ? t("settings.training.times.once")
+    : n === 2
+      ? t("settings.training.times.twice")
+      : t("settings.training.times.many", { n });
 }
 
 function learnedLine(item: TrainingLearned): string {
-  const when = new Date(item.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const parts = [JOB_NAMES[item.setting] ?? "Act as me"];
-  parts.push(item.setting === "drafts" ? `learned ${when}` : `allowed ${when}`);
-  if (item.uses > 0) parts.push(`done ${times(item.uses)} since`);
-  if (item.example) parts.push(`writes like “${item.example}”`);
+  const when = new Date(item.created_at).toLocaleDateString(displayLocale(), { month: "short", day: "numeric" });
+  const job = JOB_NAMES[item.setting];
+  const parts = [job ? t(job) : t("settings.actAsMe.title")];
+  parts.push(
+    item.setting === "drafts" ? t("settings.training.learnedOn", { when }) : t("settings.training.allowedOn", { when }),
+  );
+  if (item.uses > 0) parts.push(t("settings.training.doneSince", { times: times(item.uses) }));
+  if (item.example) parts.push(t("settings.training.writesLike", { example: item.example }));
   return parts.join(" · ");
 }
 
@@ -123,12 +128,12 @@ export function LearnedCard({
   if (!anyOn && learned.length === 0) return null;
   return (
     <SettingsCard
-      title="What it's learned"
+      title={t("settings.training.learnedTitle")}
       titleId="act-as-me-learned-label"
-      description="From its training. Yours alone. Remove one and it asks you again."
+      description={t("settings.training.learnedDescription")}
     >
       {learned.length === 0 ? (
-        <p className="text-sm text-fg-muted">Nothing yet.</p>
+        <p className="text-sm text-fg-muted">{t("settings.training.nothingYet")}</p>
       ) : (
         <ul
           aria-labelledby="act-as-me-learned-label"
@@ -145,11 +150,11 @@ export function LearnedCard({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void run(() => removeTrainingLearned(item.id), "Could not remove that.")}
+                onClick={() => void run(() => removeTrainingLearned(item.id), t("settings.training.removeFailed"))}
                 className="flex-shrink-0 min-h-touch text-sm font-semibold text-accent hover:underline disabled:opacity-60"
-                aria-label={`Remove ${item.label}`}
+                aria-label={t("settings.training.removeLabel", { label: item.label })}
               >
-                Remove
+                {t("common.remove")}
               </button>
             </li>
           ))}

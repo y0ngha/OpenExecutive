@@ -7,6 +7,8 @@
  * so opening and saving the settings never rewrites it.
  */
 
+import { displayLocale, t, type MessageKey } from "../i18n/index.ts";
+
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 export type CheckInChoice =
@@ -15,15 +17,22 @@ export type CheckInChoice =
   | { kind: "off" }
   | { kind: "custom"; spec: string };
 
-export const WEEKDAYS: { id: Weekday; label: string }[] = [
-  { id: "mon", label: "Monday" },
-  { id: "tue", label: "Tuesday" },
-  { id: "wed", label: "Wednesday" },
-  { id: "thu", label: "Thursday" },
-  { id: "fri", label: "Friday" },
-  { id: "sat", label: "Saturday" },
-  { id: "sun", label: "Sunday" },
-];
+export const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+const WEEKDAY_KEYS: Record<Weekday, MessageKey> = {
+  mon: "people.weekdayLong.mon",
+  tue: "people.weekdayLong.tue",
+  wed: "people.weekdayLong.wed",
+  thu: "people.weekdayLong.thu",
+  fri: "people.weekdayLong.fri",
+  sat: "people.weekdayLong.sat",
+  sun: "people.weekdayLong.sun",
+};
+
+/** "Monday", in the deployment's language. */
+export function weekdayLabel(day: Weekday): string {
+  return t(WEEKDAY_KEYS[day]);
+}
 
 /** What a new department starts with (DEFAULT_CHECK_IN_CADENCE). */
 export const DEFAULT_CHECK_IN_DAY: Weekday = "mon";
@@ -34,7 +43,7 @@ const DAILY_RE = /^daily@(\d{2}:\d{2})$/;
 const WEEKLY_RE = /^weekly@([A-Za-z]{3})[@-](\d{2}:\d{2})$/;
 
 function isWeekday(v: string): v is Weekday {
-  return WEEKDAYS.some((d) => d.id === v);
+  return (WEEKDAYS as string[]).includes(v);
 }
 
 /** Read a stored spec (missing or blank means off). */
@@ -84,13 +93,11 @@ export function withKind(
 export function describeCheckIn(choice: CheckInChoice): string {
   switch (choice.kind) {
     case "daily":
-      return `Every day at ${choice.time} UTC`;
-    case "weekly": {
-      const day = WEEKDAYS.find((d) => d.id === choice.day)?.label ?? choice.day;
-      return `Every ${day} at ${choice.time} UTC`;
-    }
+      return t("people.checkIn.everyDay", { time: choice.time });
+    case "weekly":
+      return t("people.checkIn.everyWeekday", { day: weekdayLabel(choice.day), time: choice.time });
     case "off":
-      return "Off";
+      return t("people.dept.checkIn.off");
     case "custom":
       return choice.spec;
   }
@@ -103,7 +110,7 @@ export function describeCheckIn(choice: CheckInChoice): string {
 export function formatNextCheckIn(
   iso: string | null | undefined,
   timeZone?: string | null,
-  locale?: string,
+  locale: string = displayLocale(),
 ): string {
   if (!iso) return "";
   const at = new Date(iso);

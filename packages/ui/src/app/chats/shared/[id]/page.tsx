@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Chat from "@/components/Chat";
+import { t } from "@/i18n/index.ts";
 import { getSession, getSessionMessages, type ChatMessage, type SessionSummary } from "@/lib/api";
 import { sessionTitle } from "@/lib/sessionChannel";
 
@@ -45,7 +46,7 @@ export default function SharedChatPage() {
       <div className="border-b border-line px-4 sm:px-6 py-3 flex-shrink-0">
         <div className="max-w-3xl mx-auto min-w-0">
           <Link href="/chats" className="text-sm text-fg-muted hover:text-fg">
-            ← Chats
+            {t("chat.shared.back")}
           </Link>
           {current?.state === "ok" && (
             <h1 className="mt-1 text-lg font-semibold text-fg truncate">{sessionTitle(current.session)}</h1>
@@ -53,29 +54,29 @@ export default function SharedChatPage() {
         </div>
       </div>
       {!current ? (
-        <p className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 text-[15px] text-fg-muted">Loading chat…</p>
+        <p className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 text-[15px] text-fg-muted">{t("chat.shared.loading")}</p>
       ) : current.state === "gone" ? (
         <p className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 text-[15px] text-fg-muted">
-          This chat isn&apos;t shared with you any more.
+          {t("chat.shared.gone")}
         </p>
       ) : !chat ? (
         <p className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 text-[15px] text-fg-muted">
-          Couldn&apos;t load this chat. Try again in a moment.
+          {t("chat.shared.error")}
         </p>
       ) : chat.session.read_only ? (
         <div className="flex-1 min-h-0">
           <Chat
             initialMessages={chat.messages}
             initialSessionId={id}
-            readOnly={{ sharedBy: chat.session.shared_by ?? "someone on your team" }}
+            readOnly={{ sharedBy: chat.session.shared_by ?? t("chat.shared.someone") }}
           />
         </div>
       ) : (
         // The viewer's own chat: it opens where they can write in it.
         <p className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 text-[15px] text-fg-muted">
-          This is your own chat.{" "}
+          {t("chat.shared.ownChat")}{" "}
           <Link href={`/?session=${encodeURIComponent(id)}`} className="font-medium text-accent hover:underline">
-            Open it
+            {t("chat.shared.openIt")}
           </Link>
         </p>
       )}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Button from "@/components/ui/Button";
+import { t } from "@/i18n/index.ts";
 import { type SkillDetail, deleteSkill, getSkill, updateSkill } from "@/lib/api";
 
 const PROSE =
@@ -53,9 +54,9 @@ export default function HowItsDone({
 
   return (
     <section className="rounded-2xl border border-line bg-surface-elevated p-5 shadow-sm sm:p-7">
-      <h2 className="text-lg font-semibold text-fg">How it&rsquo;s done</h2>
+      <h2 className="text-lg font-semibold text-fg">{t("jobs.howItsDone.title")}</h2>
       <p className="mt-1 text-sm text-fg-muted">
-        Your Executive follows this for {workflowTitle}, here and in chat.
+        {t("jobs.howItsDone.intro", { workflowTitle })}
       </p>
       <div className="mt-4 space-y-6">
         {skills.map((s) => (
@@ -105,7 +106,7 @@ function Method({
   };
 
   const reset = async () => {
-    if (!confirm("Go back to the original method? Your changes to it will be lost.")) return;
+    if (!confirm(t("jobs.howItsDone.resetConfirm"))) return;
     setBusy(true);
     setError(null);
     try {
@@ -131,7 +132,7 @@ function Method({
           )}
           {skill.customized && (
             <span className="shrink-0 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-500">
-              Customized
+              {t("jobs.howItsDone.customized")}
             </span>
           )}
         </div>
@@ -142,7 +143,7 @@ function Method({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={14}
-          aria-label="How it's done"
+          aria-label={t("jobs.howItsDone.title")}
           className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 font-mono text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         />
       ) : (
@@ -160,7 +161,7 @@ function Method({
           onClick={() => setExpanded((v) => !v)}
           className="mt-2 min-h-10 text-sm font-medium text-accent hover:underline"
         >
-          {expanded ? "Show less" : "Show all"}
+          {expanded ? t("jobs.howItsDone.showLess") : t("jobs.howItsDone.showAll")}
         </button>
       )}
 
@@ -170,7 +171,7 @@ function Method({
         {editing ? (
           <>
             <Button variant="primary" onClick={save} disabled={busy || !draft.trim()}>
-              Save
+              {t("common.save")}
             </Button>
             <Button
               onClick={() => {
@@ -180,7 +181,7 @@ function Method({
               }}
               disabled={busy}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
           </>
         ) : (
@@ -192,11 +193,11 @@ function Method({
               }}
               disabled={busy}
             >
-              Edit
+              {t("common.edit")}
             </Button>
             {skill.customized && (
               <Button onClick={reset} disabled={busy}>
-                Reset to original
+                {t("jobs.howItsDone.reset")}
               </Button>
             )}
           </>

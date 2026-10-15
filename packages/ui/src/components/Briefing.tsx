@@ -34,7 +34,7 @@ import { tRich } from "@/i18n/rich.tsx";
 import type { SnoozeChoice } from "@/lib/snooze";
 import InfoTip from "./InfoTip";
 import HeldBack from "./briefing/HeldBack";
-import { ACTION_CARDS_TIP, ActionCardItem, useActionCards } from "./ActionCards";
+import { actionCardsTip, ActionCardItem, useActionCards } from "./ActionCards";
 import { ReplyCardItem, repliesWaitingTip, useReplyCards } from "./RepliesWaiting";
 import Icon from "./Icon";
 import {
@@ -826,7 +826,7 @@ export default function Briefing({ onContinue, showHeader = false, firstName, ba
                     {needsYouCount > 0 && <span className="ml-1.5 font-normal text-fg-muted">({needsYouCount})</span>}
                   </h2>
                   {replies.cards.length > 0 && <InfoTip align="left">{repliesWaitingTip()}</InfoTip>}
-                  {actionCards.cards.length > 0 && <InfoTip align="left">{ACTION_CARDS_TIP}</InfoTip>}
+                  {actionCards.cards.length > 0 && <InfoTip align="left">{actionCardsTip()}</InfoTip>}
                   <div className="ml-auto flex items-center gap-1">
                     {hasBrief && !firstWeekBrief && (
                       <button
