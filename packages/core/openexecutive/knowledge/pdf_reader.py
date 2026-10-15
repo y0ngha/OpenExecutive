@@ -254,6 +254,7 @@ async def _model_slice(
     provider: Any, model: str, data: bytes, start: int, end: int
 ) -> tuple[str, bool]:
     """Transcribe pages [start, end): ``(text, cut off at max_tokens)``."""
+    from openexecutive.audit.usage import log_model_usage
     from openexecutive.providers.output_language import internal_call
 
     chunk = await asyncio.to_thread(slice_pdf, data, start, end)
@@ -286,6 +287,7 @@ async def _model_slice(
                 }
             ],
         )
+        log_model_usage(response, model=model, actor="pdf_reader")
     if getattr(response, "stop_reason", None) == "refusal":
         raise RuntimeError("model declined to transcribe the pages")
     text = "".join(

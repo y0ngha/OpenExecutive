@@ -7,8 +7,6 @@ import ExecutiveRunSwitch from "@/components/executive/ExecutiveRunSwitch";
 import VoicePicker from "@/components/executive/VoicePicker";
 import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsSubpage from "@/components/settings/SettingsSubpage";
-import TakeTheLeadCard from "@/components/settings/TakeTheLeadCard";
-import { MeetingAutonomySwitch } from "@/components/settings/WorkspaceCard";
 import { t, type MessageKey } from "@/i18n/index.ts";
 import { tRich } from "@/i18n/rich.tsx";
 
@@ -20,11 +18,10 @@ const ALWAYS_DOES: { title: MessageKey; text: MessageKey }[] = [
   { title: "settings.executive.always.research.title", text: "settings.executive.always.research.text" },
 ];
 
-// Settings → Your Executive: everything the Executive does without asking
-// first, and the voice it answers in. Pause at the top stops all of it; then
-// what it always does and what it does as itself (Take the lead, booking
-// meetings). What it sends as you lives on Act as me. /settings/on-its-own
-// lands here.
+// Settings → Your Executive: Pause, what it always does without asking, and
+// the voice it answers in. Pause stops everything it does on its own,
+// including Take the lead and booking meetings, which live under Delegate
+// with what it sends as you. /settings/on-its-own lands here.
 export default function ExecutiveSettingsPage() {
   return (
     <SettingsSubpage
@@ -51,20 +48,11 @@ export default function ExecutiveSettingsPage() {
         </ul>
       </SettingsCard>
 
-      <section aria-labelledby="exec-as-executive" className="space-y-3">
-        <div>
-          <h2 id="exec-as-executive" className="text-lg font-semibold text-fg">{t("settings.executive.asExecutiveTitle")}</h2>
-          <p className="mt-1 text-[15px] text-fg-muted">{t("settings.executive.asExecutiveText")}</p>
-        </div>
-        <TakeTheLeadCard />
-        <MeetingAutonomySwitch />
-      </section>
-
       <p className="text-[15px] text-fg-muted">
-        {tRich("settings.executive.actAsMeNote", {
+        {tRich("settings.executive.delegateNote", {
           link: (
-            <Link href="/settings/act-as-me" className="font-medium text-accent underline-offset-2 hover:underline">
-              {t("settings.actAsMe.title")}
+            <Link href="/delegate/take-the-lead" className="font-medium text-accent underline-offset-2 hover:underline">
+              {t("settings.executive.delegateLink")}
             </Link>
           ),
         })}

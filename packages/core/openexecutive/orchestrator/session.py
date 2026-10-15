@@ -11,6 +11,17 @@ if TYPE_CHECKING:
     from openexecutive.memory.workspace_settings import PrincipalRole
 
 
+def history_window_start(total: int, max_turns: int = 20, step_turns: int = 10) -> int:
+    """Index of the first of ``total`` history messages the model is shown
+    (``Session.get_recent_history``): the last ``max_turns`` turns, the start
+    moving in steps of ``step_turns``. Messages before it are out of view."""
+    keep = max_turns * 2
+    if total <= keep:
+        return 0
+    step = max(1, step_turns) * 2
+    return ((total - keep) // step) * step
+
+
 @dataclass
 class Session:
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -21,6 +32,18 @@ class Session:
     # Used by schedule_followup to refuse scheduling sends to refs the user
     # never actually used — anti-spam guard.
     seen_channel_refs: set[tuple[str, str]] = field(default_factory=set)
+    # Mailbox message and thread ids this conversation was shown by a search
+    # that left other teammates' mail out (or the inbound email it answers).
+    # The model may reach the Executive's mailbox only by these
+    # (orchestrator.teammate_mail).
+    mail_ids_seen: set[str] = field(default_factory=set)
+    # Who this conversation's mail actually reached: the lowercased to/cc
+    # addresses of every send the mailbox accepted, and the message ids an
+    # Outlook reply answered. The email poller reads them after an inbound
+    # email's turn to tell whether its sender got a reply
+    # (integrations.unanswered_mail).
+    mail_sent_to: set[str] = field(default_factory=set)
+    mail_replied_ids: set[str] = field(default_factory=set)
     # Which inbound channel this session arrived on ("slack", "discord",
     # "telegram", "google_chat", "email"), and the address on it. Empty for
     # web/CLI turns and runs nobody started from a channel. Used when a
@@ -56,6 +79,13 @@ class Session:
     # An adapter sets either only when it resolved `caller_person_id` from the
     # sender identity it verified itself, never from anything the message says.
     speaker_verified: bool = False
+    # The sender's People entry on a channel that names its sender but isn't
+    # one `people_tools` verifies (Google Chat, by the Google account email on
+    # its signed event). Read only by the department gate
+    # (`department_gate.speaker`), so the principal there isn't held and a
+    # teammate gets their own department's authority. Never a grant for
+    # anything else, and never set alongside `caller_person_id`.
+    gate_sender_person_id: int | None = None
     private_chat: bool = False
     # The live alert board as the server derived it this turn, recorded by
     # `briefing.context.render_and_trust`. `ack_alert` refuses anything else on
@@ -131,6 +161,10 @@ class Session:
     # (``orchestrator.fact_tools``) — a From line alone proves nothing.
     email_from: str = ""
     email_authenticated: bool = False
+    # Whether Gmail authenticated the From of a teammate's (not the
+    # principal's) inbound email: only then does the turn read the mailbox as
+    # that teammate (orchestrator.teammate_mail).
+    email_sender_authenticated: bool = False
     # Act as me for the turn in progress (``delegation.settings.TurnDelegation``),
     # pinned at its start by ``pin_turn_delegation``: whether the speaker has
     # it on, whether ``ghostwrite_email`` is offered, and whether the turn has
@@ -168,12 +202,7 @@ class Session:
         prompt cache (``orchestrator.executive._apply_history_cache_marker``)
         would miss and re-write the whole conversation each time.
         """
-        total = len(self.conversation_history)
-        keep = max_turns * 2
-        start = 0
-        if total > keep:
-            step = max(1, step_turns) * 2
-            start = ((total - keep) // step) * step
+        start = history_window_start(len(self.conversation_history), max_turns, step_turns)
         history = self.conversation_history[start:]
         # Anthropic requires messages to start with a user turn.
         # Drop a leading assistant message if history length is odd (can happen on error recovery).

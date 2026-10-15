@@ -22,7 +22,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from openexecutive.utils.i18n import MessageTable, tr
+from openexecutive.orchestrator import tool_labels
+from openexecutive.utils.i18n import MessageTable, current_language, tr
 
 # Shown when a round contains only tools with no entry in `_LABELS`. Going
 # silent is not an option — a round with no label is the exact failure this
@@ -36,6 +37,7 @@ FALLBACK_LABEL = "Working…"
 # here rather than trusted. React escapes the value, but a 4KB name or an
 # embedded newline would still wreck a one-line indicator.
 _MCP_NAME_MAX = 48
+_LABEL_MAX = 60
 _MCP_NAME_UNSAFE = re.compile(r"[^A-Za-z0-9_.:\- ]")
 
 # Canonical tool name -> present-progressive phrase. Every entry ends in an
@@ -49,9 +51,6 @@ _LABEL_TEXT = MessageTable("activity", {
     # Skills
     "search_skills": "Looking through saved skills…",
     "load_skill": "Opening a saved skill…",
-    "create_skill": "Drafting a new playbook…",
-    "update_skill": "Drafting a playbook change…",
-    "delete_skill": "Proposing a playbook deletion…",
 
     # Scheduling and outbound messages
     "schedule_followup": "Scheduling a follow-up…",
@@ -125,7 +124,10 @@ _LABEL_TEXT = MessageTable("activity", {
     "read_my_email": "Reading your email…",
     "read_my_email_attachment": "Reading an attachment…",
     "remind_me": "Setting a reminder…",
+    "propose_actions": "Leaving you a card to approve…",
     "my_email_awaiting_reply": "Checking what's waiting on a reply…",
+    "my_email_read_before": "Finding the email you mean…",
+    "my_calendar": "Checking your calendar…",
 
     # Always in the loop: the speaker's own notes
     "recall_history": "Checking your notes…",
@@ -203,9 +205,6 @@ _PRIORITY: tuple[frozenset[str], ...] = (
         "tune_watchlist_entry",
     }),
     frozenset({
-        "create_skill",
-        "update_skill",
-        "delete_skill",
         "propose_form_values",
     }),
 )
@@ -215,9 +214,10 @@ def _mcp_label(tool_input: Any) -> tuple[str, str]:
     """Label an MCP `call_tool` from the underlying tool it wraps.
 
     The real tool name lives in `tool_input["name"]` — the same field
-    `action_chips.summarize_action` reads to surface the true tool on an MCP
-    chip. A static label here would be useless, which matters because MCP is
-    the case that made the old indicator wrong most visibly.
+    `action_chips.summarize_action` reads. Both take their wording from
+    `tool_labels`, so the line and the finished chip say the same thing in
+    plain words, never the raw `server__tool` name. The second element stays
+    the (sanitized) raw name so clients can still tell tools apart.
     """
     generic = tr("activity.mcp.generic", "Using a connected tool…")
     raw = tool_input.get("name") if isinstance(tool_input, dict) else None
@@ -226,7 +226,18 @@ def _mcp_label(tool_input: Any) -> tuple[str, str]:
     name = _MCP_NAME_UNSAFE.sub("", raw).strip()[:_MCP_NAME_MAX].strip()
     if not name:
         return generic, "call_tool"
-    return tr("activity.mcp.named", "Using {name}…", name=name), name
+    if current_language() != "en":
+        # tool_labels' plain-word wording is English only; elsewhere the line
+        # names the tool in the deployment's language.
+        return tr("activity.mcp.named", "Using {name}…", name=name), name
+    # Label from the full name: the 48-char cut is for `tool` only, and a
+    # cut name would miss the table the chip reads (and the two would differ).
+    doing = tool_labels.labels_for(raw, tool_input.get("arguments"))[1]
+    # One line beside the dots: the fallback for an unlisted tool can run
+    # long, so the whole label (ellipsis included) stays within _LABEL_MAX.
+    if len(doing) >= _LABEL_MAX:
+        doing = doing[: _LABEL_MAX - 1].rstrip()
+    return f"{doing}…", name
 
 
 def _label_for(tool_use: dict[str, Any]) -> tuple[str, str]:

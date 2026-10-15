@@ -29,6 +29,7 @@ from openexecutive.orchestrator.schedule_tools import (
     tools_withheld_in_mode,
 )
 from openexecutive.orchestrator.session import Session
+from tests.unit.offered_tools import capture_offered
 from openexecutive.people import registry as people_registry
 from openexecutive.people import store as people_store
 from openexecutive.prompts.cache_manager import build_system_blocks
@@ -43,8 +44,10 @@ from ._agent_loop_fakes import FinalMsg, ScriptedProvider, TextBlock, ToolUseBlo
 # sha256 of EXECUTIVE_PERSONA_PROMPT before it was split into sections. The
 # split must not move a single byte of the team prompt. Updated once since,
 # deliberately: the inbound-email reply step names the `--- REPLY ---` block
-# instead of the Gmail send tool, so it holds for Outlook too.
-TEAM_PERSONA_SHA256 = "419725695c173451666ff8a64849bb13a5fabcbbb8f56ac0c1831e0cf61db5c4"
+# instead of the Gmail send tool, so it holds for Outlook too. And once more:
+# the Skills paragraph saves repeatable work as a workflow, not a playbook.
+# And again: Domain Expertise says when to consult a specialist.
+TEAM_PERSONA_SHA256 = "3f46b161c65c1c16d731f48728a8f8eef3dadd2da30f425dd935a6188b2acf62"
 
 SOLO_HEADINGS = (
     "## You Work for One Person",
@@ -330,7 +333,10 @@ def test_team_keeps_every_tool_and_the_same_objects() -> None:
 def _run_loop(provider: ScriptedProvider, **kw: Any) -> list[Any]:
     async def _go() -> list[Any]:
         items: list[Any] = []
-        with patch("openexecutive.orchestrator.executive.get_provider", return_value=provider):
+        with (
+            capture_offered() as offered,
+            patch("openexecutive.orchestrator.executive.get_provider", return_value=provider),
+        ):
             async for item in Executive()._stream_agent_loop(
                 system_blocks=[],
                 messages=[{"role": "user", "content": "tell everyone"}],
@@ -338,6 +344,7 @@ def _run_loop(provider: ScriptedProvider, **kw: Any) -> list[Any]:
                 **kw,
             ):
                 items.append(item)
+        provider.offered = offered
         return items
 
     return asyncio.run(_go())
@@ -351,7 +358,8 @@ def _no_loop_audit(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _offered(provider: ScriptedProvider, call: int = 0) -> list[str]:
-    return [t["name"] for t in provider.calls[call]["tools"] if "name" in t]
+    """Every tool the call offered, the ones behind open_tools included."""
+    return provider.offered[call]
 
 
 @pytest.mark.usefixtures("_no_loop_audit")

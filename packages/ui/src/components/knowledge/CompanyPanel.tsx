@@ -435,7 +435,12 @@ function DocListRow({
     if (row.addedAt) details.push(t("audit.company.added", { date: new Date(row.addedAt).toLocaleDateString(displayLocale()) }));
     if (row.sizeBytes !== null) details.push(formatSize(row.sizeBytes));
   } else {
-    if (!row.indexed) details.push(t("audit.company.noText"));
+    if (!row.indexed)
+      details.push(
+        row.unreadableReason
+          ? t("audit.company.noTextReason", { reason: row.unreadableReason })
+          : t("audit.company.noText"),
+      );
     if (row.addedAt) details.push(t("audit.company.synced", { time: formatRelativeTime(row.addedAt) }));
     if (row.editedAt)
       details.push(

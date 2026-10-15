@@ -168,6 +168,11 @@ class Snapshot:
     # nobody chose one, so UTC).
     brief_delivery: DeliveryOutcome | None = None
     brief_email_ready: bool = False
+    # Why the gateway that sends email is down (orchestrator.mcp_gateway.
+    # gateway_problem), or None while it is up; and the servers whose
+    # sign-in has died (``MCPGateway.needs_reconnect``).
+    gateway_problem: str | None = None
+    gateway_needs_reconnect: tuple[str, ...] = ()
     brief_next_runs: dict[str, datetime] = field(default_factory=dict)
     brief_zone: str | None = None
 
@@ -720,7 +725,8 @@ async def check_slack(snap: Snapshot, http: httpx.AsyncClient) -> SetupCheck:
         "setup.slack.your_workspace",
         "your Slack workspace",
     )))
-    if not app_token:
+    over_http = not app_token and bool((snap.settings.slack_signing_secret or "").strip())
+    if not app_token and not over_http:
         return _result(
             "slack",
             "warn",
@@ -749,6 +755,20 @@ async def check_slack(snap: Snapshot, http: httpx.AsyncClient) -> SetupCheck:
                 "The API log says why — look for \"Failed to start Slack bot\". Fix that, then "
                 "restart the app.",
             ),
+        )
+    if over_http:
+        # Slack posts to /webhook/slack; there is no connection to ask about,
+        # so the last message that arrived is the only sign it is delivering.
+        return _channel_ready(
+            snap,
+            "slack",
+            tr(
+                "setup.slack.events_over_http",
+                "Takes Slack events from {workspace} at /webhook/slack.",
+                workspace=workspace,
+            ),
+            actor="slack",
+            roster=_Roster("slack_user_id", "slack"),
         )
     try:
         listening = bool(
@@ -1207,6 +1227,20 @@ def _google_sign_in_missing() -> str | None:
     return "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET"
 
 
+# A stand-in gateway in a test has no probe attribute at all, which is not the
+# same as a real gateway whose probe has not finished — that one is None.
+_NO_PROBE = object()
+# Tool names are long identifiers, so _clip would cut one mid-name. Name a few
+# and count the rest; /health carries the whole list.
+_TOOLS_NAMED = 3
+
+
+def _missing_tools_text(names: tuple[str, ...]) -> str:
+    shown = ", ".join(names[:_TOOLS_NAMED])
+    rest = len(names) - _TOOLS_NAMED
+    return f"{shown}, and {rest} more" if rest > 0 else shown
+
+
 def check_gmail(snap: Snapshot) -> SetupCheck:
     from openexecutive.orchestrator.mcp_gateway import configured_server_names
 
@@ -1226,16 +1260,35 @@ def check_gmail(snap: Snapshot) -> SetupCheck:
             ),
         )
     if snap.mcp_gateway is None:
+        problem = snap.gateway_problem or "the MCP gateway is not running"
         return _result(
             "gmail",
             "error",
             tr(
-                "setup.gmail.connection_google_start_email",
-                "The connection to Google didn't start, so email is off.",
+                "setup.gmail.connection_google_start_email_problem",
+                "The connection to Google didn't start, so email is off: {problem}.",
+                problem=problem,
             ),
             tr(
-                "setup.gmail.api_log_says_why",
-                "The API log says why — look for \"MCP gateway\". Fix that, then restart the app.",
+                "setup.gmail.api_log_says_why_retrying",
+                "It keeps retrying on its own. If it stays off, the API log says why — look for "
+                "\"MCP gateway\". Fix that, then restart the app.",
+            ),
+        )
+    if "google_workspace" in snap.gateway_needs_reconnect:
+        return _result(
+            "gmail",
+            "error",
+            tr(
+                "setup.gmail.sign_in_turned_away",
+                "Google turned the Executive's sign-in as {address} away: it expired or was "
+                "revoked, so email, calendar and files are off.",
+                address=settings.exec_email_address,
+            ),
+            tr(
+                "setup.gmail.sign_in_again",
+                "Sign Google in again as that address (scripts/mint-google-token.py), then "
+                "restart the app.",
             ),
         )
     missing = _google_sign_in_missing()
@@ -1270,6 +1323,53 @@ def check_gmail(snap: Snapshot) -> SetupCheck:
             address=settings.exec_email_address,
             seconds=settings.email_poll_interval_seconds,
         )
+    # Which pinned Google tools startup priming found. Only an empty tuple says
+    # they are all there, so a probe that never finished or crashed cannot read
+    # as green. Keeps the email timestamp the way _channel_ready does.
+    probe: Any = getattr(snap.mcp_gateway, "pinned_tools", _NO_PROBE)
+    if probe is not _NO_PROBE:
+        last = snap.last_inbound.get("email")
+        last_at = last.ts if last is not None else None
+        log_fix = tr(
+            "setup.gmail.probe_log_fix",
+            'The API log says why — look for "MCPGateway", then restart the app.',
+        )
+        if probe is None:
+            return _result(
+                "gmail",
+                "warn",
+                tr(
+                    "setup.gmail.probe_pending",
+                    "{summary} Still checking which Google tools loaded.",
+                    summary=summary,
+                ),
+                tr(
+                    "setup.gmail.probe_pending_fix",
+                    "That takes a few minutes after a restart. If it doesn't finish, the "
+                    'connection to Google is stuck: look for "MCPGateway" in the API log, then '
+                    "restart the app.",
+                ),
+                last_activity=last_at,
+            )
+        if probe.missing is None:
+            return _result(
+                "gmail",
+                "warn",
+                f"{summary} Couldn't check which Google tools loaded.",
+                log_fix,
+                last_activity=last_at,
+            )
+        if probe.missing:
+            plural = "" if len(probe.missing) == 1 else "s"
+            return _result(
+                "gmail",
+                "warn",
+                f"{summary} But {len(probe.missing)} Google tool{plural} couldn't be found: "
+                f"{_missing_tools_text(probe.missing)}.",
+                "Either a workspace-mcp update renamed them, or the configured Google services "
+                f"and tool tier never loaded them. {log_fix}",
+                last_activity=last_at,
+            )
     return _channel_ready(snap, "gmail", summary, actor="email", roster=None)
 
 
@@ -1516,8 +1616,9 @@ def check_brief(snap: Snapshot) -> SetupCheck:
         channel_phrase,
         current_problem,
         delivery_problem,
+        describe_problem,
     )
-    from openexecutive.scheduler.runner import delivery_order
+    from openexecutive.scheduler.runner import delivery_order, mail_gateway_problem
 
     if not snap.settings.scheduler_enabled:
         return _result("brief", "off", tr(
@@ -1534,6 +1635,16 @@ def check_brief(snap: Snapshot) -> SetupCheck:
         ), fix, link="/people")
     plan = delivery_order(principal, email_ready=snap.brief_email_ready)
     if not plan:
+        blocked = mail_gateway_problem(principal, with_error=False)
+        if blocked is not None:
+            # The attempt count, not the error text: every team member reads
+            # this page; the owner's own notice on Home carries the text.
+            problem, fix = describe_problem("gateway_down", blocked)
+            return _result("brief", "error", tr(
+                "setup.brief.not_sent_by_email",
+                "Not sent by email: {problem}.",
+                problem=problem,
+            ), fix)
         problem, fix = delivery_problem("no_channel")
         return _result(
             "brief",
@@ -1545,7 +1656,12 @@ def check_brief(snap: Snapshot) -> SetupCheck:
     last = snap.brief_delivery
     reason = current_problem(last, has_owner=True, can_deliver=True)
     if last is not None and reason is not None:
-        problem, fix = delivery_problem(reason)
+        # The fix may read the detail (a grant that died names a reconnect)
+        # but the summary never quotes it: every team member reads this page,
+        # and the text can name the owner's channels. Home carries it, for
+        # the owner alone.
+        problem, _ = describe_problem(reason)
+        _, fix = describe_problem(reason, last.detail)
         return _result(
             "brief",
             "error",
@@ -1678,6 +1794,10 @@ def gather_snapshot(settings: Settings, *, local_login: bool, app_state: Any) ->
     from openexecutive.briefing.brief_state import last_delivery_outcome
     from openexecutive.integrations.slack_bot import bot_user_id
     from openexecutive.memory.workspace_settings import get_user_timezone, get_workspace
+    from openexecutive.orchestrator.mcp_gateway import (
+        gateway_problem,
+        gateway_reconnect_needed,
+    )
     from openexecutive.people.store import find_principal_person, list_people
     from openexecutive.scheduler.runner import email_ready, next_brief_runs
 
@@ -1698,6 +1818,8 @@ def gather_snapshot(settings: Settings, *, local_login: bool, app_state: Any) ->
         slack_handler=getattr(app_state, "slack_handler", None),
         slack_bot_id_resolved=bot_user_id() is not None,
         mcp_gateway=getattr(app_state, "mcp_gateway", None),
+        gateway_problem=gateway_problem(with_error=False),
+        gateway_needs_reconnect=gateway_reconnect_needed(getattr(app_state, "mcp_gateway", None)),
         brief_delivery=last_delivery_outcome(),
         brief_email_ready=email_ready(),
         brief_next_runs=next_brief_runs(now),

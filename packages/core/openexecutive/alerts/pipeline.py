@@ -6,7 +6,7 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from openexecutive.alerts import dispatcher, preferences, store
 from openexecutive.alerts.models import (
@@ -14,6 +14,9 @@ from openexecutive.alerts.models import (
     AlertEvent,
     TriageDecision,
 )
+
+if TYPE_CHECKING:
+    from openexecutive.people.models import Person
 
 logger = logging.getLogger(__name__)
 
@@ -275,7 +278,9 @@ async def evaluate_and_dispatch(
         headline=decision.headline or (event.subject or event.title or event.source),
         body=decision.body,
         suggested_action=decision.suggested_action,
-        topic_tags=topic_tags,
+        # Only an extension's own code files a document in its collection
+        # (orchestrator/extensions.py): a triaged alert never claims one.
+        topic_tags=[t for t in topic_tags if not t.startswith("collection:")],
         dedup_key=dedup_key,
         routed_to_person_id=routed_to,
         db_path=path,
@@ -305,6 +310,40 @@ async def evaluate_and_dispatch(
         broadcast_integration=decision.broadcast_integration,
     )
     return decision, alert_id
+
+
+def schedule_chat_message_evaluation(
+    *,
+    source: str,
+    external_id: str,
+    body: str,
+    sender: Person | None,
+    fallback_name: str,
+    channel: str | None = None,
+) -> None:
+    """Triage one inbound chat-app message, naming the sender as the roster does.
+
+    A chat app's own name for the sender is whatever they typed into it, so
+    a linked person is named by their People record instead: otherwise the
+    principal writing from an account called something else reads to triage
+    (and then to their own brief) as a stranger. ``fallback_name`` is used
+    only when nobody on the roster matched.
+
+    The principal's own messages to their Executive are a conversation with
+    it, not news for their brief, so they are not triaged at all.
+    """
+    if sender is not None and sender.is_principal:
+        return
+    name = sender.full_name if sender is not None else fallback_name
+    schedule_evaluation(
+        AlertEvent(
+            source=source,
+            external_id=external_id,
+            body=body,
+            channel=channel,
+            user=name or None,
+        )
+    )
 
 
 def schedule_evaluation(event: AlertEvent) -> None:

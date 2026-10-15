@@ -444,7 +444,7 @@ function BuilderInner() {
     try {
       if (editName) await updateCustomWorkflow(editName, def);
       else await createCustomWorkflow(def);
-      router.push(`/jobs/${encodeURIComponent(def.name)}`);
+      router.push(`/jobs/${encodeURIComponent(def.name)}?saved=1`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setSaving(false);
@@ -1072,6 +1072,7 @@ function AdvancedBuilderPage() {
 
 function WizardPage() {
   const editName = useSearchParams().get("edit");
+  const [progress, setProgress] = useState<string | null>(null);
   return (
     <div className="flex flex-col h-full min-h-0 bg-surface text-fg">
       <div className="border-b border-line px-4 sm:px-6 py-4">
@@ -1079,13 +1080,22 @@ function WizardPage() {
           <Link href="/jobs" className="text-sm text-fg-muted hover:text-fg">
             {t("jobs.common.backToWorkflows")}
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg mt-1">
-            {editName ? t("jobs.builder.editTitle") : t("jobs.start.newWorkflow")}
-          </h1>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-fg">
+              {editName ? t("jobs.builder.editTitle") : t("jobs.start.newWorkflow")}
+            </h1>
+            {progress && (
+              <span className="shrink-0 text-sm text-fg-subtle">{progress}</span>
+            )}
+          </div>
         </div>
       </div>
       <div className="flex-1 min-h-0">
-        <WorkflowWizard key={editName ?? ""} editName={editName ?? undefined} />
+        <WorkflowWizard
+          key={editName ?? ""}
+          editName={editName ?? undefined}
+          onProgress={setProgress}
+        />
       </div>
     </div>
   );

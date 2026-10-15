@@ -19,10 +19,8 @@ import {
   deleteWorkflowRun,
   listCustomWorkflows,
   listWorkflowRuns,
-  listSkills,
   listWorkflows,
 } from "@/lib/api";
-import PlaybooksBrowser from "@/components/jobs/PlaybooksBrowser";
 import StartHere from "@/components/jobs/StartHere";
 import { buttonClass } from "@/components/ui/Button";
 import OverflowMenu, { type OverflowItem } from "@/components/ui/OverflowMenu";
@@ -37,6 +35,8 @@ import {
 import { cadenceLabel, cardAction, lastRunAt } from "@/lib/workflowCards";
 import { sectionLabel } from "@/components/jobs/sectionLabel";
 import { t, tp, type MessageKey } from "@/i18n/index.ts";
+import { starterPicksFor } from "@/lib/workflowStarters";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 
 const SECTION_ORDER: WorkflowSection[] = [
   "Board",
@@ -79,35 +79,14 @@ function inSectionFilter(w: WorkflowMeta, f: SectionFilter): boolean {
   return w.section === f;
 }
 
-// Ready-made workflows shown first in the ready-made panel, each with a plain
-// line on when to use it. The full list sits under them.
-const STARTER_PICKS: { name: string; useFor: MessageKey }[] = [
-  {
-    name: "investor_update",
-    useFor: "jobs.picks.investorUpdate",
-  },
-  {
-    name: "board_prep",
-    useFor: "jobs.picks.boardPrep",
-  },
-  {
-    name: "mbr",
-    useFor: "jobs.picks.mbr",
-  },
-  {
-    name: "competitive_teardown",
-    useFor: "jobs.picks.competitiveTeardown",
-  },
-];
-
 // Runs shown per workflow group before "Show more".
 const RUNS_PER_GROUP = 5;
 
-type Tab = "catalog" | "runs" | "playbooks";
+type Tab = "catalog" | "runs";
 type RunStatus = RunBucket;
 
 function isTab(v: string | null): v is Tab {
-  return v === "catalog" || v === "runs" || v === "playbooks";
+  return v === "catalog" || v === "runs";
 }
 function isStatus(v: string | null): v is RunStatus {
   return (
@@ -167,7 +146,6 @@ function JobsPageInner() {
   // absent from `workflows` until someone turns them on.
   const [customDefs, setCustomDefs] = useState<DynamicWorkflowDef[]>([]);
   const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
-  const [playbookCount, setPlaybookCount] = useState<number | undefined>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [catalogQuery, setCatalogQuery] = useState("");
@@ -178,17 +156,13 @@ function JobsPageInner() {
   const refresh = useCallback(async () => {
     setError(null);
     try {
-      const [wfs, rs, custom, playbooks] = await Promise.all([
+      const [wfs, rs, custom] = await Promise.all([
         listWorkflows(),
         listWorkflowRuns(),
         // Schedules and the switched-off list — never fail the whole page over it.
         listCustomWorkflows().catch(() => [] as DynamicWorkflowDef[]),
-        // Count only; the Playbooks view loads its own list.
-        listSkills().catch(() => undefined),
       ]);
       setWorkflows(wfs);
-      // The Playbooks view reports its own, fresher count once mounted.
-      setPlaybookCount((current) => current ?? playbooks?.length);
       setRuns(rs);
       setCustomDefs(custom);
     } catch (e) {
@@ -279,23 +253,16 @@ function JobsPageInner() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold tracking-tight text-fg">
-          {tab === "runs" ? t("jobs.list.runs") : tab === "playbooks" ? t("jobs.list.playbooks") : t("jobs.list.yourWorkflows")}
+          {tab === "runs" ? t("jobs.list.runs") : t("jobs.list.yourWorkflows")}
         </h2>
         <ViewSwitch
           tab={tab}
           runsLabel={openRuns > 0 ? t("jobs.list.runsOpen", { n: openRuns }) : t("jobs.list.runsCount", { n: runs.length })}
-          playbookCount={playbookCount}
-          onChange={(next) =>
-            setParam(
-              next === "playbooks"
-                ? { tab: next, status: null, section: null, browse: null }
-                : { tab: next === "catalog" ? null : next }
-            )
-          }
+          onChange={(next) => setParam({ tab: next === "catalog" ? null : next })}
         />
       </div>
 
-      {loading && tab !== "playbooks" && (
+      {loading && (
         <div className="text-[15px] text-fg-muted">{t("jobs.list.loading")}</div>
       )}
       {error && (
@@ -310,14 +277,6 @@ function JobsPageInner() {
           runs={runs}
           onDeleteCustom={handleDeleteCustom}
           onBrowse={() => setParam({ browse: "1" })}
-        />
-      )}
-
-      {tab === "playbooks" && (
-        <PlaybooksBrowser
-          onCountChange={setPlaybookCount}
-          initialPlaybook={searchParams.get("playbook") ?? undefined}
-          initialDraft={searchParams.get("draft") ?? undefined}
         />
       )}
 
@@ -361,28 +320,19 @@ function JobsPageInner() {
   );
 }
 
-/** Your workflows · Runs · Playbooks: one control, beside the list's heading. */
+/** Your workflows · Runs: one control, beside the list's heading. */
 function ViewSwitch({
   tab,
   runsLabel,
-  playbookCount,
   onChange,
 }: {
   tab: Tab;
   runsLabel: string;
-  playbookCount?: number;
   onChange: (t: Tab) => void;
 }) {
   const items: { key: Tab; label: string }[] = [
     { key: "catalog", label: t("jobs.list.yourWorkflows") },
     { key: "runs", label: runsLabel },
-    {
-      key: "playbooks",
-      label:
-        playbookCount !== undefined
-          ? t("jobs.list.playbooksCount", { n: playbookCount })
-          : t("jobs.list.playbooks"),
-    },
   ];
   return (
     <div
@@ -564,7 +514,14 @@ function CatalogCard({ workflow: w, useFor }: { workflow: WorkflowMeta; useFor?:
         {useFor ?? w.description}
       </span>
       <span className="mt-1.5 block text-xs text-fg-subtle">
-        {t("jobs.catalog.cardMeta", { n: w.steps.length, min: w.estimated_minutes })}
+        {w.quick ? (
+          <span className="mr-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-500">
+            {t("jobs.catalog.quickBadge")}
+          </span>
+        ) : null}
+        {w.quick
+          ? t("jobs.catalog.cardMetaQuick", { min: w.estimated_minutes })
+          : t("jobs.catalog.cardMeta", { n: w.steps.length, min: w.estimated_minutes })}
       </span>
     </Link>
   );
@@ -597,10 +554,11 @@ function CatalogView({
   section: SectionFilter;
   onSectionChange: (s: SectionFilter) => void;
 }) {
+  const { mode } = useWorkspace();
   const byName = new Map(workflows.map((w) => [w.name, w] as const));
-  const picks = STARTER_PICKS.flatMap((p) => {
+  const picks = starterPicksFor(mode).flatMap((p) => {
     const w = byName.get(p.name);
-    return w ? [{ workflow: w, useFor: t(p.useFor) }] : [];
+    return w ? [{ workflow: w, useFor: p.useFor }] : [];
   });
   const matching = workflows.filter((w) =>
     matchesQuery(query, w.title, w.description)

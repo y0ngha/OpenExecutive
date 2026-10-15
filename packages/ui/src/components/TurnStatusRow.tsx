@@ -54,7 +54,7 @@ export default function TurnStatusRow({
 }) {
   return (
     <div className="flex items-center gap-2 flex-wrap" aria-label={t("misc.turnStatus.thinking")}>
-      {showMark && <CouncilMark consulting className="w-4 h-4 text-accent" />}
+      {showMark && <CouncilMark consulting className="w-5 h-5 text-accent" />}
       {committeePhase ? (
         <CommitteePhaseIndicator phase={committeePhase} />
       ) : status.label ? (

@@ -11,6 +11,7 @@ import {
   WorkflowRunDetail,
   decideWorkflowRun,
   getWorkflowRun,
+  rerunWorkflowRun,
   artifactDownloadUrl,
 } from "@/lib/api";
 import Button from "@/components/ui/Button";
@@ -49,6 +50,21 @@ export default function RunDetailPage() {
   const [run, setRun] = useState<WorkflowRunDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Run again on a failed run: what the server said (queued, or why not).
+  const [rerunMsg, setRerunMsg] = useState<string | null>(null);
+  const [rerunBusy, setRerunBusy] = useState(false);
+  const handleRerun = useCallback(async () => {
+    if (!run) return;
+    setRerunBusy(true);
+    try {
+      await rerunWorkflowRun(run.run_id);
+      setRerunMsg(t("jobs.run.rerunStarted"));
+    } catch (e) {
+      setRerunMsg(e instanceof Error ? e.message : t("jobs.run.rerunFailed"));
+    } finally {
+      setRerunBusy(false);
+    }
+  }, [run]);
 
   useEffect(() => {
     if (!runId) return;
@@ -226,6 +242,21 @@ export default function RunDetailPage() {
             <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-300">
               <div className="font-medium mb-1">{t("jobs.run.failed")}</div>
               <div className="text-xs">{run.error}</div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                {run.rerunnable && (
+                  <Button variant="secondary" onClick={handleRerun} disabled={rerunBusy}>
+                    {t("jobs.run.rerun")}
+                  </Button>
+                )}
+                <Link href={`/jobs/${run.workflow_name}`} className="text-xs text-accent hover:underline">
+                  {t("jobs.run.startNewInstead")}
+                </Link>
+              </div>
+              {rerunMsg && (
+                <div className="mt-2 text-xs text-fg-muted" role="status">
+                  {rerunMsg}
+                </div>
+              )}
             </div>
           )}
 

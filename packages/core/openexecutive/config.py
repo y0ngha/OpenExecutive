@@ -1,9 +1,15 @@
+import logging
 import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from pydantic import Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# One PYTHON_JOB_EXTRA_LIBRARIES entry: a package name, optionally with its
+# import name when that differs ("scikit-learn (import sklearn)").
+_EXTRA_LIBRARY = re.compile(r"[A-Za-z0-9_.\-]+( \(import [A-Za-z0-9_.]+\))?")
+_MODULE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*")
 
 # Walk up from this file to find the repo root .env. If no .env exists
 # (CI, fresh checkouts), `_ROOT` becomes `cwd` so file-path defaults stay
@@ -172,6 +178,16 @@ class Settings(BaseSettings):
     )
     knowledge_builtin_n_results: int = Field(5, alias="KNOWLEDGE_BUILTIN_N_RESULTS")
     knowledge_company_n_results: int = Field(3, alias="KNOWLEDGE_COMPANY_N_RESULTS")
+    # Total characters of knowledge excerpts a chat turn carries (web chat,
+    # Telegram, Discord, Google Chat). The closest matches are kept first.
+    # Every excerpt is re-sent on each model call of the turn, so a long tail
+    # of weak matches costs on every call. 0 = no cap.
+    knowledge_chat_max_chars: int = Field(6000, ge=0, alias="KNOWLEDGE_CHAT_MAX_CHARS")
+    # A specialist's own retrieval (router._retrieve_for_call) takes fewer
+    # chunks than the Executive's: it answers one narrow question. The company
+    # count also caps each synced source (Notion, Drive, OneDrive, Confluence).
+    specialist_builtin_n_results: int = Field(3, alias="SPECIALIST_BUILTIN_N_RESULTS", ge=0)
+    specialist_company_n_results: int = Field(2, alias="SPECIALIST_COMPANY_N_RESULTS", ge=0)
 
     # Max parallel `consult_specialist` calls dispatched in one chat turn.
     # 0 (default) is inert: resolve_fanout_cap() falls back to the specialist
@@ -325,6 +341,12 @@ class Settings(BaseSettings):
         Literal["none", "minimal", "low", "medium", "high"] | None
     ) = Field(None, alias="LOCAL_REASONING_EFFORT")
 
+    # The model that scores eval answers (`make eval` and the Evals page).
+    # Unset = Claude Opus. Any slug the registry routes works, so a slug in
+    # LOCAL_MODELS runs the judge on the local server too, for a run with no
+    # hosted API at all.
+    eval_judge_model: str | None = Field(None, alias="EVAL_JUDGE_MODEL")
+
     @field_validator("local_models", mode="before")
     @classmethod
     def _parse_local_models(cls, v: Any) -> list[str]:
@@ -429,6 +451,12 @@ class Settings(BaseSettings):
     # typically 5–12s.
     committee_extra_timeout_s: float = Field(60.0, alias="COMMITTEE_EXTRA_TIMEOUT_S")
 
+    # How often a streaming chat turn sends an SSE comment while nothing else
+    # is going out (a slow tool call, a long specialist round). Browsers and
+    # proxies drop an idle stream, often after 30-60s, well inside the
+    # whole-turn deadline above. 0 turns it off.
+    chat_stream_keepalive_s: float = Field(15.0, alias="CHAT_STREAM_KEEPALIVE_S", ge=0)
+
     # Per-call ceiling for the onboarding interview. It used to borrow
     # chat_stream_timeout_s, which meant raising that to 300s would have let the
     # wizard's 2-attempt retry loop hang for up to 600s before surfacing
@@ -461,6 +489,9 @@ class Settings(BaseSettings):
 
     slack_bot_token: str | None = Field(None, alias="SLACK_BOT_TOKEN")
     slack_app_token: str | None = Field(None, alias="SLACK_APP_TOKEN")
+    # The other way to hear Slack: with this set and no SLACK_APP_TOKEN, Slack
+    # posts events to POST /webhook/slack, signed with the app's signing secret.
+    slack_signing_secret: str | None = Field(None, alias="SLACK_SIGNING_SECRET")
     # Company-wide broadcast channels — when set, OE can post to "the
     # whole team" on a given integration without picking a specific
     # human or department. Used by `send_company_broadcast`. Each is
@@ -486,7 +517,86 @@ class Settings(BaseSettings):
     # identity addendum so the model has a concrete self-name and never
     # falls back to signing as a person from the company People roster.
     exec_display_name: str = Field("Open Executive", alias="EXEC_DISPLAY_NAME")
+    # AI disclosure (orchestrator.disclosure): a line on the mail and chat
+    # messages the Executive sends saying it is an AI assistant. On unless
+    # turned off. The texts replace the built-in wording; one that doesn't
+    # say "AI" is ignored, so the line can't be reworded into hiding it.
+    ai_disclosure: bool = Field(True, alias="AI_DISCLOSURE")
+    ai_disclosure_mail_text: str = Field("", alias="AI_DISCLOSURE_MAIL_TEXT", max_length=500)
+    ai_disclosure_chat_text: str = Field("", alias="AI_DISCLOSURE_CHAT_TEXT", max_length=200)
+    # Where each person's own switches start (delegation.disclosure): a line
+    # on the replies Handle it for me sends as them on its own, and on the
+    # drafts they approve and send themselves. Each person can change theirs.
+    ai_disclosure_handle_it: bool = Field(True, alias="AI_DISCLOSURE_HANDLE_IT")
+    ai_disclosure_approved_sends: bool = Field(False, alias="AI_DISCLOSURE_APPROVED_SENDS")
     email_poll_interval_seconds: int = Field(60, alias="EMAIL_POLL_INTERVAL_SECONDS")
+    # Whole-turn ceiling for the Executive's answer to one inbound email. The
+    # poller handles mail one message at a time, so a turn with no ceiling held
+    # every message behind it. A timed-out message is marked read and not tried
+    # again: the turn may already have replied.
+    email_turn_timeout_s: float = Field(300.0, alias="EMAIL_TURN_TIMEOUT_S", gt=0)
+    # Ceiling on one call through the MCP gateway (Gmail, Calendar, Drive,
+    # Outlook, OneDrive, tool search). A call past it is abandoned and reported
+    # as not answered, so a hung workspace server can't hold a turn, a brief or
+    # the email poller.
+    mcp_tool_timeout_s: float = Field(120.0, alias="MCP_TOOL_TIMEOUT_S", gt=0)
+
+    # Which Google services the co-located workspace-mcp child loads, and at
+    # which tier. These are the same two variables `docker/workspace-mcp-launch.sh`
+    # turns into `--tools` / `--tool-tier`; they are read here so the prompt can
+    # describe what actually loaded instead of the whole manifest. Both are
+    # process-constant, which is what keeps cached block 0 warm.
+    workspace_mcp_tools: str = Field("all", alias="WORKSPACE_MCP_TOOLS")
+    workspace_mcp_tool_tier: str = Field("complete", alias="WORKSPACE_MCP_TOOL_TIER")
+
+    @property
+    def workspace_mcp_service_list(self) -> list[str] | None:
+        """The Google services loaded, or ``None`` meaning "all of them".
+
+        Mirrors `workspace-mcp-launch.sh`'s normalisation exactly, including the
+        cases that are easy to miss — and every one of them resolves to "all",
+        so a Python parser that handled only `split(",")` would answer with a
+        NARROWER set than the child actually loaded. That direction matters:
+        this value gates what the prompt advertises, and under-reporting hides a
+        tool the model can really call, which is the mirror image of the bug
+        this property exists to fix.
+
+        The four rules, in the launcher's order:
+
+        1. unset or empty -> ``all``
+        2. a value still reading ``$SOMETHING`` -> ``all``. extensible-mcp
+           leaves an unresolved `$VAR` in a config `env` block as that literal
+           text, so the child can receive the string "$WORKSPACE_MCP_TOOLS".
+        3. commas become spaces, then a value with no non-whitespace left
+           (``","``) -> ``all``
+        4. ``all`` only means every service when it is the WHOLE value, after
+           the launcher collapses whitespace. ``"gmail,all"`` becomes
+           ``--tools gmail all``, and since ``--tools`` is declared
+           ``nargs="*" choices=VALID_SERVICES`` and ``all`` is not a service
+           name, **argparse exits 2 and the child never starts** — so nothing
+           loads at all. This property reports ``["gmail", "all"]`` there,
+           matching what the launcher passes rather than what survives it;
+           neither answer describes a dead child, which is a gap the prompt
+           cannot express (``server_names`` comes from the config file, not
+           from child health). Treating ``all`` as a sentinel wherever it
+           appeared made this answer "every service" instead, the widening
+           direction this property exists to prevent. A parity test against
+           the real script catches both.
+        """
+        raw = (self.workspace_mcp_tools or "").strip()
+        if not raw or raw.startswith("$"):
+            return None
+        names = [p for p in raw.replace(",", " ").split() if p]
+        if not names or names == ["all"]:
+            return None
+        return list(dict.fromkeys(names))
+
+    @property
+    def workspace_mcp_tier(self) -> str:
+        """The tier the child runs at. An unresolved ``$VAR`` reads as the
+        launcher's default, for the same reason as above."""
+        raw = (self.workspace_mcp_tool_tier or "").strip()
+        return "complete" if not raw or raw.startswith("$") else raw
 
     # Roster requests (people.roster_requests): someone off the roster who
     # writes in is held for the principal to confirm, and told so — at most
@@ -572,7 +682,7 @@ class Settings(BaseSettings):
     google_chat_project_number: str | None = Field(None, alias="GOOGLE_CHAT_PROJECT_NUMBER")
 
     @field_validator(
-        "slack_bot_token", "slack_app_token", "telegram_bot_token",
+        "slack_bot_token", "slack_app_token", "slack_signing_secret", "telegram_bot_token",
         "discord_bot_token", "discord_app_id", "google_chat_project_number",
         "google_chat_service_account_file", "google_chat_service_account_email",
         mode="before",
@@ -591,10 +701,18 @@ class Settings(BaseSettings):
     # Upper bound on a single tool result's characters before it enters the
     # prompt. A circuit breaker against an unbounded result (a large document
     # fetch) dominating a turn and then being re-sent on every remaining
-    # iteration of the tool loop — deliberately set high enough that ordinary
-    # tool output never reaches it. Applies to every tool, not just MCP.
+    # iteration of the tool loop. 20,000 characters (about 5,500 tokens) is
+    # well above a typical result; a longer one is cut with a marker that
+    # asks for a narrower request. Applies to every tool, not just MCP.
     tool_result_max_chars: int = Field(
-        50_000, alias="TOOL_RESULT_MAX_CHARS", ge=1_000
+        20_000, alias="TOOL_RESULT_MAX_CHARS", ge=1_000
+    )
+    # What all of one turn's tool results may add together, in characters
+    # (specialists' answers aside): each stays in the prompt for every later
+    # call of the turn. Past it a result shows its first 3,000 characters and
+    # says the turn has read enough. 0 turns it off.
+    tool_results_turn_max_chars: int = Field(
+        40_000, alias="TOOL_RESULTS_TURN_MAX_CHARS", ge=0
     )
     # Workflow action steps may also act through one short sandboxed script
     # (`run_script`, workflows/step_script.py) that calls the step's own tools
@@ -629,6 +747,75 @@ class Settings(BaseSettings):
     # The sandbox process's data limit (RLIMIT_DATA): measured, pandas plus a
     # chart needs about 1.5 GB of it; 1 GB is too little.
     python_job_memory_mb: int = Field(1536, alias="PYTHON_JOB_MEMORY_MB", ge=512, le=16384)
+    # Run Python jobs on a separate runner instead of the local sandbox: each
+    # job is POSTed there (workflows/python_job.py, _run_remote) with this key
+    # as a bearer token, and the local sandbox isn't needed. https only, or
+    # plain http to localhost or a .internal / .flycast name. The key is
+    # required with the URL.
+    python_job_runner_url: str | None = Field(None, alias="PYTHON_JOB_RUNNER_URL")
+    python_job_runner_key: str | None = Field(None, alias="PYTHON_JOB_RUNNER_KEY")
+    # Libraries the runner has beyond the local sandbox's, named in the job
+    # tool's description (e.g. "scipy, scikit-learn (import sklearn)"). Used
+    # only with PYTHON_JOB_RUNNER_URL; the local sandbox can't install more.
+    python_job_extra_libraries: str | None = Field(None, alias="PYTHON_JOB_EXTRA_LIBRARIES")
+
+    @field_validator("python_job_runner_url")
+    @classmethod
+    def _validate_python_job_runner_url(cls, v: str | None) -> str | None:
+        from urllib.parse import urlparse
+        v = (v or "").strip()
+        if not v:
+            return None
+        parsed = urlparse(v)
+        host = (parsed.hostname or "").lower()
+        private = host in {"localhost", "127.0.0.1", "::1"} or host.endswith((".internal", ".flycast"))
+        if not host or not (parsed.scheme == "https" or (parsed.scheme == "http" and private)):
+            raise ValueError(
+                "PYTHON_JOB_RUNNER_URL must be an https URL (plain http only to localhost, .internal or .flycast)"
+            )
+        return v
+
+    @field_validator("python_job_extra_libraries")
+    @classmethod
+    def _validate_python_job_extra_libraries(cls, v: str | None) -> str | None:
+        # It goes into a tool description, so only package names, each with an
+        # optional import name ("scikit-learn (import sklearn)"). A bad
+        # value is dropped, not fatal: it is optional and the control plane may
+        # push it to machines that must still boot.
+        v = " ".join((v or "").split())
+        if not v:
+            return None
+        items = [item.strip() for item in v.split(",")]
+        if len(v) > 300 or not all(_EXTRA_LIBRARY.fullmatch(item) for item in items):
+            logging.getLogger(__name__).warning(
+                "PYTHON_JOB_EXTRA_LIBRARIES ignored: not a short comma-separated list of package names"
+            )
+            return None
+        return ", ".join(items)
+
+    @model_validator(mode="after")
+    def _validate_python_job_runner_key(self) -> "Settings":
+        # Without a key every job (code and files) would go out unauthenticated.
+        if self.python_job_runner_url and not (self.python_job_runner_key or "").strip():
+            raise ValueError("PYTHON_JOB_RUNNER_URL requires PYTHON_JOB_RUNNER_KEY")
+        return self
+    # ---- Extensions (orchestrator/extensions.py) ----
+    # Python modules this install adds, comma-separated (e.g. "acme.tools").
+    # Each module's register() adds chat tools and document collections at
+    # startup. A bad name is dropped, not fatal, like the extra libraries.
+    extensions: str | None = Field(None, alias="OPENEXECUTIVE_EXTENSIONS")
+
+    @field_validator("extensions")
+    @classmethod
+    def _validate_extensions(cls, v: str | None) -> str | None:
+        items = [item.strip() for item in (v or "").split(",") if item.strip()]
+        good = [item for item in items if _MODULE_NAME.fullmatch(item)]
+        if len(good) != len(items):
+            logging.getLogger(__name__).warning(
+                "OPENEXECUTIVE_EXTENSIONS: ignored names that are not Python module paths"
+            )
+        return ",".join(good) or None
+
     # A script that worked may be saved and run again by name (saved tools,
     # workflows/saved_tools.py). Off: run_script ignores save_as/tool and
     # list_saved_tools lists nothing; saved tools stay stored.
@@ -945,6 +1132,16 @@ class Settings(BaseSettings):
     attunement_max_open_loops_per_person: int = Field(
         15, alias="ATTUNEMENT_MAX_OPEN_LOOPS_PER_PERSON"
     )
+    # Tell a person, once, when someone else assigns them a task
+    # (attunement/assignment_notice.py). Chasing it stays the nudge engine's.
+    attunement_assign_notify_enabled: bool = Field(
+        True, alias="ATTUNEMENT_ASSIGN_NOTIFY_ENABLED"
+    )
+    # The owner's monthly "what your Executive did" message, on the first
+    # weekday of the month (briefing/value_summary.py). Both workspace modes.
+    value_summary_monthly_enabled: bool = Field(
+        True, alias="VALUE_SUMMARY_MONTHLY_ENABLED"
+    )
     # Ceiling on open-loop extraction model calls per UTC day, across everyone.
     attunement_max_calls_per_day: int = Field(200, alias="ATTUNEMENT_MAX_CALLS_PER_DAY")
     # Outcome ledger: a proactive DM with no reply / action after this long is
@@ -1001,7 +1198,7 @@ class Settings(BaseSettings):
         20, alias="DELEGATION_HANDLE_IT_MAX_SENDS_PER_DAY", ge=1, le=500
     )
     # Whether the owner may let team members use Act as me for themselves
-    # (Settings → Act as me → "Let team members use it", off until they turn
+    # (Delegate → Act as me → "Let team members use it", off until they turn
     # it on). Off: the owner alone, as before (delegation.settings).
     delegation_team_members: bool = Field(False, alias="DELEGATION_TEAM_MEMBERS")
 

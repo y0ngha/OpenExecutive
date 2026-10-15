@@ -215,7 +215,7 @@ async def memory_advice() -> str:
 async def consult_specialist(
     specialist: SpecialistKey, query: str, context: str = ""
 ) -> str:
-    """Consult one of Open Executive's specialist executives for domain analysis.
+    """Consult one of Hoiv Executive's specialist executives for domain analysis.
 
     Each specialist runs its own knowledge retrieval and returns a grounded,
     domain-expert read. Specialists: cso (strategy/M&A/OKRs), cfo (finance/unit
@@ -246,7 +246,7 @@ async def consult_specialist(
 
 @mcp.tool()
 async def search_knowledge(query: str) -> str:
-    """Search Open Executive's curated MBA knowledge base and indexed company docs.
+    """Search Hoiv Executive's curated MBA knowledge base and indexed company docs.
 
     Returns the most relevant retrieved chunks, each prefixed with its
     ``[source]``. No LLM call — this is raw retrieval you can cite or feed back

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from "@/components/Icon";
 import { buttonClass } from "@/components/ui/Button";
-import ChatHistory from "@/components/sessions/ChatHistory";
+import ChatHistory, { ChatRow } from "@/components/sessions/ChatHistory";
 import { useSessions } from "@/components/sessions/SessionsContext";
+import { listSharedSessions, searchSessions, type SessionSummary } from "@/lib/api";
 import {
   CHANNEL_LABELS,
   CHANNEL_ORDER,
@@ -20,16 +21,60 @@ type ChannelFilter = SessionChannel | "all";
 
 // Full conversation history: every chat, including conversations that
 // arrived through Slack, Telegram and Discord. Each row opens its chat;
-// Delete is in the row's ⋯ menu and asks first.
+// Delete is in the row's ⋯ menu and asks first. Chats others shared with
+// the viewer list apart, under "Shared with you", and open to read.
 export default function ChatsPage() {
   const router = useRouter();
   const { sessions, loaded, error, refresh, remove } = useSessions();
   const [channel, setChannel] = useState<ChannelFilter>("all");
   const [query, setQuery] = useState("");
+  // What the server found for `query` in titles and messages; null until it
+  // answers (the list filters titles locally meanwhile) or with no query.
+  const [found, setFound] = useState<{ query: string; sessions: SessionSummary[] } | null>(null);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Chats teammates shared, to read. Kept out of the channel tabs and counts.
+  // A failure just leaves the section hidden.
+  const [shared, setShared] = useState<SessionSummary[]>([]);
+  useEffect(() => {
+    let live = true;
+    listSharedSessions()
+      .then((list) => {
+        if (live) setShared(list);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const trimmed = query.trim();
+  useEffect(() => {
+    if (!trimmed) return;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      searchSessions(trimmed, ctrl.signal)
+        .then((list) => setFound({ query: trimmed, sessions: list }))
+        .catch(() => {
+          // Aborted by the next keystroke, or the search failed: the local
+          // title filter stays on screen.
+        });
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [trimmed]);
+  const results = found && found.query === trimmed ? found.sessions : null;
+  // A chat deleted from the results leaves them too.
+  const shown = useMemo(() => {
+    if (!results) return null;
+    const live = new Set(sessions.map((s) => s.session_id));
+    return results.filter((s) => live.has(s.session_id));
+  }, [results, sessions]);
 
   const counts = useMemo(() => countByChannel(sessions), [sessions]);
   // "All" and "Web" always show; a channel tab appears once it has a chat.
@@ -47,10 +92,33 @@ export default function ChatsPage() {
     if (!channelShown) setChannel("all");
   }, [channelShown]);
   const visible = useMemo(
-    () => filterSessions(sessions, { channel: activeChannel, query }),
-    [sessions, activeChannel, query],
+    () =>
+      shown
+        ? filterSessions(shown, { channel: activeChannel, query: "" })
+        : filterSessions(sessions, { channel: activeChannel, query }),
+    [shown, sessions, activeChannel, query],
   );
-  const searching = query.trim().length > 0;
+  const searching = trimmed.length > 0;
+  const shownCounts = useMemo(() => (shown ? countByChannel(shown) : counts), [shown, counts]);
+
+  // Hidden while searching: the search covers the viewer's own chats.
+  const sharedSection =
+    shared.length > 0 && !searching ? (
+      <section aria-labelledby="shared-with-you" className="mt-8 first:mt-0">
+        <h2 id="shared-with-you" className="px-1 mb-2 text-sm font-semibold text-fg-muted">
+          {t("chat.chats.sharedWithYou")} <span className="font-normal text-fg-subtle">{shared.length}</span>
+        </h2>
+        <div className="space-y-2">
+          {shared.map((s) => (
+            <ChatRow
+              key={s.session_id}
+              session={s}
+              onSelect={(id) => router.push(`/chats/shared/${encodeURIComponent(id)}`)}
+            />
+          ))}
+        </div>
+      </section>
+    ) : null;
 
   return (
     <div className="flex flex-col h-full bg-surface text-fg">
@@ -76,7 +144,8 @@ export default function ChatsPage() {
             >
               {tabs.map((tab) => {
                 const active = activeChannel === tab;
-                const count = tab === "all" ? sessions.length : (counts[tab] ?? 0);
+                const count =
+                  tab === "all" ? (shown ?? sessions).length : (shownCounts[tab] ?? 0);
                 return (
                   <button
                     key={tab}
@@ -104,7 +173,7 @@ export default function ChatsPage() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder={t("chat.chats.search")}
+                placeholder={t("chat.chats.searchPlaceholder")}
                 aria-label={t("chat.chats.search")}
                 className="w-full h-11 rounded-xl bg-surface-elevated border border-line pl-10 pr-3 text-[15px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/20"
               />
@@ -125,14 +194,27 @@ export default function ChatsPage() {
               </button>
             </p>
           ) : sessions.length === 0 ? (
-            <p className="px-1 py-6 text-[15px] text-fg-muted">{t("chat.chats.empty")}</p>
+            <>
+              {sharedSection}
+              <p className="px-1 py-6 text-[15px] text-fg-muted">{t("chat.chats.empty")}</p>
+            </>
           ) : (
+            <>
             <ChatHistory
               sessions={visible}
               searching={searching}
-              onSelect={(id) => router.push(`/?session=${encodeURIComponent(id)}`)}
+              query={shown ? trimmed : ""}
+              onSelect={(id) => {
+                // Opened from a message match: the chat steps through the matches.
+                const hit = shown?.find((s) => s.session_id === id);
+                const find = hit && hit.match_count ? `&find=${encodeURIComponent(trimmed)}` : "";
+                router.push(`/?session=${encodeURIComponent(id)}${find}`);
+              }}
               onDelete={remove}
+              onChanged={refresh}
             />
+            {sharedSection}
+            </>
           )}
         </div>
       </main>

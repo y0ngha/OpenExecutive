@@ -23,9 +23,8 @@ import {
 import { roleFormErrors, roleFormFrom, roleUpdate, type RoleForm } from "@/lib/principalRole";
 
 // Settings → Workspace: who Hoiv Executive is for (personal, or for your
-// team), your role when it's just you, the time zone its briefs run in, and
-// whether it books meetings without asking, as one card each, with company
-// email domains under Advanced. Mode, role and zone go through PUT
+// team), your role when it's just you, and the time zone its briefs run in,
+// as one card each, with company email domains under Advanced. Mode, role and zone go through PUT
 // /workspace and then the app-wide WorkspaceProvider is refreshed so the nav
 // and pages follow. The page supplies the title; this is the body.
 
@@ -366,11 +365,14 @@ function RoleSection() {
   );
 }
 
-// "Book meetings without asking" — the meeting_scheduling decision class
-// between "propose" (each booking waits for approval in the briefing) and
-// "auto_execute". Hidden when this backend has no such setting (404). Shown
-// on Settings → Your Executive, with what else the Executive does by itself.
-export function MeetingAutonomySwitch() {
+// Meetings someone asks for in chat, as a row of Take the lead's Always asks
+// first list: the meeting_scheduling decision class between "propose" (asks
+// first: each booking waits for a yes on Today) and "auto_execute". Hidden
+// when this backend has no such setting (404). It covers only bookings
+// someone asks for in chat: both meeting gates need a person on a verified
+// surface in the turn, so a booking Take the lead thinks of always waits
+// (calendar_tools), and with a team Operations must act on its own too.
+export function MeetingAskFirstRow() {
   const [mode, setMode] = useState<DecisionClassMode | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "absent" | "error">("loading");
   const [busy, setBusy] = useState(false);
@@ -395,20 +397,12 @@ export function MeetingAutonomySwitch() {
   }, []);
 
   if (state === "absent" || state === "loading") return null;
-  if (state === "error") {
-    return (
-      <SettingsCard>
-        <p className="text-sm text-fg-muted">{t("settings.ws.meetingsLoadFailed")}</p>
-      </SettingsCard>
-    );
-  }
-
-  const on = mode === "auto_execute";
+  const asks = mode !== "auto_execute";
   const toggle = async () => {
     setBusy(true);
     setError(null);
     try {
-      const next = await setDecisionClassMode(MEETING_SCHEDULING_CLASS, on ? "propose" : "auto_execute");
+      const next = await setDecisionClassMode(MEETING_SCHEDULING_CLASS, asks ? "auto_execute" : "propose");
       setMode(next.mode);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
@@ -418,13 +412,18 @@ export function MeetingAutonomySwitch() {
   };
 
   return (
-    <SettingsCard
-      title={t("settings.ws.meetingsTitle")}
-      titleId="ws-meetings-label"
-      description={on ? t("settings.ws.meetingsOn") : t("settings.ws.meetingsOff")}
-      action={<Switch checked={on} onChange={() => void toggle()} disabled={busy} labelledBy="ws-meetings-label" />}
-    >
-      {error && <p className="text-sm text-red-500">{error}</p>}
-    </SettingsCard>
+    <li className="flex min-h-touch items-center justify-between gap-3 px-4 py-2">
+      <span className="min-w-0">
+        <span id="ask-first-meetings" className="block text-[15px]">
+          {t("settings.ws.meetingsTitle")}
+        </span>
+        <span className="mt-0.5 block text-[13px] leading-snug text-fg-muted">
+          {state === "error" ? t("settings.ws.meetingsLoadFailed") : error ?? t("settings.ws.meetingsHint")}
+        </span>
+      </span>
+      {state === "ready" && (
+        <Switch checked={asks} onChange={() => void toggle()} disabled={busy} labelledBy="ask-first-meetings" />
+      )}
+    </li>
   );
 }

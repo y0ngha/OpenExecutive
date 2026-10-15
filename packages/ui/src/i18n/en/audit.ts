@@ -136,6 +136,7 @@ const en = {
   "audit.company.howToFix": "How to fix",
   "audit.company.added": "Added {date}",
   "audit.company.noText": "No readable text",
+  "audit.company.noTextReason": "No readable text: {reason}",
   "audit.company.synced": "Synced {time}",
   "audit.company.editedIn": "edited in {source} {date}",
   "audit.company.openIn": "Open in {source} ↗",
