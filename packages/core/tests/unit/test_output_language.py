@@ -132,3 +132,23 @@ def test_chat_specialist_consults_run_as_internal_calls(monkeypatch):
     with set_session(Session()):
         asyncio.run(go())
     assert seen == [True, False]
+
+
+def test_korean_gets_the_writing_style_after_the_template():
+    from openexecutive.providers.output_language import instruction
+
+    text = instruction("ko")
+    assert text is not None
+    head, _, style = text.partition("\n\n")
+    assert "natural Korean" in head
+    # Plain words and the point first; facts never change for style.
+    assert style.startswith("Writing style for Korean")
+    assert "Lead with the answer" in style and "Never change a fact" in style
+
+
+def test_the_block_is_the_same_on_every_call(monkeypatch):
+    # The block sits in the cached prefix, so it must not vary per call.
+    monkeypatch.setenv("OE_LANGUAGE", "ko")
+    first = apply_output_language({"system": [CACHED], "messages": []})
+    second = apply_output_language({"system": [CACHED], "messages": []})
+    assert first["system"][-1] == second["system"][-1]
