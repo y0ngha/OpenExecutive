@@ -263,3 +263,61 @@ def test_offers_become_requests(offer: str, expected: str) -> None:
 )
 def test_user_voice_is_left_alone(text: str) -> None:
     assert chat_route.as_user_request(text, last_executive_reply="Churn rose 4% last quarter.") == text
+
+
+class _FakeToolUse:
+    def __init__(self, name: str, given: Any) -> None:
+        self.type = "tool_use"
+        self.name = name
+        self.input = given
+
+
+class _ToolProvider:
+    def __init__(self, block: Any) -> None:
+        self._block = block
+        self.kwargs: dict[str, Any] = {}
+
+    async def messages_create(self, **kwargs: Any) -> Any:
+        self.kwargs = kwargs
+        response = _FakeResponse("")
+        response.content = [self._block]
+        return response
+
+
+def _patch_tool_provider(monkeypatch: pytest.MonkeyPatch, block: Any) -> _ToolProvider:
+    from openexecutive import providers
+    from openexecutive.agents import utility_fast
+
+    provider = _ToolProvider(block)
+    monkeypatch.setattr(utility_fast, "get_fast_model", lambda: "claude-haiku-test")
+    monkeypatch.setattr(providers, "get_provider", lambda _model: provider)
+    return provider
+
+
+@pytest.mark.asyncio
+async def test_generator_forces_the_suggestion_tool_and_reads_its_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Asked for JSON in prose, the small model sometimes answered the
+    # transcript as the executive; a forced tool call keeps the shape.
+    provider = _patch_tool_provider(
+        monkeypatch,
+        _FakeToolUse("suggest_next_message", {"suggestion": "Draft the Pro pricing email."}),
+    )
+    assert await chat_route._generate_followup_via_llm("t") == "Draft the Pro pricing email."
+    assert provider.kwargs["tool_choice"] == {"type": "tool", "name": "suggest_next_message"}
+    assert [t["name"] for t in provider.kwargs["tools"]] == ["suggest_next_message"]
+
+
+@pytest.mark.asyncio
+async def test_generator_ignores_another_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_tool_provider(monkeypatch, _FakeToolUse("something_else", {"suggestion": "Hi there."}))
+    assert await chat_route._generate_followup_via_llm("t") is None
+
+
+@pytest.mark.asyncio
+async def test_generator_rejects_prose_in_the_executives_voice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_provider(monkeypatch, "응, 슬랙 ID 보내 주신 다음에 DM 연결까지 이어서 확인해 볼게요.")
+    assert await chat_route._generate_followup_via_llm("t") is None
