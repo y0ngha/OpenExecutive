@@ -129,6 +129,66 @@ def test_upsert_updates_existing_person() -> None:
     assert person.role == "VP Marketing"
 
 
+def test_upsert_update_keeps_the_fields_it_does_not_pass() -> None:
+    # Adding a Slack id must not clear the email: on the principal that email
+    # is their sign-in, and losing it hides every chat they had.
+    created = _call(
+        handle_upsert_person,
+        {
+            "full_name": "Cindy Lee",
+            "role": "Head of Marketing",
+            "email": "cindy@example.com",
+            "department_slugs": ["marketing"],
+            "preferred_channel": "email",
+            "response_sla_hours": 4,
+            "on_leave_until": "2030-01-02",
+        },
+    )
+    pid = created["person_id"]
+
+    updated = _call(
+        handle_upsert_person,
+        {"person_id": pid, "full_name": "Cindy Lee", "slack_user_id": "U123"},
+    )
+    assert updated["action"] == "updated"
+
+    person = people_store.get_person(pid)
+    assert person is not None
+    assert person.slack_user_id == "U123"
+    assert person.email == "cindy@example.com"
+    assert person.role == "Head of Marketing"
+    assert person.department_slugs == ["marketing"]
+    assert person.preferred_channel == "email"
+    assert person.response_sla_hours == 4
+    assert person.on_leave_until is not None
+    assert person.on_leave_until.isoformat() == "2030-01-02"
+
+
+def test_upsert_update_keeps_the_principals_sign_in_email(owner_id: int) -> None:
+    people_store.upsert_person(
+        person_id=owner_id, full_name="Owner Olivia", is_principal=True,
+        email="olivia@example.com",
+    )
+    _call(
+        handle_upsert_person,
+        {"person_id": owner_id, "full_name": "Owner Olivia", "slack_user_id": "U999"},
+    )
+    signed_in = people_store.find_person_by_email("olivia@example.com")
+    assert signed_in is not None
+    assert signed_in.id == owner_id
+
+
+def test_upsert_update_can_still_clear_a_field_on_purpose() -> None:
+    created = _call(
+        handle_upsert_person, {"full_name": "Cindy Lee", "email": "cindy@example.com"}
+    )
+    pid = created["person_id"]
+    _call(handle_upsert_person, {"person_id": pid, "full_name": "Cindy Lee", "email": None})
+    person = people_store.get_person(pid)
+    assert person is not None
+    assert person.email is None
+
+
 def test_upsert_rejects_invalid_authority_scope() -> None:
     result = _call(
         handle_upsert_person,
