@@ -1017,7 +1017,10 @@ def _schedule(channel: str, ref: str, *, session: Session, **extra: Any) -> Any:
     return row
 
 
-def test_solo_followup_to_the_principal_files_no_proposal_card() -> None:
+def test_solo_followup_to_the_principal_files_no_proposal_card(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("openexecutive.scheduler.runner.email_ready", lambda: True)
     _solo()
     pid = _principal()
     row = _schedule("telegram", "555", session=Session())
