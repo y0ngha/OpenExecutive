@@ -3,7 +3,9 @@
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useId, useState } from "react";
 
+import Icon from "@/components/Icon";
 import { TeamModeOffer } from "@/components/people/TeamModeOffer";
+import { usePageCrumb } from "@/components/shell/PageCrumb";
 import Button from "@/components/ui/Button";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import SectionTabs, { sectionPanelProps } from "@/components/ui/SectionTabs";
@@ -28,7 +30,9 @@ import {
   type PersonKind,
   type WorkingStyle,
 } from "@/lib/api";
+import { assignNoticeLine } from "@/lib/assignNotice";
 import { isContact, shouldOfferTeamMode } from "@/lib/peopleKinds";
+import { onLeaveLine, reachLine } from "@/lib/personReach";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -48,13 +52,19 @@ const ALL_SCOPES: { value: string; label: MessageKey; hint: MessageKey }[] = [
   { value: "wildcard", label: "people.scope.wildcard", hint: "people.scope.wildcardHint" },
 ];
 
-const CHANNELS = ["any", "slack", "discord", "telegram", "email"];
+const CHANNELS = ["any", "email", "slack", "discord", "telegram"];
 
-// The raw channel values as shown; brand names stay as-is.
+// Brand names stay as-is; only "any" and "email" are translated.
+const CHANNEL_BRANDS: Record<string, string> = {
+  slack: "Slack",
+  discord: "Discord",
+  telegram: "Telegram",
+};
+
 function channelOption(channel: string): string {
   if (channel === "any") return t("people.channel.any");
   if (channel === "email") return t("people.channel.email");
-  return channel;
+  return CHANNEL_BRANDS[channel] ?? channel;
 }
 
 const INPUT_CLS =
@@ -300,7 +310,10 @@ function OpenLoopsSection({
         );
       }
       setAssigned(
-        t("people.detail.assigned", { date: new Date(loop.due_at).toLocaleDateString(displayLocale()) }),
+        t("people.detail.assigned", {
+          date: new Date(loop.due_at).toLocaleDateString(displayLocale()),
+          notice: assignNoticeLine(loop.notified),
+        }),
       );
       setTask("");
       setDueDate("");
@@ -553,8 +566,7 @@ export default function PersonDetailPage() {
   const [tab, setTab] = useState<PersonTab>("overview");
   const tabsId = useId();
 
-  // Edit-mode disclosure panels
-  const [showContact, setShowContact] = useState(false);
+  // Edit mode keeps the chat ids and leave date in a closed Advanced fold.
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Edit form state — mirrors the person fields we allow editing
@@ -581,17 +593,13 @@ export default function PersonDetailPage() {
       .then((p) => {
         setPerson(p);
         resetForm(p);
-        // Auto-open sections that already have data so existing values aren't hidden
-        if (p.email || (p.email_aliases?.length ?? 0) > 0 || p.slack_user_id || p.discord_user_id || p.telegram_chat_id || p.preferred_channel !== "any" || p.response_sla_hours !== 24) {
-          setShowContact(true);
-        }
-        if (p.on_leave_until) {
-          setShowAdvanced(true);
-        }
       })
       .catch((e) => setError(e instanceof Error ? e.message : t("people.dept.loadFailed")))
       .finally(() => setLoading(false));
   }, [personId]);
+
+  // The breadcrumb names the person rather than the id in the URL.
+  usePageCrumb(person?.full_name);
 
   // Contacts are outside the team: no approvals, no reply SLA, no
   // availability windows, no departments — and nothing to chase.
@@ -859,76 +867,88 @@ export default function PersonDetailPage() {
                       </label>
                     )}
 
-                    {/* Contact & routing */}
-                    <DisclosureSection
-                      label={t("people.add.contactRouting")}
-                      open={showContact}
-                      onToggle={() => setShowContact((v) => !v)}
-                    >
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className={LABEL_CLS}>
-                            {t("people.add.preferredChannel")}
-                            <select
-                              value={form.preferred_channel}
-                              onChange={(e) => setForm((f) => ({ ...f, preferred_channel: e.target.value }))}
-                              className={INPUT_CLS}
-                            >
-                              {CHANNELS.map((c) => (
-                                <option key={c} value={c}>{channelOption(c)}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <p className={HINT_CLS}>
-                            {t("people.add.sentVia", {
-                              channel: form.preferred_channel === "any" ? t("people.add.anyAvailableChannel") : form.preferred_channel,
-                            })}
-                          </p>
-                        </div>
-                        {!formContact && (
-                        <div>
-                          <label className={LABEL_CLS}>
-                            {t("people.add.expectedReply")}
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                min={1}
-                                value={form.response_sla_hours}
-                                onChange={(e) => setForm((f) => ({ ...f, response_sla_hours: e.target.value }))}
-                                className={`${INPUT_CLS} flex-1 min-w-0`}
-                              />
-                              <span className="text-sm text-fg-muted flex-shrink-0">{t("people.add.hours")}</span>
-                            </div>
-                          </label>
-                          <p className={HINT_CLS}>
-                            {t("people.add.overdueHint", { n: form.response_sla_hours || 24 })}
-                          </p>
-                        </div>
-                        )}
-                      </div>
+                    <label className={LABEL_CLS}>
+                      {t("people.add.email")}
+                      <input
+                        type="email"
+                        value={form.email}
+                        onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                        className={INPUT_CLS}
+                      />
+                    </label>
 
+                    <label className={LABEL_CLS}>
+                      {t("people.detail.otherAddresses")}
+                      <textarea
+                        value={form.email_aliases}
+                        onChange={(e) => setForm((f) => ({ ...f, email_aliases: e.target.value }))}
+                        rows={2}
+                        placeholder="anna.personal@gmail.com"
+                        className={`${INPUT_CLS} h-auto py-2.5`}
+                      />
+                      <span className={HINT_CLS}>
+                        {t("people.detail.otherAddressesHint")}
+                      </span>
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className={LABEL_CLS}>
+                          {t("people.add.preferredChannel")}
+                          <select
+                            value={form.preferred_channel}
+                            onChange={(e) => setForm((f) => ({ ...f, preferred_channel: e.target.value }))}
+                            className={INPUT_CLS}
+                          >
+                            {CHANNELS.map((c) => (
+                              <option key={c} value={c}>{channelOption(c)}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <p className={HINT_CLS}>
+                          {t("people.add.sentVia", {
+                            channel: form.preferred_channel === "any"
+                              ? t("people.add.anyAvailableChannel")
+                              : channelOption(form.preferred_channel),
+                          })}
+                        </p>
+                      </div>
+                      {!formContact && (
+                      <div>
+                        <label className={LABEL_CLS}>
+                          {t("people.add.expectedReply")}
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={1}
+                              value={form.response_sla_hours}
+                              onChange={(e) => setForm((f) => ({ ...f, response_sla_hours: e.target.value }))}
+                              className={`${INPUT_CLS} flex-1 min-w-0`}
+                            />
+                            <span className="text-sm text-fg-muted flex-shrink-0">{t("people.add.hours")}</span>
+                          </div>
+                        </label>
+                        <p className={HINT_CLS}>
+                          {t("people.add.overdueHint", { n: form.response_sla_hours || 24 })}
+                        </p>
+                      </div>
+                      )}
+                    </div>
+
+                    {/* Advanced */}
+                    <DisclosureSection
+                      label={t("people.detail.advanced")}
+                      open={showAdvanced}
+                      onToggle={() => setShowAdvanced((v) => !v)}
+                    >
                       <label className={LABEL_CLS}>
-                        {t("people.add.email")}
+                        {t("people.detail.onLeaveUntil")}
                         <input
-                          type="email"
-                          value={form.email}
-                          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                          type="date"
+                          value={form.on_leave_until}
+                          onChange={(e) => setForm((f) => ({ ...f, on_leave_until: e.target.value }))}
                           className={INPUT_CLS}
                         />
-                      </label>
-
-                      <label className={LABEL_CLS}>
-                        {t("people.detail.otherAddresses")}
-                        <textarea
-                          value={form.email_aliases}
-                          onChange={(e) => setForm((f) => ({ ...f, email_aliases: e.target.value }))}
-                          rows={2}
-                          placeholder="anna.personal@gmail.com"
-                          className={`${INPUT_CLS} h-auto py-2.5`}
-                        />
-                        <span className={HINT_CLS}>
-                          {t("people.detail.otherAddressesHint")}
-                        </span>
                       </label>
 
                       <label className={LABEL_CLS}>
@@ -964,43 +984,35 @@ export default function PersonDetailPage() {
                         />
                       </label>
                     </DisclosureSection>
-
-                    {/* Advanced */}
-                    <DisclosureSection
-                      label={t("people.detail.advanced")}
-                      open={showAdvanced}
-                      onToggle={() => setShowAdvanced((v) => !v)}
-                    >
-                      <label className={LABEL_CLS}>
-                        {t("people.detail.onLeaveUntil")}
-                        <input
-                          type="date"
-                          value={form.on_leave_until}
-                          onChange={(e) => setForm((f) => ({ ...f, on_leave_until: e.target.value }))}
-                          className={INPUT_CLS}
-                        />
-                      </label>
-                    </DisclosureSection>
                   </div>
                 ) : (
-                  <dl className="divide-y divide-line">
+                  <ul className="divide-y divide-line">
                     {[
-                      [t("people.detail.kind"), contact ? t("people.detail.kindContact") : t("people.add.teamMember")],
-                      [t("people.add.preferredChannel"), channelOption(person.preferred_channel)],
-                      ...(contact ? [] : [[t("people.add.expectedReply"), t("people.detail.slaHours", { n: person.response_sla_hours })]]),
-                      [t("people.add.email"), person.email ?? "—"],
-                      [t("people.detail.otherAddresses"), (person.email_aliases ?? []).join(", ") || "—"],
-                      [t("people.add.slackUserId"), person.slack_user_id ?? "—"],
-                      [t("people.add.discordUserId"), person.discord_user_id ?? "—"],
-                      [t("people.dept.telegramChatId"), person.telegram_chat_id ?? "—"],
-                      [t("people.detail.onLeaveUntil"), person.on_leave_until ?? "—"],
-                    ].map(([label, value]) => (
-                      <div key={label} className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-4 py-3">
-                        <dt className="sm:w-48 flex-shrink-0 text-sm text-fg-muted">{label}</dt>
-                        <dd className="text-[15px] text-fg break-words min-w-0">{value}</dd>
-                      </div>
+                      {
+                        icon: "mail" as const,
+                        text: person.email ?? t("people.detail.noEmail"),
+                        sub: (person.email_aliases ?? []).length > 0
+                          ? t("people.detail.alsoAddresses", { addresses: (person.email_aliases ?? []).join(", ") })
+                          : null,
+                      },
+                      {
+                        icon: "chat" as const,
+                        text: reachLine(person, { self: viewerPersonId === personId, contact }),
+                        sub: null,
+                      },
+                      ...(onLeaveLine(person.on_leave_until)
+                        ? [{ icon: "pause" as const, text: onLeaveLine(person.on_leave_until) ?? "", sub: null }]
+                        : []),
+                    ].map((row) => (
+                      <li key={row.icon} className="flex items-start gap-3 py-3.5">
+                        <Icon name={row.icon} size="w-4 h-4" className="mt-1 text-fg-subtle flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-[15px] text-fg break-words">{row.text}</p>
+                          {row.sub && <p className="text-sm text-fg-muted break-words">{row.sub}</p>}
+                        </div>
+                      </li>
                     ))}
-                  </dl>
+                  </ul>
                 )}
               </section>
 

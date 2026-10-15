@@ -244,9 +244,9 @@ export default function DemoPage() {
   async function handleReset() {
     setBusy(true);
     try {
-      const r = await resetAllState();
+      await resetAllState();
       setToast({
-        message: t("misc.demo.resetComplete", { departments: r.departments_seeded }),
+        message: t("misc.demo.resetComplete"),
         kind: "success",
       });
       setResetOpen(false);

@@ -138,6 +138,7 @@ const ko: Partial<Record<keyof typeof en, string>> = {
   "audit.company.howToFix": "해결 방법",
   "audit.company.added": "{date} 추가",
   "audit.company.noText": "읽을 수 있는 텍스트 없음",
+  "audit.company.noTextReason": "읽을 수 있는 텍스트 없음: {reason}",
   "audit.company.synced": "{time} 동기화",
   "audit.company.editedIn": "{source}에서 {date} 수정",
   "audit.company.openIn": "{source}에서 열기 ↗",

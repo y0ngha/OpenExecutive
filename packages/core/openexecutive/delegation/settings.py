@@ -54,7 +54,7 @@ import contextvars
 import logging
 import re
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -92,10 +92,16 @@ class TurnDelegation:
     # that once read them (``_carry_kept_private``).
     touched_mail: bool = False
     # This turn itself read their mailbox or notes (set before the read, with
-    # ``touched_mail``): nothing that reaches anyone else runs for the rest of
-    # it (``delegation.lockdown``). Never carried into the next turn: what
-    # the mail said reaches a later turn only as the Executive's own reply.
+    # ``touched_mail``): nothing that opens a link, runs a script or workflow,
+    # or posts to everyone runs for the rest of it (``delegation.lockdown``).
+    # Never carried into the next turn: what the mail said reaches a later
+    # turn only as the Executive's own reply, which the person has read.
     read_mail: bool = False
+    # Who sent the mail this turn read, address to display name
+    # (``mail_read_tools``): a new contact's address may be one of them, when
+    # its name or address matches the contact's, never one the mail's text
+    # only mentions (``delegation.lockdown.speaker_named_contact``).
+    mail_senders: dict[str, str] = field(default_factory=dict)
     # Drafts made this turn, against the per-turn cap.
     drafts: int = 0
     # Searches and thread reads of their mailbox this turn, against the
@@ -105,8 +111,11 @@ class TurnDelegation:
     attachments_read: int = 0
     # Reminders set this turn (orchestrator.reminder_tools).
     reminders: int = 0
+    # Approval cards left this turn (orchestrator.action_card_tools).
+    action_cards: int = 0
     # The speaker's own words this turn (``executive._speaker_text``): a new
-    # email may go to an address they typed. Pinned here because the turn's
+    # contact may take an address they typed, and a draft's address they
+    # didn't type is named back to them. Pinned here because the turn's
     # message joins the session history only once the turn ends.
     speaker_text: str = ""
     person_id: int | None = None
@@ -413,14 +422,23 @@ def pin_turn_delegation(session: Any, speaker_text: str) -> TurnDelegation:
     return pinned
 
 
+def history_len(session: Any) -> int | None:
+    """How many history messages ``session`` holds now, or None when that
+    can't be told (stored as when the conversation read mail,
+    ``session_store.mail_read_at``)."""
+    history = getattr(session, "conversation_history", None)
+    return len(history) if isinstance(history, list) else None
+
+
 def _carry_kept_private(pinned: TurnDelegation) -> None:
     """A conversation that once read someone's mail (``mark_mail_private``)
     stays theirs on every later turn: its rows are private to them and it
     teaches no memory, however it is answered (``touched_mail``). Nobody else
-    drafts in it. The lockdown is not carried (``read_mail``): history keeps
-    only the speaker's words and the Executive's replies, never the mail a
-    tool returned, so a later turn locks only if it reads mail itself. Fails
-    closed: a flag that can't be read counts as set."""
+    drafts in it. The turn's own lockdown is not carried (``read_mail``):
+    history keeps only the speaker's words and the Executive's replies, never
+    the mail a tool returned, and a later message is the person asking again
+    after reading that reply. Fails closed: a flag that can't be read counts
+    as set."""
     if not pinned.session_id:
         return
     from openexecutive.memory import session_store

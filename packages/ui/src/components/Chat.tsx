@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import Message from "./Message";
 import BrandMark from "./BrandMark";
@@ -21,10 +21,14 @@ import {
   fallbackActivityLabel,
   getFollowupSuggestion,
   getSuggestedPrompts,
+  rewindSession,
   setMessageFeedback,
   streamChat,
 } from "@/lib/api";
+import { confirmRedoText, dropLastTurn, lastTurn } from "@/lib/chatTurns";
+import { downloadChat } from "@/lib/downloadChat";
 import { answerSourcesFrom, type AnswerSources } from "@/lib/answerSources";
+import { matchingMessages } from "@/lib/chatSearch";
 import { isAbortError, useStoppableTurn } from "@/lib/use-stoppable-turn";
 import {
   composerText,
@@ -58,7 +62,18 @@ interface ChatProps {
   initialMemoryText?: string;
   onTurnComplete?: (sessionId: string) => void;
   onTurnStart?: () => void;
+  // Words to find in the opened chat (it was opened from a search on the
+  // Chats page): the chat starts at the newest message containing them and
+  // steps through the others.
+  initialFind?: string;
+  // A chat someone else shared with the viewer: shown to read, with no
+  // composer and no rating, Try again or Edit.
+  readOnly?: { sharedBy: string };
 }
+
+// The browser's own highlight for found words, where it has one
+// (CSS Custom Highlight API); elsewhere only the message is outlined.
+const FIND_HIGHLIGHT = "chat-find";
 
 // Static fallbacks used only when the /chat/suggested-prompts fetch fails
 // entirely (network error, aborted, etc). The backend always returns these
@@ -79,7 +94,7 @@ function endsOnReply(messages: ChatMessage[] | undefined): boolean {
   return last?.role === "assistant" && Boolean(last.id);
 }
 
-export default function Chat({ onDebugEvent, initialMessages, initialSessionId, initialInput, autoSubmitInitialInput, initialMemoryText, onTurnComplete, onTurnStart }: ChatProps) {
+export default function Chat({ onDebugEvent, initialMessages, initialSessionId, initialInput, autoSubmitInitialInput, initialMemoryText, onTurnComplete, onTurnStart, initialFind, readOnly }: ChatProps) {
   const { data: session } = useSession();
   const firstName = session?.user?.name?.trim().split(/\s+/)[0];
 
@@ -121,8 +136,28 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
   }
   // The running turn's id, which addresses it for POST /chat/add.
   const turnIdRef = useRef<string | null>(null);
+  // Find-in-chat (opened from a search). `findPos` indexes `findHits`; null
+  // means "the newest", so a chat opens on the match its snippet showed.
+  const [find, setFind] = useState<string | null>(initialFind?.trim() || null);
+  const [findPos, setFindPos] = useState<number | null>(null);
+  const findHits = useMemo(() => (find ? matchingMessages(messages, find) : []), [find, messages]);
+  const findIndex = findHits.length ? (findPos ?? findHits.length - 1) : -1;
+  const findMessage = findIndex >= 0 ? findHits[findIndex] : -1;
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const closeFind = () => {
+    setFind(null);
+    setFindPos(null);
+  };
+  // Try again / Edit on the last turn. `editingReplyId` is the reply the
+  // edit replaces: once the chat's last reply changes, the edit is over.
+  const [editingReplyId, setEditingReplyId] = useState<number | null>(null);
+  const [redoing, setRedoing] = useState(false);
+  const [redoError, setRedoError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState(false);
 
   useEffect(() => {
+    // A shared chat is only read: nothing to suggest.
+    if (readOnly) return;
     const ctrl = new AbortController();
     getSuggestedPrompts(ctrl.signal)
       .then((r) => {
@@ -139,6 +174,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
         setIsLoadingPrompts(false);
       });
     return () => ctrl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function clearFollowup() {
@@ -163,7 +199,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
   // Opening an existing session suggests a follow-up to its last reply.
   // Later session switches are handled in the sync effect below.
   useEffect(() => {
-    if (initialSessionId && endsOnReply(initialMessages)) loadFollowup(initialSessionId);
+    if (!readOnly && initialSessionId && endsOnReply(initialMessages)) loadFollowup(initialSessionId);
     return () => followupCtrlRef.current?.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -177,14 +213,45 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
     setMessages(initialMessages ?? []);
     setSessionId(initialSessionId);
     setStreamingContent("");
+    setFind(initialFind?.trim() || null);
+    setFindPos(null);
     clearFollowup();
     if (initialSessionId && endsOnReply(initialMessages)) loadFollowup(initialSessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSessionId]);
 
   useEffect(() => {
+    // While finding, the chat stays on the match instead.
+    if (find) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingContent]);
+  }, [messages, streamingContent, find]);
+
+  // Bring the current match into view and mark every occurrence of the words.
+  useEffect(() => {
+    const root = messagesRef.current;
+    if (!root || !find || findMessage < 0) return;
+    root
+      .querySelector(`[data-msg-index="${findMessage}"]`)
+      ?.scrollIntoView({ block: "center" });
+    const highlights = typeof CSS !== "undefined" ? CSS.highlights : undefined;
+    if (!highlights || typeof Highlight === "undefined") return;
+    const needle = find.toLowerCase();
+    const ranges: Range[] = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = (node.textContent ?? "").toLowerCase();
+      for (let at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + needle.length)) {
+        const range = document.createRange();
+        range.setStart(node, at);
+        range.setEnd(node, at + needle.length);
+        ranges.push(range);
+      }
+    }
+    highlights.set(FIND_HIGHLIGHT, new Highlight(...ranges));
+    return () => {
+      highlights.delete(FIND_HIGHLIGHT);
+    };
+  }, [find, findMessage, messages]);
 
   // One-shot auto-submit of the initialInput on mount when the parent
   // requests it (briefing handoffs). Guarded by a ref so prop churn can't
@@ -255,12 +322,15 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
   // `queuedFollowup`: the leftovers of a turn, sent on their own. They carry
   // no files and leave alone whatever is being typed in the composer now.
   async function handleSend(text?: string, memoryText?: string, queuedFollowup = false) {
+    // Carrying on in the chat ends the find, so the reply scrolls into view.
+    closeFind();
     if (isLoading && text === undefined) {
       addWhileWorking();
       return;
     }
     const message = (text ?? input).trim();
     if ((!message && pendingFiles.length === 0) || isLoading) return;
+    setRedoError(null);
     const restored = restoredHandoffRef.current;
     restoredHandoffRef.current = undefined;
     const turnMemoryText =
@@ -495,6 +565,103 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
     setMessageFeedback(sessionId, target.id, value).catch(() => apply(previous));
   }
 
+  // What the last turn allows. Not while anything is in flight, and never
+  // on a chat shared to read.
+  const turn = lastTurn(messages, sessionId);
+  const canRedo =
+    !readOnly && turn.canRedo && !isLoading && !redoing && !streamingContent && queued.length === 0;
+  // Not tied to canRedo: the edit stays on while its rewind is in flight.
+  const editing = !readOnly && editingReplyId !== null && editingReplyId === turn.replyId;
+
+  // Takes the last turn back on the server, then here. Returns the words it
+  // answered, or null when the server refused (the reason shows above the
+  // composer and nothing else changes).
+  async function takeBackLastTurn(): Promise<string | null> {
+    if (!sessionId || turn.replyId === null) return null;
+    if (turn.didSomething) {
+      const reply = turn.replyIndex !== null ? messages[turn.replyIndex] : undefined;
+      if (!window.confirm(confirmRedoText(reply?.actions))) return null;
+    }
+    setRedoError(null);
+    setRedoing(true);
+    try {
+      const asked = await rewindSession(sessionId, turn.replyId);
+      clearFollowup();
+      setMessages((prev) => dropLastTurn(prev));
+      return asked;
+    } catch (err) {
+      setRedoError(err instanceof Error ? err.message : t("chat.redo.failed"));
+      return null;
+    } finally {
+      setRedoing(false);
+    }
+  }
+
+  // Try again: the same words as a new turn. Sent like a queued follow-up so
+  // whatever is in the composer (text, files) stays there.
+  async function handleRetry() {
+    const asked = await takeBackLastTurn();
+    if (asked !== null) void handleSend(asked, undefined, true);
+  }
+
+  // Edit: the last message goes back in the composer; sending replaces it
+  // and its answer.
+  function startEdit() {
+    if (turn.replyIndex === null || turn.userIndex === null) return;
+    const words = dropLastTurn(messages).length;
+    const text = messages
+      .slice(words, turn.replyIndex)
+      .filter((m) => m.role === "user")
+      .map((m) => m.content)
+      .join("\n\n");
+    setRedoError(null);
+    setEditingReplyId(turn.replyId);
+    setInput(text);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(text.length, text.length);
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    });
+  }
+
+  function cancelEdit() {
+    setEditingReplyId(null);
+    setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+  }
+
+  async function sendEdit() {
+    const text = input.trim();
+    if (!text) return;
+    const asked = await takeBackLastTurn();
+    if (asked === null) return;
+    setEditingReplyId(null);
+    setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    // Files picked before the edit stay for the next message.
+    void handleSend(text, undefined, true);
+  }
+
+  // Enter and the Send button: an edit replaces the last turn.
+  function submit() {
+    if (redoing) return;
+    if (editing) void sendEdit();
+    else void handleSend();
+  }
+
+  async function handleDownload() {
+    if (!sessionId) return;
+    setDownloadError(false);
+    try {
+      await downloadChat(sessionId);
+    } catch {
+      setDownloadError(true);
+    }
+  }
+
   // The "still working" line: before the reply starts, and again under the
   // partial reply whenever the Executive goes quiet to run a tool.
   const status = turnStatus({
@@ -538,7 +705,11 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      submit();
+    }
+    if (e.key === "Escape" && editing) {
+      e.preventDefault();
+      cancelEdit();
     }
   }
 
@@ -576,8 +747,54 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
     <div className="flex flex-col h-full">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          {isEmpty ? (
+        {find && (
+          <div
+            role="status"
+            className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur"
+          >
+            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-2 flex items-center gap-2 text-sm">
+              <span className="mr-auto min-w-0 truncate text-fg-muted">
+                {findHits.length === 0
+                  ? t("chat.find.none", { query: find })
+                  : t("chat.find.position", { query: find, n: findIndex + 1, total: findHits.length })}
+              </span>
+              {findHits.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    aria-label={t("chat.find.previous")}
+                    onClick={() => setFindPos(Math.max(0, findIndex - 1))}
+                    disabled={findIndex <= 0}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-overlay hover:text-fg disabled:opacity-40 cursor-pointer"
+                  >
+                    <Icon name="chevron-right" size="w-4 h-4" className="-rotate-90" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("chat.find.next")}
+                    onClick={() => setFindPos(Math.min(findHits.length - 1, findIndex + 1))}
+                    disabled={findIndex >= findHits.length - 1}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-overlay hover:text-fg disabled:opacity-40 cursor-pointer"
+                  >
+                    <Icon name="chevron-right" size="w-4 h-4" className="rotate-90" />
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                aria-label={t("chat.find.stop")}
+                onClick={closeFind}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-overlay hover:text-fg cursor-pointer"
+              >
+                <Icon name="close" size="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+        <div ref={messagesRef} className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          {isEmpty && readOnly ? (
+            <p className="py-10 text-center text-[15px] text-fg-muted">{t("chat.readOnly.empty")}</p>
+          ) : isEmpty ? (
             /* Empty state */
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
               <div className="mb-6">
@@ -620,8 +837,16 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
           ) : (
             <>
               {messages.map((msg, i) => (
-                <Message
+                <div
                   key={i}
+                  data-msg-index={i}
+                  className={
+                    i === findMessage
+                      ? "rounded-2xl ring-2 ring-accent/40 ring-offset-4 ring-offset-surface"
+                      : undefined
+                  }
+                >
+                <Message
                   role={msg.role}
                   content={msg.content}
                   actions={msg.role === "assistant" ? msg.actions : undefined}
@@ -629,11 +854,14 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                   sources={msg.role === "assistant" ? msg.sources : undefined}
                   feedback={msg.role === "assistant" ? msg.feedback : undefined}
                   onFeedback={
-                    msg.role === "assistant" && msg.id && sessionId
+                    !readOnly && msg.role === "assistant" && msg.id && sessionId
                       ? (v) => handleFeedback(i, v)
                       : undefined
                   }
+                  onRetry={canRedo && i === turn.replyIndex ? () => void handleRetry() : undefined}
+                  onEdit={canRedo && !editing && i === turn.userIndex ? startEdit : undefined}
                 />
+                </div>
               ))}
 
               {queued.map((q) => (
@@ -678,9 +906,56 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
         </div>
       </div>
 
-      {/* Input */}
+      {readOnly ? (
+        <div className="border-t border-line bg-surface px-4 sm:px-6 py-3 sm:py-4">
+          <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-3">
+            <p className="mr-auto text-sm text-fg-muted">
+              {t("chat.readOnly.notice", { name: readOnly.sharedBy })}
+            </p>
+            {downloadError && (
+              <p role="alert" className="text-sm text-red-400">
+                {t("chat.history.downloadFailed")}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              disabled={!sessionId}
+              className="min-h-[2.5rem] px-3 rounded-lg border border-line text-sm font-medium text-fg hover:bg-surface-overlay disabled:opacity-50 cursor-pointer"
+            >
+              {t("chat.history.download")}
+            </button>
+          </div>
+        </div>
+      ) : (
+      /* Input */
       <div className="border-t border-line bg-surface px-4 sm:px-6 py-3 sm:py-4">
         <div className="max-w-3xl mx-auto">
+          {redoError && (
+            <div role="alert" className="mb-2 flex items-start gap-2 rounded-lg border border-line bg-surface-elevated px-3 py-2 text-sm text-fg">
+              <span className="mr-auto">{redoError}</span>
+              <button
+                type="button"
+                onClick={() => setRedoError(null)}
+                aria-label={t("chat.redo.dismiss")}
+                className="-my-1 inline-flex h-8 w-8 items-center justify-center rounded-md text-fg-muted hover:text-fg hover:bg-surface-overlay cursor-pointer"
+              >
+                <Icon name="close" size="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          {editing && (
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-sm text-fg">
+              <span className="mr-auto">{t("chat.edit.banner")}</span>
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="min-h-[2rem] px-2 rounded-md font-medium text-fg-muted hover:text-fg hover:bg-surface-overlay cursor-pointer"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          )}
           {/* Committee review is switched in the + menu; while it is on, this
               chip says so and turns it off. */}
           {committeeEnabled && (
@@ -749,7 +1024,8 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
                       ? t("chat.composer.attachLimit", { n: MAX_FILES_PER_TURN })
                       : t("chat.composer.attach"),
                   onSelect: () => fileInputRef.current?.click(),
-                  disabled: isLoading || pendingFiles.length >= MAX_FILES_PER_TURN,
+                  // An edit replaces the words only.
+                  disabled: isLoading || editing || pendingFiles.length >= MAX_FILES_PER_TURN,
                 },
                 {
                   label: t(committeeEnabled ? "chat.committee.turnOff" : "chat.committee.turnOn"),
@@ -803,9 +1079,15 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
             {(!isLoading || input.trim()) && (
               <button
                 type="button"
-                onClick={() => handleSend()}
-                disabled={!input.trim() && pendingFiles.length === 0}
-                aria-label={t(isLoading ? "chat.composer.addToTurn" : "chat.composer.send")}
+                onClick={submit}
+                disabled={editing ? !input.trim() || redoing : !input.trim() && pendingFiles.length === 0}
+                aria-label={t(
+                  isLoading
+                    ? "chat.composer.addToTurn"
+                    : editing
+                      ? "chat.composer.sendEdited"
+                      : "chat.composer.send",
+                )}
                 className="flex-shrink-0 w-11 h-11 rounded-xl bg-accent-strong hover:bg-accent-strong/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center cursor-pointer"
               >
                 <Icon name="arrow-send" size="w-4 h-4" className="text-white" />
@@ -835,6 +1117,7 @@ export default function Chat({ onDebugEvent, initialMessages, initialSessionId, 
           </p>
         </div>
       </div>
+      )}
     </div>
   );
 }

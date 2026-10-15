@@ -18,7 +18,8 @@ import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import quote
+
+from openexecutive.orchestrator import tool_labels
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +61,6 @@ SIDE_EFFECTING_TOOLS: frozenset[str] = frozenset({
     "remember_fact",
     "forget_fact",
     "update_company_profile",
-    # Skills mutations
-    "create_skill",
-    "update_skill",
-    "delete_skill",
     # Triage / alerts
     "create_alert",
     "ack_alert",
@@ -78,15 +75,9 @@ SIDE_EFFECTING_TOOLS: frozenset[str] = frozenset({
     "ghostwrite_email",
     # Act as me: a reminder to the speaker alone
     "remind_me",
+    # Act as me: a card of actions left for the speaker to approve
+    "propose_actions",
 })
-
-
-_PLAYBOOKS_LINK = "/jobs?tab=playbooks"
-
-
-def _draft_link(name: str) -> str:
-    """Chat's playbook changes are drafts; the chip opens the one to review."""
-    return f"{_PLAYBOOKS_LINK}&draft={quote(name)}" if name else _PLAYBOOKS_LINK
 
 
 def _parse_result(tool_result: str) -> dict[str, Any] | None:
@@ -154,7 +145,8 @@ def summarize_action(
     None is treated as team.
 
     Returns None when:
-      • `tool_name` is not in SIDE_EFFECTING_TOOLS
+      • `tool_name` is not in SIDE_EFFECTING_TOOLS (nor an extension tool
+        with a chip, orchestrator/extensions.py)
       • the tool's parsed result reports an error (so we don't claim
         "DM'd Sara" when Slack returned 4xx)
       • the result is a `not_found` (the target row didn't exist, so nothing
@@ -163,7 +155,10 @@ def summarize_action(
     The returned dict is the SSE event body — chat.py wraps it with
     `data: ` framing. Keep summaries terse; the chip is sized for one line.
     """
-    if tool_name not in SIDE_EFFECTING_TOOLS:
+    from openexecutive.orchestrator import extensions
+
+    extension = tool_name not in SIDE_EFFECTING_TOOLS
+    if extension and not extensions.has_chip(tool_name):
         return None
 
     parsed = _parse_result(tool_result)
@@ -203,6 +198,11 @@ def summarize_action(
     }
     if iteration is not None:
         payload["iteration"] = iteration
+    if extension:
+        # An installed extension's tool (orchestrator/extensions.py) words
+        # its own chip; a link stays inside the app.
+        fields = extensions.chip_fields(tool_name, tool_input, parsed)
+        return {**payload, **fields} if fields is not None else None
 
     if tool_name == "send_slack_dm":
         user_id = tool_input.get("user_id") or "a teammate"
@@ -245,6 +245,29 @@ def summarize_action(
         summary = f"Reminder set for {when}" if when else "Reminder set"
         payload["summary"] = f"{summary}: {text}" if text else summary
         payload["target"] = None
+    elif tool_name == "propose_actions":
+        # A card carried out on its own (allowed in training) says what it did.
+        if (parsed or {}).get("status") == "done_on_its_own":
+            done = [a for a in (parsed or {}).get("actions") or [] if isinstance(a, dict)]
+            ok = sum(1 for a in done if a.get("status") in ("done", "waiting"))
+            noun = "action" if ok == 1 else "actions"
+            payload["summary"] = f"Done on its own, as you allowed: {ok} {noun}"
+            payload["target"] = None
+            payload["link"] = "/today"
+            return payload
+        # Otherwise only a stored card earns a chip; it says nothing has happened yet.
+        if (parsed or {}).get("status") != "waiting_for_approval":
+            return None
+        actions = (parsed or {}).get("actions")
+        count = len(actions) if isinstance(actions, list) else 0
+        noun = "action" if count == 1 else "actions"
+        payload["summary"] = f"Waiting for your approval: {count} {noun}" if count else "Waiting for your approval"
+        payload["target"] = None
+        payload["link"] = "/today"
+        # The chat shows the card itself under its message, by this id.
+        decision_id = (parsed or {}).get("decision_id")
+        if isinstance(decision_id, int) and not isinstance(decision_id, bool):
+            payload["decision_id"] = decision_id
     elif tool_name == "message_person":
         pid = tool_input.get("person_id")
         payload["summary"] = (
@@ -388,25 +411,6 @@ def summarize_action(
         )
         payload["target"] = str(tool_input.get("field") or "") or None
         payload["link"] = "/company-profile"
-    elif tool_name == "create_skill":
-        name = tool_input.get("name", "")
-        payload["summary"] = f"Drafted playbook: {name}" if name else "Drafted a playbook"
-        payload["target"] = name or None
-        payload["link"] = _draft_link(name)
-    elif tool_name == "update_skill":
-        name = tool_input.get("name", "")
-        payload["summary"] = (
-            f"Drafted a change to playbook: {name}" if name else "Drafted a playbook change"
-        )
-        payload["target"] = name or None
-        payload["link"] = _draft_link(name)
-    elif tool_name == "delete_skill":
-        name = tool_input.get("name", "")
-        payload["summary"] = (
-            f"Proposed deleting playbook: {name}" if name else "Proposed deleting a playbook"
-        )
-        payload["target"] = name or None
-        payload["link"] = _draft_link(name)
     elif tool_name == "create_alert":
         headline = (tool_input.get("headline") or "")[:60]
         payload["summary"] = f"Flagged alert: {headline}" if headline else "Flagged alert"
@@ -426,15 +430,17 @@ def summarize_action(
         )
         payload["target"] = str(alert_id) if alert_id is not None else None
     elif tool_name == "call_tool":
-        # MCP — the underlying tool name lives in tool_input["name"]. We
-        # can't tell from here whether the underlying call was a read or a
-        # write, so emit a generic chip with the tool name. Users will
-        # naturally tolerate "Called google_workspace__send_gmail_message" (or
-        # "Called microsoft_365__send-mail") when that's what just happened.
+        # MCP — the underlying tool name lives in tool_input["name"]. The chip
+        # names it in plain words (tool_labels) and keeps the raw name in
+        # `tool`, so the UI can collapse repeats of the same tool into one
+        # chip. `target` says what this one call looked at, for the chip's
+        # tap-to-see list.
         mcp_name = tool_input.get("name", "tool")
-        payload["tool"] = mcp_name  # surface the real tool for UI mapping
-        payload["summary"] = f"Called {mcp_name}"
-        payload["target"] = mcp_name
+        payload["tool"] = mcp_name if isinstance(mcp_name, str) else "call_tool"
+        payload["summary"] = tool_labels.labels_for(mcp_name, tool_input.get("arguments"))[0]
+        payload["target"] = tool_labels.detail_for(
+            mcp_name, tool_input.get("arguments"), tool_result
+        )
     elif tool_name == "send_department_message":
         slug = tool_input.get("department_slug", "")
         integration = tool_input.get("integration", "")

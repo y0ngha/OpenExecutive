@@ -8,7 +8,7 @@ import logging
 import re
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from typing import Any
 
 from openexecutive.audit import bind_turn, clear_turn, private_rows, set_turn
@@ -23,8 +23,6 @@ from openexecutive.audit.redaction import (
 from openexecutive.audit.usage import log_model_usage
 from openexecutive.config import get_settings
 from openexecutive.delegation.lockdown import (
-    carried_withheld_error,
-    carried_withholds,
     mail_touched_withheld_error,
     mail_touched_withholds,
 )
@@ -41,7 +39,7 @@ from openexecutive.memory.workspace_settings import (
     pin_turn_principal_role,
     pin_turn_workspace_mode,
 )
-from openexecutive.orchestrator import take_the_lead
+from openexecutive.orchestrator import department_gate, extensions, take_the_lead, tool_groups
 from openexecutive.orchestrator.action_chips import summarize_action
 from openexecutive.orchestrator.activity_labels import (
     fallback_activity,
@@ -107,6 +105,7 @@ from openexecutive.orchestrator.mcp_gateway import (
     MCP_TOOL_NAMES,
     MCP_TOOLS,
     MCPGateway,
+    gateway_reconnect_needed,
     gateway_server_names,
 )
 from openexecutive.orchestrator.open_loop_tools import (
@@ -145,6 +144,7 @@ from openexecutive.orchestrator.schedule_tools import (
 )
 from openexecutive.orchestrator.session import Session
 from openexecutive.orchestrator.skills_tools import SKILL_TOOL_HANDLERS, SKILL_TOOLS
+from openexecutive.orchestrator.teammate_mail import guard_call_tool
 from openexecutive.orchestrator.turn_inbox import (
     TurnInbox,
     render_added_messages,
@@ -247,9 +247,20 @@ _MIN_USEFUL_CAP = 1_000
 # under this (the longest in the MCP surface is ~40 chars); the bound exists
 # so a model-supplied name cannot inflate the marker past its own budget.
 _TOOL_NAME_MARKER_MAX = 80
+# Once a turn's reading budget (TOOL_RESULTS_TURN_MAX_CHARS) is used up, a
+# further tool result still shows this much, so the model sees what it got.
+_TURN_BUDGET_FLOOR = 3_000
+
+# Results the turn's reading budget counts but never cuts (see
+# _turn_result_limit).
+_NEVER_CUT_BY_TURN_BUDGET = frozenset(
+    {step_script.RUN_SCRIPT_TOOL, tool_groups.OPEN_TOOLS, "search_tools"}
+)
 
 
-def _cap_tool_result(text: Any, *, tool_name: str, limit: int) -> Any:
+def _cap_tool_result(
+    text: Any, *, tool_name: str, limit: int, budget_spent: bool = False, full_reread_left: bool = False
+) -> Any:
     """Bound one tool result before it enters the prompt.
 
     A circuit breaker, not a routine clipper: the default budget is set so
@@ -273,9 +284,16 @@ def _cap_tool_result(text: Any, *, tool_name: str, limit: int) -> Any:
 
     Precondition: ``limit`` must be at least ``_MIN_USEFUL_CAP``. The
     "never exceeds ``limit``" guarantee holds by reserving the marker
-    inside the budget, and the marker itself is ~284-383 chars — below
+    inside the budget, and the marker itself is ~280-850 chars — below
     that floor there is no room for it and the guarantee breaks. The
     config field enforces this with ``ge=1_000``.
+
+    ``budget_spent`` says the turn's reading budget, not this result's own
+    size, set ``limit``: the marker then says to answer from what the turn
+    has rather than read more, and never to edit from the cut text. With
+    ``full_reread_left`` it also offers the turn's one full re-read
+    (``_TurnReadingBudget``), so an edit the question asked for can still
+    be done from the whole document.
     """
     if not isinstance(text, str):
         return text
@@ -295,9 +313,30 @@ def _cap_tool_result(text: Any, *, tool_name: str, limit: int) -> Any:
         return (
             f"\n\n[TRUNCATED by Open Executive: showed the first {shown:,} of "
             f"{len(text):,} characters from `{safe_name}` ({pct}% omitted). "
-            "This is NOT the full result. To see more, call the tool again "
-            "with a narrower request — a page range, a section name, a query "
-            "or filter — rather than re-requesting the whole document.]"
+            "This is NOT the full result."
+            + (
+                # A narrower re-read would be cut the same way, so the
+                # budget note replaces the "ask again" advice.
+                " This question has already read as much as it can. Never "
+                "edit, rewrite or replace anything from this cut result."
+                + (
+                    " If you need this whole result to edit or rewrite it, "
+                    "call the tool again with exactly the same input: that "
+                    "repeat does not run the tool again, it brings back this "
+                    "same result in full (once per question)."
+                    if full_reread_left
+                    else " If you needed it to edit or rewrite something, say "
+                    "it was too long to work on here and offer to do it as "
+                    "its own request."
+                )
+                + " Otherwise answer from what you have, and say what you "
+                "could not read."
+                if budget_spent
+                else " To see more, call the tool again with a narrower "
+                "request — a page range, a section name, a query or filter — "
+                "rather than re-requesting the whole document."
+            )
+            + "]"
         )
 
     # Reserve the marker inside the budget so the capped result never
@@ -312,6 +351,101 @@ def _cap_tool_result(text: Any, *, tool_name: str, limit: int) -> Any:
         safe_name, len(text), shown, limit,
     )
     return text[:shown] + marker(shown, pct)
+
+
+def _turn_result_limit(name: str, *, per_result: int, turn_budget: int, used: int) -> tuple[int, bool]:
+    """The cap for one tool result, given what the turn has already read.
+
+    Every tool result stays in the prompt for each later call of the turn,
+    so a turn that reads several long documents re-sends all of them on
+    every call. ``turn_budget`` (TOOL_RESULTS_TURN_MAX_CHARS; 0 = off)
+    bounds what a turn's results add together: once ``used`` reaches it, a
+    further result is cut to ``_TURN_BUDGET_FLOOR``. Returns (limit, whether
+    the budget rather than ``per_result`` set it). A specialist's analysis
+    is the answer itself, not a read, so it neither counts nor is cut by the
+    budget. A built tool's result counts but is never cut below
+    ``per_result``: it is already bounded (step_script), and it lists the
+    writes that already ran, which a short cut would hide and the model would
+    then repeat. Tool discovery (``open_tools``, ``search_tools``) is treated
+    the same way: its result is the schema for the next call, and a cut one
+    would leave the model unable to make it.
+    """
+    if turn_budget <= 0 or name == "consult_specialist":
+        return per_result, False
+    if name in _NEVER_CUT_BY_TURN_BUDGET:
+        return per_result, False
+    remaining = turn_budget - used
+    if remaining >= per_result:
+        return per_result, False
+    return min(per_result, max(_TURN_BUDGET_FLOOR, remaining)), True
+
+
+class _TurnReadingBudget:
+    """One turn's reading budget (TOOL_RESULTS_TURN_MAX_CHARS), with one
+    escape hatch.
+
+    ``_turn_result_limit`` decides the cap from what the turn has used. A
+    read cut by the budget may be the very document the question asks to
+    edit, and an edit from a cut read would drop everything past the cut.
+    So the turn gets one full re-read: when the model repeats a call the
+    budget cut, same tool and same input, the loop answers it with the
+    result it already has (``replay``), under the per-result cap, and never
+    runs the tool again. Replaying rather than re-running matters: the
+    budget cuts any tool's result, and a repeated write (an event, a
+    message) would happen twice. Once per turn, so the budget still bounds
+    the turn: at most one extra ``per_result``.
+    """
+
+    def __init__(self, *, per_result: int, turn_budget: int) -> None:
+        self.per_result = per_result
+        self.turn_budget = turn_budget
+        self.used = 0
+        # Full text of each result the budget cut, by call.
+        self._cut_results: dict[str, str] = {}
+        # tool_use ids answered by ``replay``: shown in full, not cut again.
+        self._replayed: set[str] = set()
+        self.full_reread_left = True
+
+    @staticmethod
+    def _key(name: str, tool_input: Any) -> str:
+        try:
+            return name + "\x00" + json.dumps(tool_input, sort_keys=True, default=str)
+        except (TypeError, ValueError):
+            return name + "\x00" + repr(tool_input)
+
+    def replay(self, tool_use: dict[str, Any]) -> str | None:
+        """The stored full result if ``tool_use`` repeats a call the budget
+        cut and the turn's one re-read is left; the caller then answers it
+        with this text instead of dispatching it. ``None`` otherwise."""
+        if not self.full_reread_left:
+            return None
+        full = self._cut_results.get(self._key(tool_use["name"], tool_use["input"]))
+        if full is None:
+            return None
+        self.full_reread_left = False
+        self._replayed.add(tool_use["id"])
+        return full
+
+    def cap(self, name: str, tool_input: Any, text: Any, tool_use_id: str = "") -> Any:
+        """``text`` capped for the prompt, counted against the budget."""
+        if tool_use_id and tool_use_id in self._replayed:
+            limit, budget_spent = self.per_result, False
+        else:
+            limit, budget_spent = _turn_result_limit(
+                name, per_result=self.per_result, turn_budget=self.turn_budget, used=self.used
+            )
+            if budget_spent and isinstance(text, str) and len(text) > limit:
+                self._cut_results[self._key(name, tool_input)] = text
+        content = _cap_tool_result(
+            text,
+            tool_name=name,
+            limit=limit,
+            budget_spent=budget_spent,
+            full_reread_left=self.full_reread_left,
+        )
+        if name != "consult_specialist" and isinstance(content, str):
+            self.used += len(content)
+        return content
 
 
 # The history breakpoint lives an hour: people answer in minutes, not
@@ -388,9 +522,64 @@ def _apply_history_cache_marker(
     return new_system, new_messages
 
 
+# The turn's own message (the question plus this turn's context: facts,
+# memory, knowledge excerpts) is cached for the loop's first call only. It is
+# the slot the loop marker takes from the second call on, so the request
+# never carries more than the API's four breakpoints.
+_TURN_CACHE_CONTROL: dict[str, str] = {"type": "ephemeral"}
+
+
+def _mark_turn_message(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Cache the message being answered on the loop's first call, in place.
+
+    Without it the first call sends the turn's context uncached, and the
+    second call (after the first tool use, which is most turns) writes the
+    same tokens to the cache: the context is paid twice. With it the first
+    call writes it once and every later call reads it back.
+
+    Replaces the last message with a marked copy (the caller owns the
+    original dict) and returns that copy, so ``_clear_turn_marker`` can take
+    the marker off once the loop marker moves past it. Returns None when
+    there is nothing to mark: no messages, the last one is not the user's,
+    or it carries no text.
+    """
+    if not messages or messages[-1].get("role") != "user":
+        return None
+    content = messages[-1].get("content")
+    if isinstance(content, str):
+        if not content:
+            return None
+        marked: list[dict[str, Any]] = [
+            {"type": "text", "text": content, "cache_control": dict(_TURN_CACHE_CONTROL)}
+        ]
+    elif isinstance(content, list):
+        texts = [
+            j for j, b in enumerate(content)
+            if isinstance(b, dict) and b.get("type") == "text" and b.get("text")
+        ]
+        if not texts:
+            return None
+        marked = [dict(b) if isinstance(b, dict) else b for b in content]
+        marked[texts[-1]]["cache_control"] = dict(_TURN_CACHE_CONTROL)
+    else:
+        return None
+    message = {**messages[-1], "content": marked}
+    messages[-1] = message
+    return message
+
+
+def _clear_turn_marker(message: dict[str, Any] | None) -> None:
+    """Take ``_mark_turn_message``'s marker off its copy, in place."""
+    if message is None:
+        return
+    for block in message.get("content") or []:
+        if isinstance(block, dict):
+            block.pop("cache_control", None)
+
+
 def _apply_loop_cache_marker(
     messages: list[dict[str, Any]], start: int = 0
-) -> None:
+) -> bool:
     """Move the agent loop's intra-turn cache breakpoint to the newest
     tool result, in place.
 
@@ -447,6 +636,7 @@ def _apply_loop_cache_marker(
                 markable.append(block)
     if markable:
         markable[-1]["cache_control"] = {"type": "ephemeral"}
+    return bool(markable)
 
 
 def _tool_error_result(tool_name: str, exc: BaseException) -> str:
@@ -547,6 +737,15 @@ _ALL_SKILL_TOOLS = [
     *FORM_TOOLS,
     *PYTHON_JOB_TOOLS,
 ]
+
+
+def _offered_skill_tools() -> list[dict[str, Any]]:
+    """_ALL_SKILL_TOOLS with the Python job tool as this instance describes it
+    (python_job.offered_definition: a runner's extra libraries)."""
+    offered = python_job.offered_definition()
+    return [offered if t["name"] == python_job.TOOL_NAME else t for t in _ALL_SKILL_TOOLS]
+
+
 _ALL_SKILL_HANDLERS = {
     **SKILL_TOOL_HANDLERS,
     "create_alert": handle_create_alert,
@@ -567,6 +766,24 @@ _ALL_SKILL_HANDLERS = {
     **FORM_TOOL_HANDLERS,
     **PYTHON_JOB_TOOL_HANDLERS,
 }
+
+
+def builtin_tool_names() -> frozenset[str]:
+    """Every tool name the chat loop knows itself, which an extension's tool
+    may not take (orchestrator/extensions.py)."""
+    return frozenset({
+        *(t["name"] for t in SPECIALIST_TOOLS),
+        *_ALL_SKILL_HANDLERS,
+        *DELEGATION_TOOL_HANDLERS,
+        *MAILBOX_TOOL_NAMES,
+        *HISTORY_TOOL_HANDLERS,
+        *MCP_TOOL_NAMES,
+        step_script.RUN_SCRIPT_TOOL,
+        step_script.LIST_SAVED_TOOLS_TOOL,
+        tool_groups.OPEN_TOOLS,
+        tool_groups.USE_TOOL,
+        WEB_SEARCH_TOOL_NAME,
+    })
 
 
 def _private_tool_row(tool_name: str) -> bool:
@@ -1060,6 +1277,7 @@ class Executive:
             include_contacts=_contacts_in_prompt(session),
             delegation=block0_delegation_on(session),
             mcp_servers=gateway_server_names(self._mcp_gateway),
+            needs_reconnect=gateway_reconnect_needed(self._mcp_gateway),
             persona_instructions=persona_instructions,
         )
         # turn_id ties every downstream audit row (knowledge_retrieval,
@@ -1379,6 +1597,7 @@ class Executive:
             include_contacts=_contacts_in_prompt(session),
             delegation=block0_delegation_on(session),
             mcp_servers=gateway_server_names(self._mcp_gateway),
+            needs_reconnect=gateway_reconnect_needed(self._mcp_gateway),
             persona_instructions=persona_instructions,
         )
         # turn_id covers both the draft and (later) the revision pass so a
@@ -1874,11 +2093,26 @@ class Executive:
         if history_offered:
             delegation_tools = [*delegation_tools, *HISTORY_TOOLS]
             turn_handlers = {**turn_handlers, **HISTORY_TOOL_HANDLERS}
+        # Tools an installed extension adds (orchestrator/extensions.py): only
+        # on a turn someone is in, never an unattended run or a turn private
+        # to the principal, and only where each tool says it is offered.
+        if not unattended_withheld and not private_turn:
+            extra_tools = extensions.offered_tools(current_session.get())
+            if extra_tools:
+                delegation_tools = [*delegation_tools, *(t.definition for t in extra_tools)]
+                turn_handlers = {**turn_handlers, **{t.name: t.handler for t in extra_tools}}
         # Take the lead as the Executive: an unattended run's acting tools,
         # its own and the MCP ones, go through the gate (take_the_lead).
         leading = bool(unattended_withheld) and take_the_lead.executive_on()
         if leading:
             turn_handlers = take_the_lead.gated_handlers(turn_handlers, source="scheduled")
+        # A team member's turn (not the principal's): every send or edit goes
+        # through their department's authority first (department_gate), as
+        # unattended work goes through the scheduler's and Take the lead's.
+        seat = None if unattended_withheld else department_gate.speaker(current_session.get())
+        seat_session_id = getattr(current_session.get(), "session_id", None)
+        if seat is not None:
+            turn_handlers = department_gate.gated_handlers(turn_handlers, seat, session_id=seat_session_id)
         # Something new came in on a channel (mail, Slack, Telegram, …): with
         # Take the lead on, the reflection looks at it soon, batched.
         origin = str(getattr(current_session.get(), "origin_channel", "") or "")
@@ -1889,6 +2123,9 @@ class Executive:
             system_blocks, current_messages = _apply_history_cache_marker(
                 system_blocks, current_messages
             )
+        turn_marked = (
+            _mark_turn_message(current_messages) if self._settings.enable_caching else None
+        )
         # Tool calls this turn's scripts have made, in all and per own tool
         # (settings.chat_script_max_calls, step_script.CHAT_OWN_TOOL_CAPS).
         script_counts: dict[str, int] = {}
@@ -1898,6 +2135,12 @@ class Executive:
         caller_message_count = len(current_messages)
         last_full_text = ""
         specialists_consulted: list[str] = []
+        # What this turn's tool results have put in the prompt so far: every
+        # one is re-sent on each later call.
+        reading_budget = _TurnReadingBudget(
+            per_result=self._settings.tool_result_max_chars,
+            turn_budget=self._settings.tool_results_turn_max_chars,
+        )
 
         for iteration in range(1, max_iterations + 1):
             logger.info(
@@ -1924,19 +2167,20 @@ class Executive:
             # Solo withholds the team-only tools before the sort, so each mode
             # has its own stable, sorted tool prefix (as do an unattended run
             # and a turn private to the principal).
-            client_tools = sorted(
-                (
-                    t for t in filter_tools_for_workspace_mode(
-                        [
-                            *SPECIALIST_TOOLS, *_ALL_SKILL_TOOLS, *self._mcp_tools,
-                            *self._script_tools, *delegation_tools,
-                        ],
-                        workspace_mode,
-                    )
-                    if t["name"] not in not_offered
-                ),
-                key=lambda t: t["name"],
+            # The less common tools are offered through open_tools/use_tool
+            # rather than one by one (tool_groups), so the list is short and
+            # stays the same whichever groups the turn opens.
+            direct_tools, deferred_tools = tool_groups.split(
+                t for t in filter_tools_for_workspace_mode(
+                    [
+                        *SPECIALIST_TOOLS, *_offered_skill_tools(), *self._mcp_tools,
+                        *self._script_tools, *delegation_tools,
+                    ],
+                    workspace_mode,
+                )
+                if t["name"] not in not_offered
             )
+            client_tools = sorted(direct_tools, key=lambda t: t["name"])
             tools_with_cache: list[dict[str, Any]] = [
                 *client_tools[:-1],
                 {**client_tools[-1], "cache_control": {"type": "ephemeral", "ttl": "1h"}},
@@ -2036,8 +2280,31 @@ class Executive:
             if final_msg.stop_reason != "tool_use":
                 return
 
-            specialist_tool_uses = [tu for tu in tool_uses if tu["name"] == "consult_specialist"]
-            skill_tool_uses = [tu for tu in tool_uses if tu["name"] in turn_handlers]
+            # open_tools is answered here; a use_tool call becomes the call it
+            # stands for (same id), so every guard, handler, chip and audit
+            # row below sees the tool's own name, as for a direct call.
+            group_results: dict[str, str] = {}
+            for i, tu in enumerate(tool_uses):
+                if tu["name"] == tool_groups.OPEN_TOOLS:
+                    group_results[tu["id"]] = tool_groups.open_result(tu["input"], deferred_tools)
+                elif tu["name"] == tool_groups.USE_TOOL:
+                    call, error = tool_groups.unwrap(tu)
+                    if call is None:
+                        group_results[tu["id"]] = error or ""
+                    else:
+                        tool_uses[i] = call
+            # The turn's one full re-read of a result the reading budget cut
+            # is answered from that result, never by running the tool again
+            # (it may have been a write).
+            for tu in tool_uses:
+                if tu["id"] not in group_results:
+                    replayed = reading_budget.replay(tu)
+                    if replayed is not None:
+                        group_results[tu["id"]] = replayed
+            dispatch_uses = [tu for tu in tool_uses if tu["id"] not in group_results]
+
+            specialist_tool_uses = [tu for tu in dispatch_uses if tu["name"] == "consult_specialist"]
+            skill_tool_uses = [tu for tu in dispatch_uses if tu["name"] in turn_handlers]
             # Dispatch guard: a tool this mode does not offer never runs, even
             # if the model emits it anyway — it gets an error tool_result.
             withheld_uses = [tu for tu in skill_tool_uses if tu["name"] in withheld_tools]
@@ -2045,9 +2312,9 @@ class Executive:
                 skill_tool_uses = [
                     tu for tu in skill_tool_uses if tu["name"] not in withheld_tools
                 ]
-            mcp_tool_uses = [tu for tu in tool_uses if tu["name"] in MCP_TOOL_NAMES]
+            mcp_tool_uses = [tu for tu in dispatch_uses if tu["name"] in MCP_TOOL_NAMES]
             script_tool_uses = [
-                tu for tu in tool_uses
+                tu for tu in dispatch_uses
                 if self._script_tools
                 and tu["name"] in (step_script.RUN_SCRIPT_TOOL, step_script.LIST_SAVED_TOOLS_TOOL)
             ]
@@ -2080,14 +2347,13 @@ class Executive:
             # Act as me: once the turn has read the principal's own mail (in
             # an earlier round, or with a ghostwrite_email, a mailbox read or
             # recall_history in this one — a round's tools run together),
-            # nothing that reaches anyone else runs for the rest of the turn
-            # (delegation.lockdown). A later turn of that conversation
-            # (touched_mail, not read_mail) refuses only what reaches an
-            # outside address with no recipient check (carried_withholds).
-            # The offered list stays as it is, so the cached prefix never
-            # changes mid-turn.
+            # nothing that opens a link, runs a script or workflow, or posts
+            # to everyone runs for the rest of the turn (delegation.lockdown).
+            # A later turn of that conversation stays private (touched_mail)
+            # but is not locked: it is the person asking again. The offered
+            # list stays as it is, so the cached prefix never changes
+            # mid-turn.
             mail_touched_uses: list[dict[str, Any]] = []
-            refusal_for: Callable[[str], str] = mail_touched_withheld_error
             if pinned_delegation is not None and (
                 pinned_delegation.read_mail
                 or any(tu["name"] in MAILBOX_TOOL_NAMES or tu["name"] in HISTORY_TOOL_NAMES for tu in tool_uses)
@@ -2095,12 +2361,6 @@ class Executive:
                 mail_touched_uses = [
                     tu for tu in [*skill_tool_uses, *mcp_tool_uses, *script_tool_uses]
                     if mail_touched_withholds(tu["name"], tu["input"])
-                ]
-            elif pinned_delegation is not None and pinned_delegation.touched_mail:
-                refusal_for = carried_withheld_error
-                mail_touched_uses = [
-                    tu for tu in [*skill_tool_uses, *mcp_tool_uses, *script_tool_uses]
-                    if carried_withholds(tu["name"], tu["input"])
                 ]
             if mail_touched_uses:
                 skill_tool_uses = [tu for tu in skill_tool_uses if tu not in mail_touched_uses]
@@ -2185,7 +2445,7 @@ class Executive:
             # Signal that tool calls are in flight so the client can show progress.
             yield self._THINKING
 
-            results_by_id: dict[str, str] = {}
+            results_by_id: dict[str, str] = dict(group_results)
 
             event_cursor = len(debug_collector._events) if debug_collector else 0
             session_id = getattr(current_session.get(), "session_id", None)
@@ -2217,7 +2477,7 @@ class Executive:
                     },
                     private=True,
                 )
-                results_by_id[tu["id"]] = refusal_for(label)
+                results_by_id[tu["id"]] = mail_touched_withheld_error(label)
             for tu in withheld_uses:
                 if private_turn and private_turn_withholds(tu["name"], tu["input"]):
                     # Fail closed: never run, and leave a trace — private to
@@ -2480,11 +2740,17 @@ class Executive:
                     )
 
             if mcp_tool_uses and self._mcp_gateway is not None:
+                # A teammate's mail with the Executive stays theirs: every
+                # mailbox read the model makes is filtered (teammate_mail).
                 _mcp_dispatch = {
                     "search_tools": self._mcp_gateway.search_tools,
-                    "call_tool": (
+                    "call_tool": guard_call_tool(
                         take_the_lead.gated_call_tool(self._mcp_gateway.call_tool, source="scheduled")
                         if leading
+                        else department_gate.gated_call_tool(
+                            self._mcp_gateway.call_tool, seat, session_id=seat_session_id,
+                        )
+                        if seat is not None
                         else self._mcp_gateway.call_tool
                     ),
                     "load_mcp_server": self._mcp_gateway.load_mcp_server,
@@ -2500,10 +2766,33 @@ class Executive:
                         logger.info("→ %s  input=%s", tu["name"], _log_value(tu["name"], tu["input"]))
                 # Same isolation as the skill gather above: a gateway crash on
                 # one tool must not take the turn down with it.
-                mcp_results = await asyncio.gather(
-                    *(_mcp_dispatch[tu["name"]](tu["input"]) for tu in mcp_tool_uses),
-                    return_exceptions=True,
-                )
+                try:
+                    mcp_results = await asyncio.gather(
+                        *(_mcp_dispatch[tu["name"]](tu["input"]) for tu in mcp_tool_uses),
+                        return_exceptions=True,
+                    )
+                except asyncio.CancelledError:
+                    # The turn was cut off (a deadline, a stop) with these
+                    # calls in flight. A request already sent may still run
+                    # on the server, a send included, so each gets its row,
+                    # as run_script's calls do.
+                    for tu in mcp_tool_uses:
+                        tool_label = tu["input"].get("name", tu["name"]) if tu["name"] == "call_tool" else tu["name"]
+                        audit_log(
+                            "tool_invocation",
+                            f"mcp:{tool_label} CANCELLED",
+                            session_id=session_id,
+                            turn_id=turn_id,
+                            actor="executive",
+                            details={
+                                "tool": tool_label,
+                                "kind": "mcp",
+                                "iteration": iteration,
+                                "ok": False,
+                                "cancelled": True,
+                            },
+                        )
+                    raise
                 for tu, raw in zip(mcp_tool_uses, mcp_results, strict=True):
                     tool_label = tu["input"].get("name", tu["name"]) if tu["name"] == "call_tool" else tu["name"]
                     if isinstance(raw, BaseException):
@@ -2571,9 +2860,13 @@ class Executive:
                 # matters: the gateway's own gates (discovery, deny-list,
                 # recipients), Take the lead's gate on an unattended run, and
                 # the same chip and audit row, as each call happens.
-                script_call = (
+                script_call = guard_call_tool(
                     take_the_lead.gated_call_tool(self._mcp_gateway.call_tool, source="scheduled")
                     if leading
+                    else department_gate.gated_call_tool(
+                        self._mcp_gateway.call_tool, seat, session_id=seat_session_id,
+                    )
+                    if seat is not None
                     else self._mcp_gateway.call_tool
                 )
                 # The Executive's own tools a script may call this turn: the
@@ -2854,18 +3147,15 @@ class Executive:
             # output, tool errors and the unknown-tool fallback, and it
             # leaves non-model consumers (the propose_form_values JSON
             # parse above, the audit trail) reading the full text.
-            tool_results = [
-                {
-                    "type": "tool_result",
-                    "tool_use_id": tu["id"],
-                    "content": _cap_tool_result(
-                        results_by_id.get(tu["id"], f"Unknown tool: {tu['name']}"),
-                        tool_name=tu["name"],
-                        limit=self._settings.tool_result_max_chars,
-                    ),
-                }
-                for tu in tool_uses
-            ]
+            tool_results: list[dict[str, Any]] = []
+            for tu in tool_uses:
+                content = reading_budget.cap(
+                    tu["name"],
+                    tu["input"],
+                    results_by_id.get(tu["id"], f"Unknown tool: {tu['name']}"),
+                    tu["id"],
+                )
+                tool_results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": content})
             # Messages the person sent since the last round ride in this
             # round's user message, after the tool results (which must come
             # first). Only this loop's own, newest message changes, so the
@@ -2877,7 +3167,7 @@ class Executive:
                 not fanout_hinted
                 and self._script_tools
                 and step_script.RUN_SCRIPT_TOOL not in not_offered
-                and not (pinned_delegation is not None and pinned_delegation.touched_mail)
+                and not (pinned_delegation is not None and pinned_delegation.read_mail)
                 and not any(tu["name"] == step_script.RUN_SCRIPT_TOOL for tu in tool_uses)
                 and any(step_script.lists_many(str(results_by_id.get(tu["id"], ""))) for tu in tool_uses)
             ):
@@ -2893,8 +3183,11 @@ class Executive:
             # Bounded to the messages this loop appended: current_messages
             # is a shallow copy, so anything at a lower index is still owned
             # by the caller and must not be mutated.
-            if self._settings.enable_caching:
-                _apply_loop_cache_marker(current_messages, caller_message_count)
+            if self._settings.enable_caching and _apply_loop_cache_marker(
+                current_messages, caller_message_count
+            ):
+                _clear_turn_marker(turn_marked)
+                turn_marked = None
 
         logger.warning("max_iterations=%d reached — returning partial result", max_iterations)
         yield last_full_text or "I was unable to complete the analysis. Please try again."

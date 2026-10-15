@@ -1,5 +1,6 @@
 // Type-only imports, so `npm test` can load this file under
 // `node --experimental-strip-types` (see scripts/navConfig.test.mjs).
+import type { Feature } from "@/components/FeatureName";
 import type { IconName } from "@/components/Icon";
 import type { RoleKind, WorkspaceMode } from "@/lib/api";
 // Relative, with the extension: node loads this file without the `@/` alias.
@@ -23,6 +24,8 @@ export interface NavItem {
   description: string;
   /** Optional pending-count badge (e.g. items awaiting review). */
   badge?: number;
+  /** A named feature: its tab shows the feature's brand label. */
+  feature?: Feature;
 }
 
 interface BuildOpts {
@@ -164,13 +167,49 @@ function workTabs(): NavItem[] {
   ];
 }
 
+// The Delegate hub's tabs: what it may do without asking (one read-only
+// page over all of them), then what the Executive does as you (Act as me,
+// Handle it for me) and on its own (Take the lead). Each of those is a named
+// feature, so its tab shows the brand label.
+function delegateTabs(): NavItem[] {
+  return [
+    {
+      href: "/delegate/what-it-may-do",
+      label: t("chat.nav.whatItMayDo"),
+      icon: "eye",
+      description: t("chat.nav.desc.whatItMayDo"),
+    },
+    {
+      href: "/delegate/act-as-me",
+      label: t("chat.nav.actAsMe"),
+      icon: "mail",
+      feature: "act_as_me",
+      description: t("chat.nav.desc.actAsMe"),
+    },
+    {
+      href: "/delegate/handle-it",
+      label: t("chat.nav.handleIt"),
+      icon: "check-circle",
+      feature: "handle_it",
+      description: t("chat.nav.desc.handleIt"),
+    },
+    {
+      href: "/delegate/take-the-lead",
+      label: t("chat.nav.takeTheLead"),
+      icon: "bolt",
+      feature: "take_the_lead",
+      description: t("chat.nav.desc.takeTheLead"),
+    },
+  ];
+}
+
 /**
  * A hub: one menu entry that holds several pages, shown as a row of tabs at
  * the top of each of them (components/ui/HubTabs.tsx). The menu entry opens
  * the first tab.
  */
 export interface Hub {
-  key: "work" | "company" | "you";
+  key: "work" | "company" | "you" | "delegate";
   label: string;
   icon: IconName;
   description: string;
@@ -205,7 +244,14 @@ export function buildHubs({
           description: t("chat.nav.desc.company"),
           tabs: companyTabs(isOnboarded),
         };
-  return [work, people];
+  const delegate: Hub = {
+    key: "delegate",
+    label: t("chat.nav.delegate"),
+    icon: "check-circle",
+    description: t("chat.nav.desc.delegate"),
+    tabs: delegateTabs(),
+  };
+  return [work, people, delegate];
 }
 
 // The hub a page belongs to, or null for a page that isn't in one.
@@ -229,7 +275,7 @@ export interface Destination extends NavItem {
   alsoActiveOn?: string[];
 }
 
-// The main menu, the same in the sidebar on every page: six places, then
+// The main menu, the same in the sidebar on every page: seven places, then
 // Settings at the bottom. Everything else is a tab inside one of them or a
 // tool under Settings.
 export function buildDestinations({
@@ -386,12 +432,17 @@ export function advancedItemsByGroup(): {
 }
 
 // The Settings hub's tiles, in hub order. Each opens a short page of its
-// own at `href`. "act-as-me" shows only for someone who can have Act as me
-// (the hub drops it when the card is hidden), "memory" only for someone with
+// own at `href`. "memory" shows only for someone with
 // notes to keep (signed in and on the People list). `hashes` are the anchors the
 // old one-page Settings used (`/settings#workspace`): links that still
 // carry one land on the matching page (see settingsPageForHash).
-export type SettingsPageId = "executive" | "act-as-me" | "memory" | "workspace" | "advanced" | "about";
+export type SettingsPageId =
+  | "executive"
+  | "notifications"
+  | "memory"
+  | "workspace"
+  | "advanced"
+  | "about";
 
 export interface SettingsPageDef {
   id: SettingsPageId;
@@ -413,12 +464,12 @@ export const SETTINGS_PAGES: SettingsPageDef[] = [
     hashes: ["executive", "on-its-own"],
   },
   {
-    id: "act-as-me",
-    get label() { return t("chat.nav.actAsMe"); },
-    href: "/settings/act-as-me",
-    icon: "mail",
-    get description() { return t("chat.nav.desc.actAsMe"); },
-    hashes: ["act-as-me"],
+    id: "notifications",
+    get label() { return t("chat.nav.notifications"); },
+    href: "/settings/notifications",
+    icon: "bell",
+    get description() { return t("chat.nav.desc.notifications"); },
+    hashes: [],
   },
   {
     id: "memory",
@@ -467,6 +518,19 @@ export function settingsPageForHash(hash: string): SettingsPageDef | null {
   id = id.trim();
   if (!id) return null;
   return SETTINGS_PAGES.find((p) => p.hashes.includes(id)) ?? null;
+}
+
+// Old Settings anchors for pages that moved out of Settings, and where they
+// went: Act as me is a tab of Delegate now.
+const MOVED_HASHES: Record<string, string> = { "act-as-me": "/delegate/act-as-me" };
+
+// Where an old `/settings#<hash>` link should go: its Settings page, or the
+// page it moved to, or null.
+export function settingsHrefForHash(hash: string): string | null {
+  const page = settingsPageForHash(hash);
+  if (page) return page.href;
+  const id = hash.replace(/^#/, "").trim();
+  return MOVED_HASHES[id] ?? null;
 }
 
 // The phone's bottom bar: five, with New chat in the middle. Knowledge,

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import Icon from "@/components/Icon";
 import AdvancedFold from "@/components/settings/AdvancedFold";
+import ReachCard from "@/components/settings/ReachCard";
 import SettingsCard from "@/components/settings/SettingsCard";
 import Switch from "@/components/Switch";
 import Button from "@/components/ui/Button";
@@ -16,30 +17,32 @@ import {
   learnVoiceProfile,
   refreshVoiceSignature,
   resetVoiceProfile,
-  setDelegationEnabled,
   setDelegationTeam,
   setInboxWatch,
+  setReadMyCalendar,
   updateVoiceProfile,
   type DelegationSettings,
   type DelegationTeam,
   type DescribedVoice,
   type InboxWatch,
+  type ReadMyCalendar,
   type VoiceProfile,
 } from "@/lib/api";
 import { formatAgo } from "@/lib/setupStatus";
 import { addPhrase, markNew, STYLE_PHRASES, styleSentences } from "@/lib/voiceStyle";
 
-// Settings → Act as me: let the Executive draft email AS you, in your own
-// Gmail Drafts, when you ask it to — and, with Draft replies to my inbox on,
-// for mail that needs you, which it sends when you tap Send on Today (or on
+// Delegate → Act as me: let the Executive draft email AS you, in your own
+// Gmail Drafts, when you ask it to — and, with How far it goes as you at
+// Drafts for my inbox or above, for mail that needs you, which it sends when you tap Send on Today (or on
 // its own, under Handle it for me).
-// Backed by GET/PUT /delegation, /delegation/inbox and /delegation/voice.
+// Backed by GET /delegation, PUT /delegation/reach (ReachCard) and /delegation/voice.
 // Not offered to anyone who can't have it (the owner can, and team members
 // once the owner lets them: PUT /delegation/team) or on a backend without
 // it: the hub then shows no tile, and this page says so.
 //
-// The page body: the mailbox, Write drafts as me and Draft replies to my
-// inbox up front; How I write and Let team members use it under Advanced.
+// The page body: the mailbox, How far it goes as you and, while the inbox
+// watcher is on, Your inbox up front; How I write and Let team members use
+// it under Advanced.
 
 export function ACT_AS_ME_INTRO(): string {
   return t("settings.actAsMe.intro");
@@ -83,11 +86,26 @@ function greetingFields(p: VoiceProfile): Record<string, string> {
   return Object.fromEntries(AUDIENCES.map((a) => [a, p.greetings[a] ?? ""]));
 }
 
-export default function ActAsMeCard() {
-  const [settings, setSettings] = useState<DelegationSettings | null>(null);
+// `onSettings` hears every change made here, so the page's other cards
+// (Handle it for me, What it's learned) keep up; `children` sit after Draft
+// replies to my inbox, before Advanced.
+export default function ActAsMeCard({
+  onSettings,
+  children,
+}: {
+  onSettings?: (next: DelegationSettings) => void;
+  children?: ReactNode;
+} = {}) {
+  const [settings, setSettingsState] = useState<DelegationSettings | null>(null);
+  const setSettings = useCallback(
+    (next: DelegationSettings | ((prev: DelegationSettings | null) => DelegationSettings | null)) => {
+      setSettingsState(next);
+      if (typeof next !== "function") onSettings?.(next);
+    },
+    [onSettings],
+  );
   const [state, setState] = useState<"loading" | "hidden" | "ready" | "error">("loading");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -96,7 +114,7 @@ export default function ActAsMeCard() {
         setState("hidden");
         return;
       }
-      setSettings(next);
+      setSettingsState(next);
       setState("ready");
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
@@ -130,7 +148,7 @@ export default function ActAsMeCard() {
       polls.current += 1;
       getDelegation()
         .then((next) => {
-          if (next) setSettings(next);
+          if (next) setSettingsState(next);
         })
         .catch(() => { /* keep the card; the next look may work */ })
         .finally(() => setPollTick((n) => n + 1));
@@ -161,21 +179,8 @@ export default function ActAsMeCard() {
   const mailbox = outlook ? "Outlook" : "Gmail";
   const on = settings.enabled;
 
-  const toggle = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      setSettings(await setDelegationEnabled(!on));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const recheck = async () => {
     setBusy(true);
-    setError(null);
     await load();
     setBusy(false);
   };
@@ -221,33 +226,14 @@ export default function ActAsMeCard() {
         )}
       </SettingsCard>
 
-      <SettingsCard
-        title={t("settings.actAsMe.writeDraftsTitle")}
-        titleId="act-as-me-label"
-        description={
-          on
-            ? t("settings.actAsMe.writeDraftsOn", { mailbox })
-            : connected
-              ? t("settings.actAsMe.writeDraftsOff")
-              : t("settings.actAsMe.connectFirst")
-        }
-        action={
-          <Switch
-            checked={on}
-            onChange={() => void toggle()}
-            disabled={busy || (!on && !connected)}
-            labelledBy="act-as-me-label"
-          />
-        }
-      >
-        {error && <p className="text-sm text-red-500">{error}</p>}
-      </SettingsCard>
+      {connected || on ? (
+        <ReachCard settings={settings} onSettings={setSettings} />
+      ) : null}
 
-      {settings.inbox && (
+      {settings.inbox?.enabled && (
         <InboxSection
           inbox={stoppedWaiting ? { ...settings.inbox, checking: false } : settings.inbox}
-          actAsMeOn={on}
-          handleItOn={!!settings.handle_it?.enabled}
+          mailbox={settings.gmail?.provider === "microsoft" ? "Outlook" : "Gmail"}
           onSettings={setSettings}
           onInbox={(inbox) => {
             setStoppedWaiting(false);
@@ -256,6 +242,12 @@ export default function ActAsMeCard() {
           }}
         />
       )}
+
+      {settings.calendar && (
+        <CalendarSection calendar={settings.calendar} actAsMeOn={on} onSettings={setSettings} />
+      )}
+
+      {children}
 
       <AdvancedFold
         id="act-as-me-advanced"
@@ -324,18 +316,18 @@ function TeamSection({
   );
 }
 
-// "Draft replies to my inbox" (PUT /delegation/inbox; Check now is POST
-// /delegation/inbox/check). Needs Act as me on; the replies wait on Today.
+// Your inbox, while the dial is at Drafts for my inbox or higher: how the
+// watcher is doing, Check now (POST /delegation/inbox/check) and where its
+// replies are kept (PUT /delegation/inbox {mailbox_drafts}). The switch
+// itself is a step of How far it goes as you.
 function InboxSection({
   inbox,
-  actAsMeOn,
-  handleItOn,
+  mailbox,
   onSettings,
   onInbox,
 }: {
   inbox: InboxWatch;
-  actAsMeOn: boolean;
-  handleItOn: boolean;
+  mailbox: string;
   onSettings: (next: DelegationSettings) => void;
   onInbox: (next: InboxWatch) => void;
 }) {
@@ -343,11 +335,13 @@ function InboxSection({
   const [error, setError] = useState<string | null>(null);
   const on = inbox.enabled;
 
-  const toggle = async () => {
+  // Also keep each reply in their mailbox's Drafts (off: on its card alone).
+  const inDrafts = !!inbox.mailbox_drafts;
+  const keepInDrafts = async (next: boolean) => {
     setBusy(true);
     setError(null);
     try {
-      onSettings(await setInboxWatch(!on));
+      onSettings(await setInboxWatch({ mailbox_drafts: next }));
     } catch (err) {
       setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
     } finally {
@@ -372,23 +366,7 @@ function InboxSection({
     <SettingsCard
       title={t("settings.actAsMe.inboxTitle")}
       titleId="act-as-me-inbox-label"
-      description={
-        on
-          ? handleItOn
-            ? t("settings.actAsMe.inboxOnHandleIt")
-            : t("settings.actAsMe.inboxOn")
-          : actAsMeOn
-            ? t("settings.actAsMe.inboxOff")
-            : t("settings.actAsMe.inboxNeedsDrafts")
-      }
-      action={
-        <Switch
-          checked={on}
-          onChange={() => void toggle()}
-          disabled={busy || (!on && !actAsMeOn)}
-          labelledBy="act-as-me-inbox-label"
-        />
-      }
+      description={t("settings.actAsMe.inboxDescription")}
     >
       {on && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -399,6 +377,88 @@ function InboxSection({
           <Button size="sm" onClick={() => void checkNow()} disabled={busy || inbox.checking}>
             {inbox.checking ? t("settings.status.checking") : t("settings.actAsMe.checkNow")}
           </Button>
+        </div>
+      )}
+      {on && (
+        <label className="mt-4 flex cursor-pointer items-start gap-3 border-t border-line pt-4">
+          <input
+            type="checkbox"
+            checked={inDrafts}
+            disabled={busy}
+            onChange={(e) => void keepInDrafts(e.target.checked)}
+            className="mt-0.5 h-5 w-5 flex-shrink-0 accent-indigo-500"
+          />
+          <span>
+            <span className="block text-[15px] font-semibold text-fg">{t("settings.actAsMe.keepInDraftsLabel", { mailbox })}</span>
+            <span className="mt-0.5 block text-sm text-fg-muted leading-snug">
+              {inDrafts
+                ? t("settings.actAsMe.keepInDraftsOn", { mailbox })
+                : t("settings.actAsMe.keepInDraftsOff", { mailbox })}
+            </span>
+          </span>
+        </label>
+      )}
+      {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+    </SettingsCard>
+  );
+}
+
+// Read my calendar (PUT /delegation/calendar): the Executive reads your own
+// calendar, read-only, when you ask about your day. Turning it on checks the
+// calendar opens; a sign-in made without it shows the command that adds it.
+function CalendarSection({
+  calendar,
+  actAsMeOn,
+  onSettings,
+}: {
+  calendar: ReadMyCalendar;
+  actAsMeOn: boolean;
+  onSettings: (next: DelegationSettings) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const on = calendar.enabled;
+
+  const toggle = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onSettings(await setReadMyCalendar(!on));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("settings.lead.saveFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SettingsCard
+      title={t("settings.actAsMe.calendarTitle")}
+      titleId="act-as-me-calendar-label"
+      description={
+        on
+          ? t("settings.actAsMe.calendarOn")
+          : actAsMeOn
+            ? t("settings.actAsMe.calendarOff")
+            : t("settings.actAsMe.calendarNeedsReach")
+      }
+      action={
+        <Switch
+          checked={on}
+          onChange={() => void toggle()}
+          disabled={busy || (!on && !actAsMeOn)}
+          labelledBy="act-as-me-calendar-label"
+        />
+      }
+    >
+      {!on && actAsMeOn && (
+        <div>
+          <p className="text-sm text-fg-muted leading-relaxed">
+            {t("settings.actAsMe.calendarConnectHelp")}
+          </p>
+          <pre className="mt-2 whitespace-pre-wrap break-all rounded-xl border border-line bg-surface px-3 py-2 text-xs text-fg font-mono">
+            {calendar.connect_command}
+          </pre>
         </div>
       )}
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}

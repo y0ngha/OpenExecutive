@@ -28,27 +28,33 @@ export default function NarrativeBody({
   stale,
   solo,
   onContinue,
+  intro = true,
 }: {
   narrative: string | null | undefined;
   stale: boolean;
   solo: boolean;
   onContinue?: ContinueHandler;
+  /** The side panel's explanation of what the brief is; off where the brief
+   * sits in the page under its own heading. */
+  intro?: boolean;
 }) {
   if (!narrative) {
     return (
       <div aria-live="polite" className="rounded-xl bg-accent/5 px-4 py-3 text-[15px] text-fg-muted animate-pulse">
-        {stale ? t("briefing.home.catchingUp") : t("briefing.narrative.noBrief")}
+        {stale ? t("briefing.narrative.writing") : t("briefing.narrative.noBrief")}
       </div>
     );
   }
   return (
     <>
+      {intro && (
       <PanelIntro>
         {t("briefing.narrative.intro", {
           scope: solo ? t("briefing.narrative.scopeSolo") : t("briefing.narrative.scopeCompany"),
         })}
         {onContinue && t("briefing.narrative.tapHint")}
       </PanelIntro>
+      )}
       <div className="prose prose-invert max-w-none text-[15px] prose-p:my-2 prose-ul:my-2 prose-headings:text-fg prose-strong:text-fg">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}

@@ -19,6 +19,10 @@ TEAM_TABLE = "delegation_team"
 HANDLE_IT_TABLE = "delegation_handle_it"
 HANDLED_TABLE = "delegation_handled"
 REMINDERS_TABLE = "delegation_reminders"
+MAIL_READ_TABLE = "delegation_mail_read"
+TRAINING_TABLE = "delegation_training"
+DISCLOSURE_TABLE = "delegation_disclosure"
+CALENDAR_TABLE = "delegation_calendar"
 
 TABLES: tuple[str, ...] = (
     SETTINGS_TABLE,
@@ -31,6 +35,10 @@ TABLES: tuple[str, ...] = (
     HANDLE_IT_TABLE,
     HANDLED_TABLE,
     REMINDERS_TABLE,
+    MAIL_READ_TABLE,
+    TRAINING_TABLE,
+    DISCLOSURE_TABLE,
+    CALENDAR_TABLE,
 )
 
 _DDL: tuple[str, ...] = (
@@ -83,6 +91,8 @@ _DDL: tuple[str, ...] = (
     f"ON {DRAFTS_TABLE}(person_id, created_at)",
     # The inbox watcher's switch and health, one row per person (absent: off).
     # watch_since resets on every off → on, so it never drafts for old mail.
+    # mailbox_drafts: also save each reply in their mailbox's Drafts (off: the
+    # reply lives on its card alone until they send it).
     f"CREATE TABLE IF NOT EXISTS {INBOX_WATCH_TABLE} ("
     "  person_id INTEGER PRIMARY KEY,"
     "  enabled INTEGER NOT NULL DEFAULT 0,"
@@ -91,6 +101,7 @@ _DDL: tuple[str, ...] = (
     "  status TEXT NOT NULL DEFAULT 'off',"
     "  backoff_until TEXT,"
     "  failures INTEGER NOT NULL DEFAULT 0,"
+    "  mailbox_drafts INTEGER NOT NULL DEFAULT 0,"
     "  updated_at TEXT,"
     "  updated_by TEXT"
     ")",
@@ -121,7 +132,8 @@ _DDL: tuple[str, ...] = (
     f"CREATE INDEX IF NOT EXISTS idx_{INBOX_MESSAGES_TABLE}_created "
     f"ON {INBOX_MESSAGES_TABLE}(person_id, created_at)",
     # Handle it for me, one row per person (absent: off). mode is careful |
-    # balanced | bold (delegation.handle_it.MODES). levels is the per-kind
+    # balanced | bold (delegation.handle_it.MODES; a 'training' row from
+    # before is moved by _move_training_off_the_dial). levels is the per-kind
     # setting it replaced, kept for older rows (_add_handle_it_mode).
     f"CREATE TABLE IF NOT EXISTS {HANDLE_IT_TABLE} ("
     "  person_id INTEGER PRIMARY KEY,"
@@ -157,6 +169,51 @@ _DDL: tuple[str, ...] = (
     ")",
     f"CREATE INDEX IF NOT EXISTS idx_{REMINDERS_TABLE}_due "
     f"ON {REMINDERS_TABLE}(claimed_at, cancelled_at, due_at)",
+    # The threads of someone's own mailbox read_my_email opened for them
+    # (delegation.mail_reads): where, never what. One row per thread, the
+    # subject and sender as one line each and never a message's text, so a
+    # later conversation can open it again; mailbox is the address it was
+    # read from, so a list never points into another mailbox.
+    f"CREATE TABLE IF NOT EXISTS {MAIL_READ_TABLE} ("
+    "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+    "  person_id INTEGER NOT NULL,"
+    "  mailbox TEXT NOT NULL,"
+    "  thread_id TEXT NOT NULL,"
+    "  subject TEXT NOT NULL DEFAULT '',"
+    "  sender TEXT NOT NULL DEFAULT '',"
+    "  read_at TEXT NOT NULL,"
+    "  UNIQUE(person_id, mailbox, thread_id)"
+    ")",
+    f"CREATE INDEX IF NOT EXISTS idx_{MAIL_READ_TABLE}_person_read "
+    f"ON {MAIL_READ_TABLE}(person_id, read_at)",
+    # Act as me in training, per setting (delegation.training.SETTINGS):
+    # one row per person and setting, absent means not in training.
+    f"CREATE TABLE IF NOT EXISTS {TRAINING_TABLE} ("
+    "  person_id INTEGER NOT NULL,"
+    "  setting TEXT NOT NULL,"
+    "  enabled INTEGER NOT NULL DEFAULT 0,"
+    "  updated_at TEXT,"
+    "  updated_by TEXT,"
+    "  PRIMARY KEY (person_id, setting)"
+    ")",
+    # The AI disclosure line on what is sent as a person (delegation.disclosure):
+    # one row per person who changed theirs. NULL follows the install's
+    # AI_DISCLOSURE_HANDLE_IT / AI_DISCLOSURE_APPROVED_SENDS.
+    f"CREATE TABLE IF NOT EXISTS {DISCLOSURE_TABLE} ("
+    "  person_id INTEGER PRIMARY KEY,"
+    "  handle_it INTEGER,"
+    "  approved_sends INTEGER,"
+    "  updated_at TEXT,"
+    "  updated_by TEXT"
+    ")",
+    # Read my calendar (delegation.calendar): one row per person who set it.
+    # Absent means off.
+    f"CREATE TABLE IF NOT EXISTS {CALENDAR_TABLE} ("
+    "  person_id INTEGER PRIMARY KEY,"
+    "  enabled INTEGER NOT NULL DEFAULT 0,"
+    "  updated_at TEXT,"
+    "  updated_by TEXT"
+    ")",
 )
 
 
@@ -183,8 +240,44 @@ def _add_handle_it_mode(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _move_training_off_the_dial(conn: sqlite3.Connection) -> None:
+    """In training was once a step on Handle it for me's dial (mode
+    ``training``); it is now a switch per Act as me setting. Such a row moves
+    to Balanced, the limits its allowed senders had, with Replies and
+    Follow-ups in training (follow-ups always waited there), so nothing more
+    goes on its own than before."""
+    rows = conn.execute(
+        f"SELECT person_id FROM {HANDLE_IT_TABLE} WHERE mode = 'training'"  # noqa: S608 — constant table name
+    ).fetchall()
+    if not rows:
+        return
+    for (person_id,) in rows:
+        for setting in ("replies", "follow_ups"):
+            conn.execute(
+                f"INSERT INTO {TRAINING_TABLE} (person_id, setting, enabled, updated_by) "  # noqa: S608
+                "VALUES (?, ?, 1, 'migration') ON CONFLICT(person_id, setting) DO UPDATE SET enabled = 1",
+                (person_id, setting),
+            )
+        conn.execute(
+            f"UPDATE {HANDLE_IT_TABLE} SET mode = 'balanced' WHERE person_id = ?",  # noqa: S608
+            (person_id,),
+        )
+    conn.commit()
+
+
+def _add_mailbox_drafts(conn: sqlite3.Connection) -> None:
+    """Give a watch table made before ``mailbox_drafts`` existed the column,
+    off: replies wait on their cards and no longer fill the person's Drafts."""
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({INBOX_WATCH_TABLE})")}
+    if "mailbox_drafts" not in columns:
+        conn.execute(f"ALTER TABLE {INBOX_WATCH_TABLE} ADD COLUMN mailbox_drafts INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+
+
 def ensure_schema(conn: sqlite3.Connection) -> None:
     """Create the tables if missing. Idempotent."""
     for statement in _DDL:
         conn.execute(statement)
     _add_handle_it_mode(conn)
+    _add_mailbox_drafts(conn)
+    _move_training_off_the_dial(conn)

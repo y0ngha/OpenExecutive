@@ -33,13 +33,15 @@ const SECTION_IDS = [
   'settings',
 ] as const;
 
+// "How it's done" (the `skills` section) is part of Workflows now, so its
+// title and line live in the jobs namespace.
 const SECTIONS = SECTION_IDS.map((id) => ({
   id,
   get label() {
-    return t(`misc.guide.section.${id}.title`);
+    return id === 'skills' ? t('jobs.guide.skills.title') : t(`misc.guide.section.${id}.title`);
   },
   get sub() {
-    return t(`misc.guide.section.${id}.sub`);
+    return id === 'skills' ? t('jobs.guide.skills.sub') : t(`misc.guide.section.${id}.sub`);
   },
 }));
 

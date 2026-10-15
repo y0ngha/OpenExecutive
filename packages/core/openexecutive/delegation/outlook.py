@@ -50,7 +50,7 @@ import re
 import tempfile
 import time
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from email.message import Message
 from email.utils import parseaddr
 from pathlib import Path
@@ -63,7 +63,11 @@ from openexecutive.delegation.gmail import (
     _AUTOREPLY_HEADERS,
     _BULK_PRECEDENCE,
     _REPORT_SENDERS,
+    MAX_EVENTS,
+    CalendarEvent,
+    CalendarNotGranted,
     CreatedDraft,
+    DraftChanged,
     DraftInfo,
     DraftSpec,
     GmailAuthError,
@@ -91,6 +95,9 @@ LOGIN_BASE = "https://login.microsoftonline.com"
 GRAPH_RESOURCE = "https://graph.microsoft.com/"
 GRAPH_SCOPES: tuple[str, ...] = ("User.Read", "Mail.ReadWrite", "Mail.Send")
 REQUEST_SCOPE = " ".join(["offline_access", *(GRAPH_RESOURCE + s for s in GRAPH_SCOPES)])
+# Read my calendar (delegation.calendar): optional, granted when they connected
+# with --calendar. Microsoft's token lists every Graph scope they consented to.
+CALENDAR_SCOPES: frozenset[str] = frozenset({"calendars.read", "calendars.readwrite"})
 # The tenant every personal Microsoft account (Outlook.com, Hotmail) is in.
 CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad"
 CREDENTIAL_VERSION = 1
@@ -117,6 +124,9 @@ _THREAD_LIMIT = 50
 
 # Access tokens by (address, refresh token) — never written anywhere.
 _TOKENS: dict[str, tuple[str, float]] = {}
+# The scopes Microsoft said each of those tokens carries ("" when it didn't say).
+_GRANTED: dict[str, str] = {}
+_EVENT_SELECT = "id,subject,start,end,isAllDay,location,organizer,attendees,isCancelled,responseStatus,showAs"
 
 
 @dataclass(frozen=True)
@@ -126,6 +136,8 @@ class OutlookCredential:
     client_id: str = ""
     tenant: str = "common"
     personal: bool = False
+    # The Graph scopes it was minted with (the file's ``scopes``), lowercased.
+    scopes: frozenset[str] = frozenset()
 
 
 def valid_id(value: object) -> bool:
@@ -182,7 +194,19 @@ def load_credential(email: str, *, directory: Path | None = None) -> OutlookCred
         client_id=str(values["client_id"]),
         tenant=tenant,
         personal=data.get("account") == "personal" or tenant in ("consumers", CONSUMER_TENANT_ID),
+        scopes=frozenset(
+            s.strip().lower() for s in data.get("scopes") or () if isinstance(s, str) and s.strip()
+        ) if isinstance(data.get("scopes"), list) else frozenset(),
     )
+
+
+def _refresh_scope(cred: OutlookCredential) -> str:
+    """The scopes a refresh asks for: the mail ones, plus the calendar one
+    only when the credential was minted with it (asking a mail-only one for
+    it would fail the refresh, and mail with it)."""
+    if "calendars.read" not in cred.scopes:
+        return REQUEST_SCOPE
+    return f"{REQUEST_SCOPE} {GRAPH_RESOURCE}Calendars.Read"
 
 
 def _store_rotated(email: str, old: str, new: str, directory: Path | None) -> None:
@@ -235,6 +259,63 @@ def _addresses(entries: object) -> list[str]:
     if not isinstance(entries, list):
         return []
     return [a for _, a in (_address(e) for e in entries) if "@" in a]
+
+
+def _who(entry: object) -> str:
+    name, address = _address(entry)
+    name = clean_header(name)
+    return f"{name} <{address}>" if name and address else (name or address)
+
+
+def _graph_when(value: object, all_day: bool, tz: tzinfo = UTC) -> str:
+    """Graph's ``{dateTime, timeZone}`` (UTC, asked for) as ISO 8601: the
+    date alone for an all-day event, read in ``tz`` (the person's zone)."""
+    raw = str(value.get("dateTime") or "") if isinstance(value, dict) else ""
+    if not raw:
+        return ""
+    try:
+        moment = datetime.fromisoformat(raw[:19])
+    except ValueError:
+        return ""
+    if all_day:
+        # Midnight in the mailbox's own zone, shown in UTC: east of UTC that
+        # is the day before (Tokyo's 14th is 15:00 on the 13th, Auckland's
+        # 11:00). Read it in the person's zone, rounded to the nearest
+        # midnight there in case the mailbox's zone differs a little.
+        local = moment.replace(tzinfo=UTC).astimezone(tz)
+        return (local + timedelta(hours=12)).date().isoformat()
+    return moment.replace(tzinfo=UTC).isoformat()
+
+
+def parse_event(raw: dict[str, Any], tz: tzinfo = UTC) -> CalendarEvent | None:
+    """An Outlook event, or None for a cancelled one. ``tz`` is the zone an
+    all-day event's date is read in."""
+    if raw.get("isCancelled") is True:
+        return None
+    all_day = raw.get("isAllDay") is True
+    start = _graph_when(raw.get("start"), all_day, tz)
+    if not start:
+        return None
+    status_raw = raw.get("responseStatus")
+    status: dict[str, Any] = status_raw if isinstance(status_raw, dict) else {}
+    response = {
+        "organizer": "organizer", "accepted": "accepted", "declined": "declined",
+        "tentativelyAccepted": "tentative", "notResponded": "needs_action",
+    }.get(str(status.get("response") or ""), "")
+    location_raw = raw.get("location")
+    location: dict[str, Any] = location_raw if isinstance(location_raw, dict) else {}
+    attendees = [a for a in raw.get("attendees") or [] if isinstance(a, dict)]
+    return CalendarEvent(
+        id=str(raw.get("id") or ""),
+        title=clean_header(str(raw.get("subject") or "")) or "(no title)",
+        start=start,
+        end=_graph_when(raw.get("end"), all_day, tz),
+        all_day=all_day,
+        location=clean_header(str(location.get("displayName") or "")),
+        organizer=_who(raw.get("organizer")),
+        attendees=tuple(w for w in (_who(a) for a in attendees[:25]) if w),
+        response=response,
+    )
 
 
 def _header_list(raw: dict[str, Any]) -> list[tuple[str, str]]:
@@ -450,7 +531,7 @@ class DelegateOutlook:
             "grant_type": "refresh_token",
             "refresh_token": cred.refresh_token,
             "client_id": cred.client_id,
-            "scope": REQUEST_SCOPE,
+            "scope": _refresh_scope(cred),
         }
         try:
             resp = await client.post(f"{LOGIN_BASE}/{cred.tenant}/oauth2/v2.0/token", data=form)
@@ -481,6 +562,7 @@ class DelegateOutlook:
             cred = replace(cred, refresh_token=rotated)
             self._credential = cred
         _TOKENS[_token_key(cred)] = (token, time.time() + ttl)
+        _GRANTED[_token_key(cred)] = granted
         return token
 
     async def _request(
@@ -492,9 +574,10 @@ class DelegateOutlook:
         params: Any = None,
         json_body: dict[str, Any] | None = None,
         if_match: str = "",
+        prefer: str = _PREFER,
     ) -> dict[str, Any]:
         token = await self._access_token(client)
-        headers = {"Authorization": f"Bearer {token}", "Prefer": _PREFER}
+        headers = {"Authorization": f"Bearer {token}", "Prefer": prefer}
         if if_match:
             headers["If-Match"] = if_match
         try:
@@ -554,6 +637,37 @@ class DelegateOutlook:
         address. A personal account that signs in with another address (even
         a Gmail one) is matched by that sign-in address."""
         return normalize_email(str(me.get("mail") or me.get("userPrincipalName") or ""))
+
+    async def list_events(self, start: datetime, end: datetime, *, max_results: int = MAX_EVENTS) -> list[CalendarEvent]:
+        """The events on their calendar between ``start`` and ``end``,
+        recurring ones expanded, in order (``calendarView``), times in UTC.
+        Read-only (``Calendars.Read``)."""
+        async with self._client() as client:
+            await self._access_token(client)
+            granted = _GRANTED.get(_token_key(self._cred()), "")
+            if granted and not CALENDAR_SCOPES & _granted(granted):
+                raise CalendarNotGranted("Calendars.Read not granted")
+            params = {
+                "startDateTime": start.astimezone(UTC).isoformat(),
+                "endDateTime": end.astimezone(UTC).isoformat(),
+                "$orderby": "start/dateTime",
+                "$top": str(max(1, min(max_results, MAX_EVENTS))),
+                "$select": _EVENT_SELECT,
+            }
+            try:
+                data = await self._request(
+                    client, "GET", "/calendarView", params=params, prefer='outlook.timezone="UTC"',
+                )
+            except GmailAuthError as exc:
+                if str(exc) == "forbidden":
+                    raise CalendarNotGranted("calendar read refused") from exc
+                raise
+        items_raw = data.get("value")
+        items: list[Any] = items_raw if isinstance(items_raw, list) else []
+        # The window is in the person's zone (calendar.day_window).
+        zone = start.tzinfo or UTC
+        events = [parse_event(item, zone) for item in items if isinstance(item, dict)]
+        return [e for e in events if e is not None]
 
     async def profile_email(self) -> str:
         """The address of the mailbox the credential opens, from the directory."""
@@ -777,6 +891,42 @@ class DelegateOutlook:
             except GmailNotFound:
                 return False
         return True
+
+    async def update_draft_text(self, draft_id: str, expected_version: str, text: str) -> str:
+        """Replace the words of the draft ``draft_id`` with ``text``, keeping
+        who it goes to, the subject and the conversation, when it is still the
+        version ``expected_version`` (``draft_version``; If-Match holds it to
+        that version on Microsoft's side too). Returns its new version.
+        Raises ``GmailNotFound`` when it is gone and ``DraftChanged`` when it
+        changed meanwhile or is more than plain text. Nothing is sent."""
+        if not valid_id(draft_id):
+            raise GmailError("invalid draft id")
+        path = f"/messages/{quote(draft_id, safe='')}"
+        async with self._client() as client:
+            data = await self._get(client, path, {"$select": "id,isDraft,changeKey,body,hasAttachments"})
+            if data.get("isDraft") is not True:
+                raise GmailNotFound("not a draft")
+            change_key = str(data.get("changeKey") or "")
+            if draft_version(draft_id, change_key) != expected_version or not change_key:
+                raise DraftChanged("changed")
+            body = data.get("body")
+            if data.get("hasAttachments") is True or not (
+                isinstance(body, dict) and str(body.get("contentType") or "").lower() == "text"
+            ):
+                raise DraftChanged("not_plain")
+            etag = str(data.get("@odata.etag") or f'W/"{change_key}"')
+            try:
+                updated = await self._request(
+                    client, "PATCH", path, json_body={"body": {"contentType": "text", "content": text}},
+                    if_match=etag,
+                )
+            except GmailNotFound as exc:
+                # 412: it changed between the read and the write.
+                raise DraftChanged("changed") from exc
+        new_key = str(updated.get("changeKey") or "")
+        if not new_key:
+            raise GmailError("graph returned no edited draft", maybe_done=True)
+        return draft_version(draft_id, new_key)
 
     async def send_draft(self, draft_id: str) -> SentMessage:
         """Send the draft ``draft_id`` exactly as it is in Outlook now: Graph's

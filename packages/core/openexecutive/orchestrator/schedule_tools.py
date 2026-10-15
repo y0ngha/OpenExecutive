@@ -27,6 +27,8 @@ from collections.abc import Awaitable, Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from openexecutive.orchestrator.disclosure import with_chat_line
+
 logger = logging.getLogger(__name__)
 
 
@@ -181,16 +183,11 @@ def _guard_outbound(*, tool: str, channel: str, channel_ref: str, text: str) -> 
     ``done`` activity row is written, so a suppressed attempt never counts itself
     toward the rate cap.
     """
-    from openexecutive.delegation.lockdown import mail_touched_refusal
-
-    # Act as me: a turn that read the principal's own mail sends nothing.
-    if (refused := mail_touched_refusal(tool)) is not None:
-        return refused
     from openexecutive.orchestrator.outbound_guard import check_outbound_allowed
 
     reason = check_outbound_allowed(channel, channel_ref, text)
     if reason is None:
-        return None
+        return _hold_outbound(tool=tool, channel=channel, channel_ref=channel_ref, text=text)
     from openexecutive.audit import log_event as audit_log
 
     audit_log(
@@ -208,6 +205,58 @@ def _guard_outbound(*, tool: str, channel: str, channel_ref: str, text: str) -> 
         },
     )
     return json.dumps({"status": "suppressed", "reason": reason})
+
+
+def _hold_outbound(*, tool: str, channel: str, channel_ref: str, text: str) -> str | None:
+    """Hold the Executive's own outreach back when the recipient asked for
+    that (quiet hours, "In my briefs": ``outbound_guard.check_hold``).
+
+    Returns the ``{"status": "held"}`` result once the message is stored
+    (``people.held_messages``), or ``None`` to send it now — including when
+    it couldn't be stored, so a message is never lost to the hold."""
+    from openexecutive.orchestrator.outbound_guard import check_hold
+
+    held = check_hold(channel, channel_ref)
+    if held is None:
+        return None
+    person_id, source, hold = held
+    try:
+        from openexecutive.attunement.outcomes import current_tag
+        from openexecutive.people.held_messages import hold as store_held
+
+        tag = current_tag()
+        held_id = store_held(
+            person_id, text, source=source, release_at=hold.release_at,
+            ref=tag[1] if tag else "",
+        )
+    except Exception:
+        logger.exception("hold_outbound: couldn't store the message; sending it")
+        return None
+    from openexecutive.audit import log_event as audit_log
+
+    audit_log(
+        "tool_invocation",
+        f"{tool} HELD for person {person_id}: {hold.reason}",
+        actor="executive",
+        details={
+            "tool": tool,
+            "kind": "outbound",
+            "ok": True,
+            "held": True,
+            "held_id": held_id,
+            "person_id": person_id,
+            "source": source,
+            "channel": channel,
+            "release_at": hold.release_at.isoformat() if hold.release_at else None,
+        },
+    )
+    return json.dumps({
+        "status": "held",
+        "reason": (
+            f"Not sent now: {hold.reason}. It is saved and will be delivered "
+            "then — do not send it again or schedule it."
+        ),
+    })
 
 
 def _resolve_recipient_person_id(channel: str, channel_ref: str) -> int | None:
@@ -293,7 +342,7 @@ def _record_outbound_context(
         # Never for one of the principal's contacts. They cannot message the
         # bot, and hydrating their email reply with this backstory would quote
         # the principal's conversation into an unattended turn — whose opening
-        # the audit log (readable by everyone) records — and set that turn
+        # the audit log records — and set that turn
         # apart from any other outside sender's.
         from openexecutive.people.store import find_person_by_channel_ref
 
@@ -301,6 +350,15 @@ def _record_outbound_context(
             return
         originating_session_id = getattr(session, "session_id", None)
         recipient_person_id = _resolve_recipient_person_id(channel, channel_ref)
+        # A teammate's own conversation is theirs alone: their message to
+        # someone else is linked so the reply makes sense, but no excerpt of
+        # their chat goes with it into the recipient's turn
+        # (`inbound_hydration._build_backstory_excerpt`).
+        from openexecutive.orchestrator.people_tools import teammate_turn_owner
+
+        speaker = teammate_turn_owner(session)
+        if speaker is not None and speaker != recipient_person_id:
+            originating_session_id = None
         from openexecutive.memory.episodic import insert_outbound_context
 
         context_id = insert_outbound_context(
@@ -888,7 +946,9 @@ async def handle_send_telegram_message(tool_input: dict[str, Any]) -> str:
 
     from openexecutive.audit import log_event as audit_log
     try:
-        msg_id = await send_message(settings.telegram_bot_token, chat_id, text)
+        msg_id = await send_message(
+            settings.telegram_bot_token, chat_id, with_chat_line(text, f"telegram:{chat_id}")
+        )
     except Exception as exc:
         logger.exception("send_telegram_message: send failed")
         audit_log(
@@ -940,13 +1000,27 @@ async def handle_send_slack_dm(tool_input: dict[str, Any]) -> str:
         PRIVATE_TURN_REFUSAL,
         turn_is_private_to_principal,
     )
+    from openexecutive.people.store import find_person_by_slack_id
 
     if turn_is_private_to_principal():
-        from openexecutive.people.store import find_person_by_slack_id
-
         recipient = find_person_by_slack_id(user_id)
         if recipient is None or not recipient.is_principal:
             return json.dumps({"error": PRIVATE_TURN_REFUSAL})
+
+    # Roster gate: refuse outbound to any Slack user that doesn't match a
+    # non-archived Person row. Prevents prompt-injection from coaxing the
+    # Executive into DMing arbitrary Slack users — the same guard
+    # send_discord_dm and send_telegram_message already apply. Kept after the
+    # private-turn check above so that refusal keeps its own reason.
+    if not _dm_recipient_on_roster(find_person_by_slack_id, user_id):
+        logger.warning(
+            "send_slack_dm: refused user_id=%s (not in People roster)", user_id
+        )
+        return json.dumps({"error": (
+            f"user_id {user_id!r} is not in the People roster. Pass the person's "
+            "slack_user_id from lookup_person (a Slack member id like U01ABCDEF) "
+            "— NOT their person_id."
+        )})
 
     settings = get_settings()
     if not settings.slack_bot_token:
@@ -967,7 +1041,9 @@ async def handle_send_slack_dm(tool_input: dict[str, Any]) -> str:
     client = AsyncWebClient(token=settings.slack_bot_token)
     try:
         # No previews: Slack would fetch a link in the text to unfurl it.
-        result = await client.chat_postMessage(channel=user_id, text=text, unfurl_links=False, unfurl_media=False)
+        result = await client.chat_postMessage(
+            channel=user_id, text=with_chat_line(text, f"slack_dm:{user_id}"), unfurl_links=False, unfurl_media=False,
+        )
     except Exception as exc:
         logger.exception("send_slack_dm: send failed")
         return json.dumps({"error": f"send failed: {exc}"})
@@ -1110,7 +1186,7 @@ async def handle_send_discord_dm(tool_input: dict[str, Any]) -> str:
 
     from openexecutive.audit import log_event as audit_log
     try:
-        msg_id = await send_dm(discord_user_id, text)
+        msg_id = await send_dm(discord_user_id, with_chat_line(text, f"discord_dm:{discord_user_id}"))
     except Exception as exc:
         logger.exception("send_discord_dm: send failed")
         audit_log(
@@ -1347,6 +1423,10 @@ MESSAGE_PERSON_TOOL: dict[str, Any] = {
 
 
 async def handle_message_person(tool_input: dict[str, Any]) -> str:
+    return await message_person(tool_input)
+
+
+async def message_person(tool_input: dict[str, Any], *, alert_fallback: bool = True) -> str:
     """Send a DM to a rostered person, resolving the channel + real channel id
     server-side from their person_id.
 
@@ -1454,7 +1534,9 @@ async def handle_message_person(tool_input: dict[str, Any]) -> str:
             parsed = json.loads(result)
         except (ValueError, TypeError):
             parsed = {}
-        if parsed.get("status") == "sent":
+        if parsed.get("status") in ("sent", "held"):
+            # Held: saved for when they asked to hear (quiet hours, their
+            # brief) — trying the next channel would hold it twice.
             return result
         last_error = parsed.get("error") or last_error
 
@@ -1468,6 +1550,13 @@ async def handle_message_person(tool_input: dict[str, Any]) -> str:
             "instead if they have an address."
         )})
 
+    if not alert_fallback:
+        # The caller promised a direct message (an approval card), and an
+        # alert is read by more people than its recipient.
+        return json.dumps({"error": (
+            f"could not deliver to {person.full_name!r} on any configured chat "
+            f"channel ({last_error or 'no reachable channel'})"
+        )})
     # No channel delivered (none usable, or every attempt failed). Don't drop
     # the finding — surface it as a briefing alert routed to that person so it
     # still reaches their / the principal's "Needs you" queue.
@@ -1722,6 +1811,13 @@ UNATTENDED_WITHHELD_TOOLS: frozenset[str] = frozenset({
     # Library work on files (workflows/python_job.py): the principal's own
     # turns only; research synthesis and reflection build from the full list.
     "run_python_job",
+    # Its sibling, for the reason this whole set exists: an unattended run's
+    # context is stored or inbound text with nobody watching, and run_script
+    # turns one instruction in it into a program spending the run's own tool
+    # budget (CHAT_SCRIPT_MAX_CALLS, default 200). A workflow's own action step
+    # keeps its scripts — that is the owner's definition, approved per step,
+    # and goes through workflows/step_script.py rather than this set.
+    "run_script",
     "assign_open_loop",
     "create_goal",
     "forget_fact",
@@ -1766,8 +1862,6 @@ def unattended_withheld_error(tool_name: str) -> str:
 # - update_department_goal: goal status and progress text render in every
 #   turn's org block and on /today.
 # - save_workflow: the definition is listed on everyone's /jobs.
-# - create_skill, update_skill, delete_skill: the draft goes on the shared
-#   skill review list.
 # - load_mcp_server: connects to any HTTPS URL the model names — the URL
 #   itself can carry the turn's content to a stranger.
 # - read_document: reads company documents and other downloaded files, so a
@@ -1794,8 +1888,6 @@ PRIVATE_TURN_WITHHELD_TOOLS: frozenset[str] = frozenset({
     "cancel_calendar_event",
     "create_calendar_event",
     "create_instant_meeting",
-    "create_skill",
-    "delete_skill",
     "draft_artifact",
     "forget_fact",
     "load_mcp_server",
@@ -1815,7 +1907,6 @@ PRIVATE_TURN_WITHHELD_TOOLS: frozenset[str] = frozenset({
     "suggest_workflow",
     "update_company_profile",
     "update_department_goal",
-    "update_skill",
 })
 
 
@@ -1835,30 +1926,46 @@ PRIVATE_TURN_WITHHELD_TOOLS: frozenset[str] = frozenset({
 # refuses a `call_tool` naming anything else. Names are exact, as the
 # gateway's own gates match them; each is one the code already calls or
 # documents: the poller's Gmail reads (`email_poller`), the calendar reads in
-# the gateway notes and `decisions` (free/busy), and the Drive search the
-# Drive gate's tests treat as a read. Add a name only for a tool that reads,
-# or whose every recipient the gateway checks.
+# the gateway notes and `decisions` (free/busy), and the Drive, Docs and
+# Sheets reads (workspace-mcp marks each read-only and calls it with a
+# read-only scope). Add a name only for a tool that reads, or whose every
+# recipient the gateway checks.
 PRIVATE_TURN_MCP_TOOLS: frozenset[str] = frozenset({
     "google_workspace__draft_gmail_message",
+    "google_workspace__get_doc_content",
+    "google_workspace__get_drive_file_content",
     "google_workspace__get_events",
     "google_workspace__get_gmail_message_content",
     "google_workspace__get_gmail_thread_content",
+    "google_workspace__get_spreadsheet_info",
     "google_workspace__list_calendars",
+    "google_workspace__list_docs_in_folder",
+    "google_workspace__list_drive_items",
+    "google_workspace__list_sheet_tables",
+    "google_workspace__list_spreadsheets",
     "google_workspace__query_freebusy",
+    "google_workspace__read_sheet_values",
+    "google_workspace__search_docs",
     "google_workspace__search_drive_files",
     "google_workspace__search_gmail_messages",
     "google_workspace__send_gmail_message",
     # The Microsoft 365 twins, for an Executive whose mailbox is Outlook
-    # (EMAIL_PROVIDER=microsoft): its mail, calendar and OneDrive search reads, and the two
+    # (EMAIL_PROVIDER=microsoft): its mail, calendar and OneDrive reads, and the two
     # mail writes whose every recipient `_check_m365_recipients` checks
     # against the same narrowed `_roster_allow_set`. Hyphenated, exactly as
-    # ms-365-mcp-server names them.
+    # ms-365-mcp-server names them. Opening a OneDrive file goes through
+    # `download-bytes`, allowed only for a file's content
+    # (`private_turn_allows_mcp_call`).
     "microsoft_365__create-draft-email",
     "microsoft_365__get-calendar-event",
     "microsoft_365__get-calendar-view",
+    "microsoft_365__get-drive-item",
+    "microsoft_365__get-drive-root-item",
     "microsoft_365__get-mail-message",
     "microsoft_365__list-calendar-events",
     "microsoft_365__list-calendars",
+    "microsoft_365__list-drives",
+    "microsoft_365__list-folder-files",
     "microsoft_365__list-mail-folder-messages",
     "microsoft_365__list-mail-messages",
     "microsoft_365__search-onedrive-files",
@@ -1873,16 +1980,43 @@ def private_turn_allows_mcp_tool(tool_name: object) -> bool:
     return isinstance(tool_name, str) and tool_name in PRIVATE_TURN_MCP_TOOLS
 
 
+def is_onedrive_file_read(call_input: Any) -> bool:
+    """Whether a ``call_tool`` input is ``download-bytes`` fetching one
+    OneDrive file's content, the twin of ``get_drive_file_content`` and the
+    only shape a private turn may run it with. Its other target, a mail
+    attachment, stays out, as Gmail's attachment read does."""
+    from openexecutive.orchestrator.mcp_gateway import (
+        _M365_DOWNLOAD_TOOL,
+        _M365_DRIVE_CONTENT_TARGET_RE,
+        _normalize_tool_name,
+        _unsafe_id_segment,
+    )
+
+    name = call_input.get("name") if isinstance(call_input, dict) else None
+    if not isinstance(name, str) or _normalize_tool_name(name) != _M365_DOWNLOAD_TOOL:
+        return False
+    arguments = call_input.get("arguments")
+    target = arguments.get("target") if isinstance(arguments, dict) else None
+    match = _M365_DRIVE_CONTENT_TARGET_RE.fullmatch(target) if isinstance(target, str) else None
+    return match is not None and not any(_unsafe_id_segment(g) for g in match.groups()[:2])
+
+
+def private_turn_allows_mcp_call(call_input: Any) -> bool:
+    """Whether a turn private to the principal may run this ``call_tool``
+    input: a tool in ``PRIVATE_TURN_MCP_TOOLS``, or a OneDrive file read."""
+    named = call_input.get("name") if isinstance(call_input, dict) else None
+    return private_turn_allows_mcp_tool(named) or is_onedrive_file_read(call_input)
+
+
 def private_turn_withholds(tool_name: str, tool_input: Any) -> bool:
     """Whether a turn private to the principal may not run this tool use: a
     tool in ``PRIVATE_TURN_WITHHELD_TOOLS``, or a gateway ``call_tool`` that
-    names a tool outside ``PRIVATE_TURN_MCP_TOOLS``."""
+    ``private_turn_allows_mcp_call`` does not allow."""
     if tool_name in PRIVATE_TURN_WITHHELD_TOOLS:
         return True
     if tool_name != "call_tool":
         return False
-    named = tool_input.get("name") if isinstance(tool_input, dict) else None
-    return not private_turn_allows_mcp_tool(named)
+    return not private_turn_allows_mcp_call(tool_input)
 
 
 def private_turn_withheld_error(tool_name: str) -> str:

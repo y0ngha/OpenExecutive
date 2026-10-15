@@ -6,6 +6,7 @@ import Button, { buttonClass } from "@/components/ui/Button";
 import { t } from "@/i18n/index.ts";
 import {
   dismissReplyCard,
+  editReplyText,
   getReplyCards,
   ReplySendError,
   sendReplyCard,
@@ -25,15 +26,17 @@ import {
 } from "@/lib/replyCards";
 import FeatureName from "@/components/FeatureName";
 
-// Home: the replies the Executive drafted in your own Gmail for mail that
-// needs you (Settings → Act as me → Draft replies to my inbox), shown as
-// cards in "Needs you". Each card shows who wrote, what they wrote, the
-// draft, what it leaves you to decide and anything to check. Send (the
-// card's primary) sends that draft from your Gmail exactly as it is there,
-// after you confirm who it goes to; Edit in Gmail and Dismiss (deletes it
-// unless you edited it) are their own buttons beside it. GET /delegation/replies answers
-// only the owner, so nothing shows for everyone else, on a backend without
-// it, and when nothing is waiting.
+// Home: the replies the Executive wrote as you for mail that needs you
+// (Delegate → Act as me → Draft replies to my inbox), shown as cards in
+// "Needs you". Each card shows who wrote, what they wrote, the draft, what it
+// leaves you to decide and anything to check. The reply waits on the card
+// alone unless you chose to keep replies in your Drafts too. Edit changes its
+// words right on the card (and in your Drafts when it's there:
+// PUT /delegation/replies/{id}/text). Send (the card's primary) sends it from
+// your own mailbox after you confirm who it goes to; Open in Gmail (when it's
+// in your Drafts) and Dismiss are their own buttons beside it.
+// GET /delegation/replies answers only the owner, so nothing shows for
+// everyone else, on a backend without it, and when nothing is waiting.
 
 // While a send Gmail hasn't confirmed is being settled (the card is
 // "executing"), how often the cards are read again.
@@ -75,7 +78,12 @@ export function useReplyCards() {
     setNotice(note ?? null);
   }, []);
 
-  return { cards: cards ?? [], notice, gone, refresh };
+  // A card changed in place (its words edited).
+  const replace = useCallback((card: ReplyCard) => {
+    setCards((prev) => (prev ?? []).map((c) => (c.decision_id === card.decision_id ? card : c)));
+  }, []);
+
+  return { cards: cards ?? [], notice, gone, refresh, replace };
 }
 
 // What the Replies-waiting cards are, for the Needs you header's tip.
@@ -85,26 +93,35 @@ export function repliesWaitingTip(): string {
 
 // What the row is doing: idle, asking before sending (first or second
 // time), or waiting on the backend.
+// `allow`: Send + allow, in training (replies to them, or follow-ups to
+// these people, go on their own after).
 type Step =
   | { kind: "idle" }
-  | { kind: "ask"; recipients: string[] }
-  | { kind: "confirm"; message: string; recipients: string[]; threadMovedOn: boolean }
+  | { kind: "ask"; recipients: string[]; allow: boolean }
+  | { kind: "confirm"; message: string; recipients: string[]; threadMovedOn: boolean; allow: boolean }
   | { kind: "busy"; label: string };
 
 export function ReplyCardItem({
   card,
   onGone,
   onRefresh,
+  onChanged,
   emphasized = false,
 }: {
   card: ReplyCard;
   emphasized?: boolean;
   onGone: (id: number, note?: string) => void;
   onRefresh: () => Promise<void>;
+  onChanged?: (card: ReplyCard) => void;
 }) {
   const [step, setStep] = useState<Step>({ kind: "idle" });
   const [error, setError] = useState<string | null>(null);
   const [fullDraft, setFullDraft] = useState(false);
+  // Edit: the draft's words in a box on the card, until Save or Cancel.
+  const [editing, setEditing] = useState<string | null>(null);
+  // Drafts in training: keep what you sent as an example when you changed it first.
+  const [keepExample, setKeepExample] = useState(true);
+  const learnsStyle = Boolean(card.learns_style);
   // Being settled: Gmail didn't confirm a send. The server says so, and the
   // section reads the cards again until it's settled.
   const unconfirmed = card.status === "executing";
@@ -112,7 +129,9 @@ export function ReplyCardItem({
   const warnings = replyFlagLines(card.flags);
   const received = formatRelativeTime(card.received_at);
   const gmailLink = safeGmailLink(card.gmail_link);
-  const mailbox = mailboxName(card.gmail_link);
+  const mailbox = card.mailbox || mailboxName(card.gmail_link);
+  // Kept in their Drafts too, or on this card alone until Send.
+  const inMailbox = card.in_mailbox !== false;
   const who = card.from_name.trim() || card.from_email;
   const followUp = card.source === "follow_up";
 
@@ -128,15 +147,43 @@ export function ReplyCardItem({
     }
   };
 
-  const send = async (confirm: { recipients: string[]; thread_moved_on?: boolean }) => {
+  const saveEdit = async () => {
+    if (editing === null) return;
+    setStep({ kind: "busy", label: t("common.saving") });
+    setError(null);
+    try {
+      const updated = await editReplyText(card.decision_id, editing);
+      onChanged?.(updated);
+      setEditing(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("briefing.replies.saveEditFailed"));
+    } finally {
+      setStep({ kind: "idle" });
+    }
+  };
+
+  const send = async (confirm: { recipients: string[]; thread_moved_on?: boolean }, allow: boolean) => {
     setStep({ kind: "busy", label: t("briefing.replies.sending") });
     setError(null);
     try {
-      const result = await sendReplyCard(card.decision_id, confirm);
+      const result = await sendReplyCard(
+        card.decision_id,
+        {
+          ...confirm,
+          ...(allow ? { allow: true } : {}),
+          ...(learnsStyle && keepExample ? { example: true } : {}),
+        },
+      );
       if (result.status === "sent") {
         onGone(
           card.decision_id,
-          followUp ? t("briefing.replies.sentFollowUp", { who }) : t("briefing.replies.sentReply", { who }),
+          followUp
+            ? allow
+              ? t("briefing.replies.sentFollowUpAllowed", { who })
+              : t("briefing.replies.sentFollowUp", { who })
+            : allow
+              ? t("briefing.replies.sentReplyAllowed", { who })
+              : t("briefing.replies.sentReply", { who }),
         );
         return;
       }
@@ -145,6 +192,7 @@ export function ReplyCardItem({
         message: result.message,
         recipients: result.recipients,
         threadMovedOn: result.reasons.includes("thread_moved_on"),
+        allow,
       });
     } catch (err) {
       const code = err instanceof ReplySendError ? err.code : "error";
@@ -207,6 +255,33 @@ export function ReplyCardItem({
 
       <div className="mt-3">
         <div className={label}>{t("briefing.replies.yourDraft")}</div>
+        {editing !== null ? (
+          <div className="mt-1.5">
+            <div className="px-1 text-xs text-fg-subtle break-words">{t("briefing.replies.to", { recipients: card.draft_to.join(", ") })}</div>
+            <textarea
+              aria-label={t("briefing.replies.yourDraft")}
+              rows={9}
+              value={editing}
+              disabled={busy}
+              autoFocus
+              onChange={(e) => setEditing(e.target.value)}
+              className="mt-1 w-full resize-y whitespace-pre-wrap rounded-xl border border-line-strong bg-surface p-3 text-[15px] leading-relaxed text-fg focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
+            />
+            <p className="mt-1 px-1 text-xs text-fg-subtle">
+              {inMailbox
+                ? t("briefing.replies.editSavesInMailbox", { mailbox })
+                : t("briefing.replies.editNothingSent")}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button variant="primary" onClick={() => void saveEdit()} disabled={busy || !editing.trim()}>
+                {busy ? step.label : t("common.save")}
+              </Button>
+              <Button variant="ghost" onClick={() => setEditing(null)} disabled={busy}>
+                {t("common.cancel")}
+              </Button>
+            </div>
+          </div>
+        ) : (
         <div className="mt-1.5 rounded-xl border border-line bg-surface px-3 py-2">
           <div className="text-xs text-fg-subtle break-words">{t("briefing.replies.to", { recipients: card.draft_to.join(", ") })}</div>
           <p
@@ -227,6 +302,7 @@ export function ReplyCardItem({
             </button>
           )}
         </div>
+        )}
       </div>
 
       {card.waited_because && (
@@ -261,7 +337,23 @@ export function ReplyCardItem({
           {step.kind === "confirm" && (
             <p className="text-sm text-amber-700 dark:text-amber-300">{step.message}</p>
           )}
-          <p className="text-sm text-fg">{sendQuestion(step.recipients, mailbox)}</p>
+          <p className="text-sm text-fg">{sendQuestion(step.recipients, mailbox, inMailbox)}</p>
+          {step.allow && (
+            <p className="mt-2 text-sm text-fg">
+              {followUp ? t("briefing.replies.allowFollowUpsNote", { who }) : t("briefing.replies.allowRepliesNote", { who })}
+            </p>
+          )}
+          {learnsStyle && (
+            <label className="mt-2 flex min-h-touch items-center gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                checked={keepExample}
+                onChange={(e) => setKeepExample(e.target.checked)}
+                className="h-4 w-4 accent-accent"
+              />
+              {t("briefing.replies.keepExample")}
+            </label>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button
               variant="primary"
@@ -270,6 +362,7 @@ export function ReplyCardItem({
                   step.kind === "confirm"
                     ? { recipients: step.recipients, thread_moved_on: step.threadMovedOn || undefined }
                     : { recipients: step.recipients },
+                  step.allow,
                 )
               }
             >
@@ -280,23 +373,42 @@ export function ReplyCardItem({
             </Button>
           </div>
         </div>
-      ) : (
+      ) : editing !== null ? null : (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button
             variant="primary"
-            onClick={() => setStep({ kind: "ask", recipients: card.draft_to })}
+            onClick={() => setStep({ kind: "ask", recipients: card.draft_to, allow: false })}
             disabled={busy}
           >
             {busy ? step.label : t("briefing.replies.send")}
+          </Button>
+          {card.can_allow && (
+            <Button
+              variant="secondary"
+              onClick={() => setStep({ kind: "ask", recipients: card.draft_to, allow: true })}
+              disabled={busy}
+            >
+              {t("briefing.replies.sendAllow")}
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setError(null);
+              setEditing(card.draft_body);
+            }}
+            disabled={busy}
+          >
+            {t("common.edit")}
           </Button>
           {gmailLink && (
             <a
               href={gmailLink}
               target="_blank"
               rel="noopener noreferrer"
-              className={buttonClass("secondary")}
+              className={buttonClass("ghost")}
             >
-              {t("briefing.replies.editIn", { mailbox })}
+              {t("briefing.replies.openIn", { mailbox })}
             </a>
           )}
           {/* Dismiss is its own button, set apart on the right, so it's never

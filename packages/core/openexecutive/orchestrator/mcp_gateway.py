@@ -11,12 +11,13 @@ import os
 import re
 import unicodedata
 from collections.abc import Awaitable, Callable, Iterable, Iterator
+from dataclasses import dataclass
 from email.utils import getaddresses
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-from openexecutive.config import get_settings, mcp_config_file_present
+from openexecutive.config import Settings, get_settings, mcp_config_file_present
 from openexecutive.memory import drive_reads
 from openexecutive.people.identity import RosterAllow
 from openexecutive.utils.html_tags import strip_tags
@@ -1552,6 +1553,98 @@ def _check_calendar_attendees(tool: str, arguments: dict[str, Any]) -> str | Non
     return None
 
 
+def _mail_recipients(*values: Any) -> list[str]:
+    """Every address in Gmail-style ``to`` / ``cc`` / ``bcc`` values (a
+    string or a list of them)."""
+    found: list[str] = []
+    for value in values:
+        items = value if isinstance(value, list) else [value]
+        found += [a for _, a in getaddresses([v for v in items if isinstance(v, str)]) if a]
+    return found
+
+
+def _m365_recipients(message: dict[str, Any]) -> list[str]:
+    found: list[str] = []
+    for key in ("toRecipients", "ccRecipients", "bccRecipients"):
+        entries = message.get(key)
+        for entry in entries if isinstance(entries, list) else []:
+            address = entry.get("emailAddress") if isinstance(entry, dict) else None
+            if isinstance(address, dict) and isinstance(address.get("address"), str):
+                found.append(address["address"])
+    return found
+
+
+def _with_disclosure(
+    tool_name: Any, normalized: str, arguments: dict[str, Any], *, bare: bool = False,
+) -> dict[str, Any] | str:
+    """The Executive's own mail send or draft with the AI disclosure line
+    under its body (``orchestrator.disclosure``), or a JSON refusal for HTML
+    that could hide it. Runs after every gate, on a copy; a shape it doesn't
+    know is left as it is. ``bare``: the acknowledgement to a new sender,
+    whose line names nobody."""
+    from openexecutive.orchestrator.disclosure import applies, hides_what_follows, with_mail_line
+
+    def html_refusal(key: str, text: str, recipients: list[str] | None) -> str | None:
+        if applies(recipients) and hides_what_follows(text):
+            return _refuse(
+                str(tool_name), key, "<hidden-markup>",
+                reason=(
+                    "this HTML has markup that can hide text after it (a comment, a style or "
+                    "script block, or text styled out of sight), so the line saying it was "
+                    "written by an AI could be hidden — refusing. Send it as plain text, or "
+                    "as HTML without that markup."
+                ),
+            )
+        return None
+
+    if tool_name in _GATED_GMAIL_TOOLS:
+        out = dict(arguments)
+        recipients = _mail_recipients(out.get("to"), out.get("cc"), out.get("bcc"))
+        if isinstance(out.get("html_body"), str) and out["html_body"]:
+            refused = html_refusal("html_body", out["html_body"], recipients)
+            if refused is not None:
+                return refused
+            out["html_body"] = with_mail_line(out["html_body"], recipients=recipients, as_html=True, bare=bare)
+        if isinstance(out.get("body"), str) and out["body"]:
+            as_html = str(out.get("body_format") or "").lower() == "html"
+            refused = html_refusal("body", out["body"], recipients) if as_html else None
+            if refused is not None:
+                return refused
+            out["body"] = with_mail_line(out["body"], recipients=recipients, as_html=as_html, bare=bare)
+        return out
+    if normalized not in _GATED_M365_MAIL_TOOLS or normalized == _M365_SEND_DRAFT_TOOL:
+        return arguments
+    body = arguments.get("body")
+    if not isinstance(body, dict):
+        return arguments
+    body = dict(body)
+    # A reply or forward carries its words as Comment, which Graph puts in
+    # the HTML reply; a new message or a draft as a Graph message (under
+    # Message for send_mail).
+    if isinstance(body.get("Comment"), str) and body["Comment"]:
+        refused = html_refusal("Comment", body["Comment"], None)
+        if refused is not None:
+            return refused
+        body["Comment"] = with_mail_line(body["Comment"], as_html=True)
+        return {**arguments, "body": body}
+    wrapped = isinstance(body.get("Message"), dict)
+    message = body["Message"] if wrapped else body
+    content = message.get("body")
+    if not (isinstance(content, dict) and isinstance(content.get("content"), str) and content["content"]):
+        return arguments
+    as_html = str(content.get("contentType") or "").lower() == "html"
+    recipients = _m365_recipients(message)
+    refused = html_refusal("body", content["content"], recipients) if as_html else None
+    if refused is not None:
+        return refused
+    content = {
+        **content,
+        "content": with_mail_line(content["content"], recipients=recipients, as_html=as_html),
+    }
+    message = {**message, "body": content}
+    return {**arguments, "body": {**body, "Message": message} if wrapped else message}
+
+
 def _pin_calendar_notifications(arguments: dict[str, Any]) -> dict[str, Any]:
     """Keep a manage_event call that named no attendees from emailing the
     event's existing guests.
@@ -1758,6 +1851,35 @@ def _m365_implied_recipients(normalized: str, message: dict[str, Any]) -> list[s
 _Discover = Callable[[str], Awaitable[bool]]
 
 
+class GatewayCallTimeout(TimeoutError):
+    """A call through the MCP gateway got no answer within
+    ``MCP_TOOL_TIMEOUT_S``. The workspace server may still have run it."""
+
+
+def _tool_timeout_s() -> float:
+    """``MCP_TOOL_TIMEOUT_S``; a settings stub without it (tests patch
+    ``get_settings`` here) gets config's default."""
+    return float(getattr(get_settings(), "mcp_tool_timeout_s", 120.0))
+
+
+async def _session_call(
+    session: Any, name: str, arguments: dict[str, Any], timeout: float | None = None,
+) -> Any:
+    """``session.call_tool`` with the per-call ceiling. Without one, a
+    workspace server that never answers (a hung Google or Microsoft request,
+    a stuck child process) held whatever awaited it for good: the email
+    poller, which handles one message at a time, a brief, a chat turn. The
+    call is cancelled on our side; the server may still finish it."""
+    if timeout is None:
+        timeout = _tool_timeout_s()
+    try:
+        return await asyncio.wait_for(session.call_tool(name, arguments), timeout=timeout)
+    except TimeoutError as exc:
+        tool = arguments.get("tool_name") if name == "call_tool" else name
+        logger.warning("MCPGateway: %s got no answer within %.0fs", str(tool)[:200], timeout)
+        raise GatewayCallTimeout(f"{str(tool)[:200]} got no answer within {timeout:.0f}s") from exc
+
+
 async def _fetch_m365_json(
     session: Any, tool_name: str, arguments: dict[str, Any], discover: _Discover | None = None,
 ) -> dict[str, Any] | None:
@@ -1767,8 +1889,8 @@ async def _fetch_m365_json(
     that only searched for the reply tool never returned the lookup: then
     ``discover`` it and read once more."""
     try:
-        result = await session.call_tool(
-            "call_tool", {"tool_name": tool_name, "arguments": arguments},
+        result = await _session_call(
+            session, "call_tool", {"tool_name": tool_name, "arguments": arguments},
         )
         text = result.content[0].text if result.content else ""
         if (
@@ -1778,8 +1900,8 @@ async def _fetch_m365_json(
             and _UNDISCOVERED_MARKER in text
             and await discover(tool_name)
         ):
-            result = await session.call_tool(
-                "call_tool", {"tool_name": tool_name, "arguments": arguments},
+            result = await _session_call(
+                session, "call_tool", {"tool_name": tool_name, "arguments": arguments},
             )
             text = result.content[0].text if result.content else ""
         parsed = json.loads(text) if isinstance(text, str) and text.strip() else None
@@ -2573,6 +2695,46 @@ def _record_m365_outbound_context(arguments: dict[str, Any]) -> None:
         )
 
 
+# Outlook replies that answer one message by its id (a draft only waits).
+_M365_SENT_REPLY_TOOLS = frozenset({
+    "microsoft_365__reply_mail_message",
+    "microsoft_365__reply_all_mail_message",
+})
+
+
+def _note_mail_sent(tool_name: str, normalized: str, arguments: dict[str, Any]) -> None:
+    """Mark on the conversation (``Session.mail_sent_to`` /
+    ``mail_replied_ids``) who a send the mailbox accepted went to, so the
+    email poller can tell whether an inbound email got its reply
+    (``integrations.unanswered_mail``). Nothing without a live session, and
+    never raises: the send already happened."""
+    from openexecutive.orchestrator.schedule_tools import current_session
+
+    session = current_session.get()
+    if session is None:
+        return
+    try:
+        if tool_name == "google_workspace__send_gmail_message":
+            for field in _OUTBOUND_CONTEXT_RECIPIENT_FIELDS:
+                value = arguments.get(field)
+                items = value if isinstance(value, list) else [value]
+                for _name, addr in getaddresses([s for s in items if isinstance(s, str)]):
+                    if addr.strip():
+                        session.mail_sent_to.add(addr.strip().lower())
+        elif normalized == _M365_RECORD_SEND_TOOL:
+            message = _ci_get(_ci_get(arguments, "body"), "message")
+            for key in ("toRecipients", "ccRecipients"):
+                for addr in _m365_recipient_addresses(_ci_get(message, key)):
+                    if addr.strip():
+                        session.mail_sent_to.add(addr.strip().lower())
+        elif normalized in _M365_SENT_REPLY_TOOLS:
+            message_id = _ci_get(arguments, "messageId")
+            if isinstance(message_id, str) and message_id:
+                session.mail_replied_ids.add(message_id)
+    except Exception:
+        logger.exception("note_mail_sent: could not record the send (non-fatal)")
+
+
 # extensible-mcp's refusal for a tool no search in this session has returned
 # (DiscoveredToolsFilter, surfaced by its call_tool handler as "Error: ...").
 _UNDISCOVERED_MARKER = "has not been discovered via search_tools"
@@ -2698,6 +2860,20 @@ def configured_server_names(config_path: Path) -> list[str]:
     return sorted(str(name) for name in servers)
 
 
+@dataclass(frozen=True)
+class PinnedToolsProbe:
+    """What startup priming learned about the pinned Google tools.
+
+    One value, assigned once, so a reader never has to reconcile two attributes
+    that were written separately: ``missing`` is the names the probe could not
+    find, or ``None`` when the probe itself failed and found out nothing. The
+    gateway's attribute being ``None`` means the probe has not finished (or
+    never ran, because Google is not configured).
+    """
+
+    missing: tuple[str, ...] | None
+
+
 class MCPGateway:
     """Proxies search_tools / call_tool / load_mcp_server to an extensible-mcp subprocess.
 
@@ -2716,6 +2892,51 @@ class MCPGateway:
         # Connected Systems prompt section reads it, so a gateway that never
         # started never reads as connected.
         self.server_names: tuple[str, ...] = ()
+        # What startup priming found, for /health and the Setup status page.
+        # None until priming finishes, so a probe that crashed can never read
+        # as "every pinned tool is present" — only PinnedToolsProbe(missing=())
+        # asserts that.
+        self.pinned_tools: PinnedToolsProbe | None = None
+        # Servers whose sign-in has died (``mark_needs_reconnect``): the
+        # Connected Systems prompt section says so instead of "connected",
+        # and the Setup page shows it. Cleared by ``mark_reconnected`` or by
+        # the next call to one of that server's tools that answers without
+        # an authorization error.
+        self.needs_reconnect: set[str] = set()
+        # MCP_TOOL_TIMEOUT_S, read on first use (`_call_timeout`) and kept:
+        # `get_settings()` builds a fresh Settings on every call.
+        self._tool_timeout_s: float | None = None
+
+    def _call_timeout(self, settings: Settings | None = None) -> float:
+        """The per-call ceiling, read once per gateway (from ``settings``
+        when the caller already holds a read)."""
+        if self._tool_timeout_s is None:
+            self._tool_timeout_s = (
+                float(getattr(settings, "mcp_tool_timeout_s", 120.0))
+                if settings is not None
+                else _tool_timeout_s()
+            )
+        return self._tool_timeout_s
+
+    def mark_needs_reconnect(self, server: str, reason: str | None = None) -> bool:
+        """Note that ``server``'s grant no longer works. True when this is
+        news (the first report), so the caller can log or notify once."""
+        if server in self.needs_reconnect:
+            return False
+        self.needs_reconnect.add(server)
+        logger.warning(
+            "MCP server %s needs reconnecting%s; the prompt now says so",
+            server, f": {reason[:200]}" if reason else "",
+        )
+        return True
+
+    def mark_reconnected(self, server: str) -> bool:
+        """The grant works again (a reconnect, or a call that succeeded)."""
+        if server not in self.needs_reconnect:
+            return False
+        self.needs_reconnect.discard(server)
+        logger.info("MCP server %s is connected again", server)
+        return True
 
     async def start(self, config_path: Path) -> None:
         from mcp import ClientSession, StdioServerParameters
@@ -2757,52 +2978,97 @@ class MCPGateway:
         # (extensible-mcp defaults to 5 results).
         if isinstance(tool_input.get("top_k"), int):
             args["top_k"] = tool_input["top_k"]
-        result = await session.call_tool("search_tools", args)
+        result = await _session_call(session, "search_tools", args, self._call_timeout())
         text = result.content[0].text if result.content else json.dumps({"tools": []})
         return _drop_blocked_tools(text)
 
-    async def _discover(self, tool_name: str) -> bool:
+    async def _discover(self, tool_name: str, settings: Settings | None = None) -> bool:
         """Run the exact-name search that registers ``tool_name`` with
         extensible-mcp's discovered-tools filter (it only runs a tool one of
         this session's ``search_tools`` results returned, and remembers it for
         the session's life), the way ``tool_catalog.resolve`` does. True when
-        the search returned it. Best-effort: never raises."""
+        the search returned it. Best-effort: never raises.
+
+        A caller that probes many names passes ``settings`` so the whole run
+        shares one read: ``get_settings()`` builds a fresh ``Settings`` every
+        call, so reading it here cost one environment read per missing tool.
+        Left out (the ``call_tool`` retry, which probes one name), it is read
+        only on the path that needs it.
+        """
         from openexecutive.workflows.tool_catalog import parse_search_results
 
         query = re.sub(r"[_\-]+", " ", tool_name).strip()
         try:
             text = await self.search_tools({"query": query, "top_k": 10})
+            found = any(info.name == tool_name for info in parse_search_results(text))
         except Exception as exc:
             logger.warning(
                 "MCPGateway: discovering %s failed (%s)", tool_name, type(exc).__name__
             )
             return False
-        if any(info.name == tool_name for info in parse_search_results(text)):
+        if found:
             return True
+        if settings is None:
+            settings = get_settings()
+        # Both causes, because the old text named only the rename and sent the
+        # operator to the manifest for what was really a service-list setting.
         logger.warning(
-            "MCPGateway: pinned tool %s not found by search — has workspace-mcp "
-            "renamed it? (prompts/connected_systems.GOOGLE_TOOL_MANIFEST)",
+            "MCPGateway: pinned tool %s not found by search — not loaded under "
+            "WORKSPACE_MCP_TOOLS=%s / WORKSPACE_MCP_TOOL_TIER=%s, or renamed by "
+            "workspace-mcp? (prompts/connected_systems.GOOGLE_TOOL_MANIFEST)",
             tool_name,
+            settings.workspace_mcp_tools,
+            settings.workspace_mcp_tool_tier,
         )
         return False
 
     async def prime_pinned_tools(self) -> list[str]:
-        """Discover every pinned Google tool (PINNED_GOOGLE_TOOLS) up front, so
-        the model's direct ``call_tool`` on one works without a search of its
-        own. Returns the names not found, a drift signal. Run once at startup
-        when Google is configured."""
-        from openexecutive.prompts.connected_systems import PINNED_GOOGLE_TOOLS
+        """Discover the pinned Google tools this install actually loaded, so the
+        model's direct ``call_tool`` on one works without a search of its own.
+        Returns the names not found, a drift signal. Run once at startup when
+        Google is configured.
 
-        missing = [n for n in sorted(PINNED_GOOGLE_TOOLS) if not await self._discover(n)]
+        Also records the outcome on ``self.pinned_tools`` for ``/health`` and
+        the Setup status page, which is the authoritative reading: the return
+        value cannot express "the probe itself failed", and nothing awaits it.
+
+        Probes the same filtered set the prompt advertises
+        (``connected_systems.pinned_google_tools``), not the whole manifest: with
+        a ``WORKSPACE_MCP_TOOLS`` subset or the ``core`` tier, the rest were
+        never registered, so probing them produced a warning per tool every boot
+        and told the operator to look for a rename that had not happened."""
+        from openexecutive.prompts.connected_systems import pinned_google_tools
+
+        settings = get_settings()
+        pinned = pinned_google_tools(settings)
+        self._call_timeout(settings)
+        try:
+            missing = [n for n in sorted(pinned) if not await self._discover(n, settings)]
+        except asyncio.CancelledError:
+            # Shutdown cancels this task (api.main). Leave pinned_tools unset:
+            # the probe did not finish, and the process is going away.
+            raise
+        except BaseException:
+            # Not `except Exception`: anyio wraps a session failure in
+            # BaseExceptionGroup as soon as one member is a BaseException, and
+            # that group is not an Exception — the same reasoning the gateway's
+            # own startup guard in api.main spells out. Letting one through
+            # here would leave pinned_tools None forever, which the Setup
+            # status page would show as "still checking" rather than a failure.
+            logger.warning("MCPGateway: priming the pinned Google tools failed", exc_info=True)
+            self.pinned_tools = PinnedToolsProbe(missing=None)
+            return []
+        self.pinned_tools = PinnedToolsProbe(missing=tuple(missing))
         logger.info(
             "MCPGateway: primed %d pinned Google tools (%d missing)",
-            len(PINNED_GOOGLE_TOOLS) - len(missing), len(missing),
+            len(pinned) - len(missing), len(missing),
         )
         return missing
 
     async def call_tool(self, tool_input: dict[str, Any]) -> str:
         # Act as me: once the turn has read the principal's own mail, only
-        # the Google Workspace reads run (delegation.lockdown).
+        # PRIVATE_TURN_MCP_TOOLS run: reads, and sends whose every recipient
+        # the roster checks below (delegation.lockdown).
         from openexecutive.delegation.lockdown import outside_reach_refusal
 
         refused = outside_reach_refusal(
@@ -2940,21 +3206,45 @@ class MCPGateway:
             if isinstance(expanded, str):
                 return expanded
             arguments, attached_artifacts = expanded
-        result = await session.call_tool(
-            "call_tool",
-            {"tool_name": tool_input["name"], "arguments": arguments},
-        )
-        result_text = result.content[0].text if result.content else json.dumps({"result": None})
-        # A pinned tool called before startup priming reached it: the prompt
-        # told the model to call it directly, so discover it and retry once.
-        # The refused call ran nothing, and every gate above has already
-        # passed these same arguments.
-        if _is_undiscovered_refusal(tool_name, result_text) and await self._discover(tool_name):
-            result = await session.call_tool(
-                "call_tool",
-                {"tool_name": tool_input["name"], "arguments": arguments},
+        # Last, once every gate passed: the AI disclosure line, on what goes
+        # out only; what is recorded below stays the words the model wrote.
+        wire_arguments = arguments
+        if tool_name in _GATED_GMAIL_TOOLS or normalized in _GATED_M365_MAIL_TOOLS:
+            # The roster acknowledgement (the one send to an address nobody
+            # checked) gets the line that names nobody, as the ack itself.
+            grant = _roster_ack.get()
+            disclosed = _with_disclosure(
+                tool_name, normalized, arguments, bare=bool(grant is not None and grant["used"]),
             )
+            if isinstance(disclosed, str):
+                return disclosed
+            wire_arguments = disclosed
+        wire_input = {"tool_name": tool_input["name"], "arguments": wire_arguments}
+        try:
+            result = await _session_call(session, "call_tool", wire_input, self._call_timeout())
             result_text = result.content[0].text if result.content else json.dumps({"result": None})
+            # A pinned tool called before startup priming reached it: the prompt
+            # told the model to call it directly, so discover it and retry once.
+            # The refused call ran nothing, and every gate above has already
+            # passed these same arguments.
+            if _is_undiscovered_refusal(tool_name, result_text) and await self._discover(tool_name):
+                result = await _session_call(session, "call_tool", wire_input, self._call_timeout())
+                result_text = result.content[0].text if result.content else json.dumps({"result": None})
+        except GatewayCallTimeout:
+            # An error payload, not a raise: the model reads it like any tool
+            # error, and every caller that checks for one (`_is_error_payload`)
+            # treats the call as failed. Not a failed send, though: the server
+            # may still have run it, so say to check before calling again.
+            # Nothing below runs: no outbound linkage or attachment row for a
+            # send that may not have happened, and no grant-health reading.
+            return json.dumps({
+                "error": (
+                    f"{str(tool_name)[:200]} did not answer within "
+                    f"{self._call_timeout():.0f}s. It may still have run: "
+                    "check its effect before calling it again."
+                ),
+                "timed_out": True,
+            })
         # On the final result, retry or not: roster answer tokens are hidden
         # from every mailbox read (Google Workspace or Microsoft 365) but the
         # poller's own.
@@ -2964,6 +3254,7 @@ class MCPGateway:
             and not _reveal_tokens.get()
         ):
             result_text = hide_roster_tokens(result_text)
+        self._note_grant_health(tool_name, result_text)
         if tool_name in drive_reads.DRIVE_READ_TOOLS:
             result_text = _remember_drive_read(tool_name, arguments, result_text)
         if normalized == _M365_DOWNLOAD_TOOL and isinstance(arguments.get("target"), str):
@@ -2978,6 +3269,10 @@ class MCPGateway:
             _record_email_outbound_context(arguments)
         elif normalized == _M365_RECORD_SEND_TOOL and not _is_error_payload(result_text):
             _record_m365_outbound_context(arguments)
+        # A plain-text "Error …" result (FastMCP, extensible-mcp) is no send
+        # either: marking it would hide the unanswered-email card.
+        if not _is_error_payload(result_text) and not result_text.lstrip().lower().startswith("error"):
+            _note_mail_sent(tool_name, normalized, arguments)
         if attached_artifacts and not _is_error_payload(result_text):
             from openexecutive.audit import log_event as audit_log
 
@@ -2993,6 +3288,19 @@ class MCPGateway:
             )
         return result_text
 
+    def _note_grant_health(self, tool_name: object, result_text: str) -> None:
+        """Read a tool's answer for a dead grant (``grant_failure``) and keep
+        ``needs_reconnect`` in step: an authorization failure marks the
+        server, an answer that is not one clears it."""
+        server = _server_of(tool_name)
+        if server is None:
+            return
+        failure = grant_failure(result_text)
+        if failure is not None:
+            self.mark_needs_reconnect(server, failure)
+        elif server in self.needs_reconnect:
+            self.mark_reconnected(server)
+
     async def load_mcp_server(self, tool_input: dict[str, Any]) -> str:
         from openexecutive.delegation.lockdown import outside_reach_refusal
 
@@ -3002,9 +3310,11 @@ class MCPGateway:
         url: str = tool_input["url"]
         if not url.startswith("https://"):
             return json.dumps({"error": "load_mcp_server requires an HTTPS URL"})
-        result = await session.call_tool(
+        result = await _session_call(
+            session,
             "load_mcp_server",
             {"name": tool_input["name"], "url": url},
+            self._call_timeout(),
         )
         return result.content[0].text if result.content else json.dumps({"ok": True})
 
@@ -3088,6 +3398,69 @@ def get_active_gateway() -> MCPGateway | None:
     return _active_gateway
 
 
+# What a Google or Microsoft tool answers once the stored grant is dead:
+# workspace-mcp relays google-auth's "invalid_grant: Token has been expired or
+# revoked", the Graph server a 401 / InvalidAuthenticationToken. A rate limit,
+# a missing scope on one call or a 403 on a single file is not a dead grant,
+# so none of those match.
+_GRANT_FAILURE_RE = re.compile(
+    r"invalid_grant|token has been (?:expired|revoked)|refresh ?token (?:is )?(?:expired|revoked|invalid)"
+    r"|invalidauthenticationtoken|(?:^|[^\w])401(?:[^\w]|$).{0,80}unauthori[sz]ed"
+    r"|unauthori[sz]ed.{0,80}(?:^|[^\w])401(?:[^\w]|$)|reauthentication (?:is )?required"
+    r"|credentials (?:have |are )?(?:expired|been revoked)|invalid authentication credentials"
+    r"|\bUNAUTHENTICATED\b",
+    re.IGNORECASE | re.DOTALL,
+)
+# How much of a result is read for it: an error comes first; a long mailbox
+# listing quoting the words "invalid_grant" is not one.
+_GRANT_FAILURE_SCAN_CHARS = 4000
+
+
+# How a failed call reads as text (the gateway's gates and the MCP client
+# render errors these ways; workflows/action_step.py reads the same). A
+# successful answer that happens to open with "error" ("Errors in Q3…") is
+# not one, and a model-echoed argument never starts a result.
+_ERROR_TEXT_PREFIXES = ("Error: ", "Error calling tool ", "Tool error:", "Error executing tool ")
+
+
+def grant_failure(result_text: object) -> str | None:
+    """The authorization failure a tool result reports, in a line, or None
+    when the result is not one. Only an error payload counts (``{"error":
+    …}``, or text that opens with an error marker), never a successful
+    answer that merely quotes those words."""
+    if not isinstance(result_text, str) or not result_text:
+        return None
+    head = result_text[:_GRANT_FAILURE_SCAN_CHARS]
+    error: str | None = None
+    try:
+        parsed = json.loads(head) if head.lstrip().startswith("{") else None
+    except (ValueError, TypeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        if "error" not in parsed:
+            return None
+        error = json.dumps(parsed.get("error"))[:_GRANT_FAILURE_SCAN_CHARS]
+    elif head.lstrip().startswith(_ERROR_TEXT_PREFIXES):
+        error = head
+    if error is None:
+        return None
+    match = _GRANT_FAILURE_RE.search(error)
+    if match is None:
+        return None
+    start = max(match.start() - 40, 0)
+    return " ".join(error[start:match.end() + 80].split())[:200]
+
+
+def _server_of(tool_name: object) -> str | None:
+    """The server a prefixed tool name belongs to (``google_workspace__x`` →
+    ``google_workspace``), or None."""
+    if not isinstance(tool_name, str):
+        return None
+    normalized = _normalize_tool_name(tool_name)
+    server, sep, _ = normalized.partition("__")
+    return server if sep and server else None
+
+
 def gateway_server_names(gateway: object) -> tuple[str, ...]:
     """The servers ``gateway`` started with, or () for no gateway (or a
     stand-in without the attribute)."""
@@ -3095,3 +3468,57 @@ def gateway_server_names(gateway: object) -> tuple[str, ...]:
     if not isinstance(names, tuple | list):
         return ()
     return tuple(n for n in names if isinstance(n, str))
+
+
+def gateway_reconnect_needed(gateway: object) -> tuple[str, ...]:
+    """The servers ``gateway`` has marked as needing a reconnect, sorted; ()
+    for no gateway or a stand-in without the attribute."""
+    names = getattr(gateway, "needs_reconnect", ())
+    if not isinstance(names, set | frozenset | tuple | list):
+        return ()
+    return tuple(sorted(n for n in names if isinstance(n, str)))
+
+
+# The supervisor that starts the gateway and retries while it is down
+# (orchestrator/gateway_boot.py). Set by the app lifespan next to the active
+# gateway, so code that is about to need the gateway can ask for a start now
+# (``ensure_active_gateway``) and the Setup page can say why it is down.
+_supervisor: Any = None
+
+
+def set_gateway_supervisor(supervisor: Any) -> None:
+    global _supervisor
+    _supervisor = supervisor
+
+
+def get_gateway_supervisor() -> Any:
+    return _supervisor
+
+
+async def ensure_active_gateway() -> MCPGateway | None:
+    """The active gateway, after a start attempt if it is down and the
+    supervisor is not already in one. The lazy re-check before a scheduled
+    delivery: with no supervisor (tests, a process started without the
+    lifespan) this is just ``get_active_gateway``."""
+    if _active_gateway is not None or _supervisor is None:
+        return _active_gateway
+    try:
+        await _supervisor.ensure()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception("MCP gateway re-check failed")
+    return _active_gateway
+
+
+def gateway_problem(*, with_error: bool = True) -> str | None:
+    """Why there is no active gateway, in one line, or None while there is
+    one. Without a supervisor the answer is only that it is not running.
+    ``with_error=False`` leaves the failure's text out (a page every team
+    member reads)."""
+    if _active_gateway is not None:
+        return None
+    if _supervisor is None:
+        return "the MCP gateway is not running"
+    problem = _supervisor.problem(with_error=with_error)
+    return str(problem) if problem else "the MCP gateway is not running"

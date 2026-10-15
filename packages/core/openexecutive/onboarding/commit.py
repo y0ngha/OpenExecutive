@@ -8,19 +8,23 @@ without the profile they just saved.
 The department step is deliberately **additive**, and that is the one place
 this module must not copy ``cli/fixture_loader._seed_departments``. That
 seeder DELETEs every department and goal before inserting, which is correct
-when swapping in a demo company and destructive here: it would drop the eight
-defaults seeded by ``departments.store.seed_default_departments`` along with
-their ``specialist_key`` wiring, and ``create_department`` always writes
-``specialist_key = NULL`` — so a wiped default can never be recreated
-properly. We match drafted departments onto existing ones and create only
-what is genuinely new.
+when swapping in a demo company and destructive here: it would drop
+departments the user already has (and their goals) on a re-run of setup. We
+match drafted departments onto existing ones and create only what is
+genuinely new.
+
+A new install has no departments until this step runs, so the draft decides
+which ones exist: none for a solo workspace or a team that names none. A new
+department named after a specialist's area ("Finance", "HR") is wired to that
+specialist, the same rule the Executive's ``create_goal`` tool uses, so its
+goals get check-ins.
 """
 from __future__ import annotations
 
 import logging
 import re
 import sqlite3
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from openexecutive.utils.i18n import tr
 from openexecutive.utils.slug import DEPARTMENT_SLUG_FALLBACK, slugify
@@ -180,7 +184,9 @@ class OwnerEmailError(ValueError):
     fixed, input-free string, safe to return as an HTTP detail."""
 
 
-def check_owner_email(raw: str | None, principal_name: str) -> str | None:
+def check_owner_email(
+    raw: str | None, principal_name: str, *, caller_email: str | None = None
+) -> str | None:
     """Normalise the owner's sign-in email, or return None when left blank.
 
     Runs BEFORE the commit writes anything, and setup only ever FILLS IN a
@@ -223,6 +229,11 @@ def check_owner_email(raw: str | None, principal_name: str) -> str | None:
             )
         ) from exc
     if holder is not None and (own_row is None or holder.id != own_row.id):
+        if own_row is None and _is_own_seat(holder, email, caller_email):
+            # The signed-in owner's own entry under another name (the one a
+            # hosted sign-up seeds from the address, or an old spelling).
+            # adopt_owner_row renames it before the roster is saved.
+            return email
         if holder.is_principal:
             raise OwnerEmailError(
                 tr(
@@ -249,6 +260,49 @@ def check_owner_email(raw: str | None, principal_name: str) -> str | None:
             )
         )
     return email
+
+
+def _is_own_seat(holder: Any, email: str, caller_email: str | None) -> bool:
+    """Whether ``holder`` is the signed-in caller's own principal entry: it is
+    the principal, it carries the address being saved, and that address is
+    the one the caller signed in with."""
+    return bool(
+        holder.is_principal
+        and caller_email
+        and email == caller_email.strip().lower()
+        and (holder.email or "").strip().lower() == email
+    )
+
+
+def adopt_owner_row(email: str | None, principal_name: str, caller_email: str | None) -> bool:
+    """Rename the caller's own principal entry to the name setup drafted.
+
+    A hosted sign-up seeds the owner's People entry from the sign-in address
+    when no name was given ("ada" for ada@example.com), and the interview
+    drafts the real name. The name-keyed upsert would then add a second row
+    and the email check would reject the save, so the matched entry takes
+    the drafted name first; the upsert finds it by that name and updates it.
+    Returns True when a row was renamed. Best-effort: a failure leaves the
+    roster as it was and the save goes on.
+    """
+    email = (email or "").strip().lower()
+    key = principal_name.strip().lower()
+    if not email or not key:
+        return False
+    from openexecutive.people.store import find_person_by_address, list_people, update_person
+
+    try:
+        holder = find_person_by_address(email)
+        if holder is None or holder.id is None or not _is_own_seat(holder, email, caller_email):
+            return False
+        if holder.full_name.strip().lower() == key:
+            return False
+        if any(p.full_name.strip().lower() == key for p in list_people()):
+            return False
+        return update_person(holder.id, full_name=principal_name.strip())
+    except (OSError, sqlite3.Error) as exc:
+        logger.warning("adopt_owner_row failed (%s)", type(exc).__name__)
+        return False
 
 
 def owner_change_blocked(principal_name: str, caller_person_id: int | None) -> bool:
@@ -345,6 +399,7 @@ def reconcile_onboarding_departments(
             create_department,
             list_departments,
             match_department,
+            specialist_key_for_area,
             update_department,
         )
         from openexecutive.departments.store import (
@@ -388,7 +443,17 @@ def reconcile_onboarding_departments(
             head_id = person_ids.get(draft.head_person_name.strip()) if draft.head_person_name else None
 
             if match is None:
-                created = create_department(title, mission=draft.mission.strip())
+                candidate = specialist_key_for_area(title)
+                # One department per specialist: a second would make the
+                # specialist -> department mapping ambiguous.
+                specialist_key = (
+                    candidate
+                    if candidate and not any(k.specialist_key == candidate for k in known)
+                    else None
+                )
+                created = create_department(
+                    title, mission=draft.mission.strip(), specialist_key=specialist_key
+                )
                 counts["created"] += 1
                 slug = created.config.slug
                 # Register it so a later draft in this same batch matches the

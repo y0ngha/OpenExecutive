@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AskOEProvider, useAskOE } from "@/components/askoe/AskOEContext";
 import AskOEPanel from "@/components/askoe/AskOEPanel";
 import Icon from "@/components/Icon";
 import PausedBanner from "@/components/executive/PausedBanner";
 import AppSidebar from "@/components/shell/AppSidebar";
+import { PageCrumbProvider, usePageCrumbLabel } from "@/components/shell/PageCrumb";
 import {
   buildMobilePrimary,
   hubForPath,
@@ -17,6 +18,7 @@ import {
   PROFILE_NAV,
   profileWording,
 } from "@/components/shell/navConfig";
+import { useFirstRunRedirect } from "@/components/onboard/useFirstRunRedirect";
 import HubTabs from "@/components/ui/HubTabs";
 import { t, type MessageKey } from "@/i18n/index.ts";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
@@ -59,6 +61,10 @@ const SEGMENT_LABELS: Record<string, MessageKey> = {
   status: "chat.nav.setupStatus",
   executive: "chat.nav.yourExecutive",
   "act-as-me": "chat.nav.actAsMe",
+  delegate: "chat.nav.delegate",
+  "what-it-may-do": "chat.nav.whatItMayDo",
+  "handle-it": "chat.nav.handleIt",
+  "take-the-lead": "chat.nav.takeTheLead",
   memory: "chat.nav.aboutYou",
   workspace: "chat.nav.workspace",
   advanced: "chat.nav.advanced",
@@ -78,13 +84,46 @@ function isExempt(pathname: string): boolean {
   return EXEMPT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+// Settings stays reachable before setup: its pages are where the Executive's
+// account is connected and where setup status is read.
+const FIRST_RUN_FREE_PREFIXES = ["/settings"];
+
+function firstRunGated(pathname: string): boolean {
+  return !isExempt(pathname) && !FIRST_RUN_FREE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+// The owner lands on setup from any page while no company profile exists
+// (useFirstRunRedirect; Home does the same with the /health it already has).
+function useFirstRunGate(pathname: string): boolean {
+  const gated = firstRunGated(pathname);
+  const [profileLoaded, setProfileLoaded] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (!gated) return;
+    let cancelled = false;
+    fetch("/api/backend/health")
+      .then((r) => r.json())
+      .then((h: { company_profile_loaded?: boolean }) => {
+        if (!cancelled) setProfileLoaded(h.company_profile_loaded === true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [gated]);
+  return useFirstRunRedirect(gated ? profileLoaded : undefined);
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { mode, role } = useWorkspace();
+  const redirecting = useFirstRunGate(pathname);
 
   if (isExempt(pathname)) {
     return <>{children}</>;
+  }
+  if (redirecting) {
+    return <div className="h-full bg-surface" />;
   }
 
   const segments = pathname.split("/").filter(Boolean);
@@ -92,6 +131,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AskOEProvider>
+      <PageCrumbProvider>
       <div className="flex h-full bg-surface text-fg">
         {/* Mobile backdrop */}
         {drawerOpen && (
@@ -133,6 +173,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             right sheet below. Renders nothing while closed. */}
         <AskOEPanel />
       </div>
+      </PageCrumbProvider>
     </AskOEProvider>
   );
 }
@@ -146,6 +187,8 @@ function TopBar({
 }) {
   const { mode, role } = useWorkspace();
   const profileLabel = PROFILE_NAV[profileWording(mode, role.role_kind)].label;
+  // A page showing one record names it in place of the id in the URL.
+  const pageLabel = usePageCrumbLabel("/" + segments.join("/"));
   // Breadcrumb chain. Only the top-level section (segment[0]) is a real
   // route in this app — intermediate segments like `runs` in
   // `/jobs/runs/<id>` or `session` in `/audit/session/<id>` are not
@@ -157,7 +200,12 @@ function TopBar({
     const href = linkable ? "/" + segment : null;
     return {
       href,
-      label: idx === 0 && segment === "company-profile" ? profileLabel : labelFor(segment),
+      label:
+        idx === segments.length - 1 && idx > 0 && pageLabel
+          ? pageLabel
+          : idx === 0 && segment === "company-profile"
+            ? profileLabel
+            : labelFor(segment),
     };
   });
   // The Advanced pages (Agent Council, Audit log, ...) live at their own
