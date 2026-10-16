@@ -90,8 +90,8 @@ case "$cmd" in
     logs=$(mktemp)
     if ! docker compose --project-directory "$HERE" -f "$HERE/docker-compose.yml" \
         logs --no-color --no-log-prefix --since "${minutes}m" api >"$logs" 2>&1 \
-        || ! compose cp "$logs" api:/tmp/ops-logs.txt >/dev/null \
-        || ! compose cp "$HERE/ops_check.py" api:/tmp/ops_check.py >/dev/null \
+        || ! compose cp "$logs" api:/tmp/ops-logs.txt >/dev/null 2>&1 \
+        || ! compose cp "$HERE/ops_check.py" api:/tmp/ops_check.py >/dev/null 2>&1 \
         || ! compose exec -T api python /tmp/ops_check.py /tmp/ops-logs.txt "$minutes"; then
       # The API itself is down or unreachable: say so with the bot's token
       # straight from api.env (never echoed).
