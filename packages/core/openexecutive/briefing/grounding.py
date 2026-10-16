@@ -183,12 +183,23 @@ def _mask(text: str, pattern: re.Pattern[str]) -> str:
 # --------------------------------------------------------------------------- #
 
 _NUM_RE = re.compile(
-    r"(?P<cur>[$€£])?\s?"
+    r"(?P<cur>[$€£₩])?\s?"
     r"(?P<num>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
-    r"(?:\s?(?P<mult>bn|mm|thousand|million|billion|[kmb])(?![a-z]))?"
-    r"(?:\s?(?P<pct>%|percent\b))?",
+    r"(?:\s?(?P<mult>bn|mm|thousand|million|billion|[kmb])(?![a-z])"
+    # Korean units: 3억, 1,200만, 3천만 (a Korean brief writes its amounts
+    # this way; without them every one of them read as "3d" and went
+    # unchecked).
+    r"|\s?(?P<kmult>천억|천만|백만|십만|천|만|억|조))?"
+    r"(?:\s?(?P<won>원))?"
+    r"(?:\s?(?P<pct>%|percent\b|퍼센트))?",
     re.IGNORECASE,
 )
+_KO_MULTIPLIERS = {
+    "천": 1e3, "만": 1e4, "십만": 1e5, "백만": 1e6, "천만": 1e7,
+    "억": 1e8, "천억": 1e11, "조": 1e12,
+}
+# Korean counters glued to a number: a figure, like "12 deals".
+_KO_COUNTERS = frozenset("명건개곳회번배점팀권장벌")
 _MULTIPLIERS = {
     "k": 1e3, "thousand": 1e3,
     "m": 1e6, "mm": 1e6, "million": 1e6,
@@ -214,7 +225,9 @@ _PROSE_MASK = re.compile(
     rf"|\b{_MONTHS}\s+\d{{1,2}}(?:st|nd|rd|th)?\b"
     rf"|\b\d{{1,2}}(?:st|nd|rd|th)?\s+{_MONTHS}(?![a-z])"
     r"|\b\d+(?:\.\d+)?\s?(?:minutes?|mins?|hours?|hrs?|days?|weeks?|wks?|"
-    r"months?|mos?|years?|yrs?|quarters?|business days?)\b",
+    r"months?|mos?|years?|yrs?|quarters?|business days?)\b"
+    # Korean dates, times and durations: 10월 16일, 8시, 3시간, 2주, 6개월.
+    r"|\d+(?:\.\d+)?\s?(?:시간|개월|주일|분기|초|분|시|일|주|달|월|년|살|세)",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -222,11 +235,14 @@ _PROSE_MASK = re.compile(
 def _figure_from(m: re.Match[str]) -> tuple[float, float, str]:
     num = m.group("num")
     mult_key = (m.group("mult") or "").lower()
-    mult = _MULTIPLIERS.get(mult_key, 1.0)
+    mult = _MULTIPLIERS.get(mult_key) or _KO_MULTIPLIERS.get(m.group("kmult") or "", 1.0)
     decimals = len(num.split(".", 1)[1]) if "." in num else 0
     value = float(num.replace(",", "")) * mult
     tol = (10.0 ** -decimals) / 2 * mult
-    kind = "money" if m.group("cur") else "pct" if m.group("pct") else "count"
+    kind = (
+        "money" if m.group("cur") or m.group("won")
+        else "pct" if m.group("pct") else "count"
+    )
     return value, tol, kind
 
 
@@ -243,10 +259,11 @@ def extract_figures(text: str) -> list[Figure]:
         after = masked[num_end] if num_end < len(masked) else " "
         if before.isalpha() or before in "#_.-/=" or before.isdigit():
             continue  # Q3, FY26, #42, v1.2, 2026-…, id=7
-        if not (m.group("mult") or m.group("pct")) and (after.isalpha() or after == "_"):
+        unit = m.group("mult") or m.group("kmult") or m.group("won") or m.group("pct")
+        if not unit and (after.isalpha() or after == "_") and after not in _KO_COUNTERS:
             continue  # 3d, 5th, 2x
         value, tol, kind = _figure_from(m)
-        plain = kind == "count" and not m.group("mult")
+        plain = kind == "count" and not (m.group("mult") or m.group("kmult"))
         if plain and value <= 10:
             continue
         if plain and "," not in m.group("num") and "." not in m.group("num") and 1990 <= value <= 2100:
@@ -264,7 +281,7 @@ def _values_in(text: str) -> tuple[float, ...]:
     for m in _NUM_RE.finditer(_mask(_fold(text), _ALWAYS_MASK)):
         value, _tol, _kind = _figure_from(m)
         values.append(value)
-        if m.group("mult"):
+        if m.group("mult") or m.group("kmult"):
             values.append(float(m.group("num").replace(",", "")))
     return tuple(values)
 
@@ -337,6 +354,9 @@ _MD_MASK = re.compile(
 )
 
 
+_HANGUL = re.compile(r"[가-힣]")
+
+
 def _is_name_token(word: str) -> bool:
     letters = [c for c in word if c.isalpha()]
     if len(letters) < 2 or not word[0].isupper():
@@ -385,7 +405,41 @@ def extract_names(text: str) -> list[str]:
         for segment in _SEGMENT_SPLIT.split(line):
             if segment and segment.strip():
                 out.extend(_segment_names(segment))
+        out.extend(_korean_names(line))
     return _dedupe(out)
+
+
+# Korean has no capitals, so a name is found by what follows it: an
+# honorific (김민수님, 민수 씨) or a title (박지훈 팀장). Only those slots are
+# read, so ordinary nouns before 님 (고객님, 대표님) are listed here and the
+# check stays quiet on everything else.
+_KO_NAME_SLOT = re.compile(
+    # Honorific: 김민수님, 민수 씨 (two to four syllables).
+    r"(?<![가-힣])(?P<name>[가-힣]{2,4})\s?(?:님|씨)"
+    # Title: a three-syllable full name before it (박지훈 팀장에게). A
+    # company or team name before a title is usually longer or shorter.
+    r"|(?<![가-힣])(?P<titled>[가-힣]{3})\s(?:대표|팀장|과장|부장|차장|이사|실장|"
+    r"본부장|매니저|사장|상무|전무|주임|대리|사원|선임|책임|수석|원장|교수|작가|기자|"
+    r"변호사|세무사|회계사)"
+)
+_KO_NOT_NAMES = _wordset(
+    "대표 고객 팀장 사장 선생 부장 과장 차장 이사 실장 원장 회장 기사 작가 담당자 담당 "
+    "디자이너 개발자 매니저 거래처 업체 협력사 손님 선배 후배 동료 팀원 직원 멤버 회원 "
+    "구독자 판매자 구매자 사용자 이용자 관리자 운영자 여러분 어머 아버 부모 교수 기자 "
+    "변호사 세무사 회계사 본부장 상무 전무 주임 대리 사원 선임 책임 수석 상대 상대방 "
+    "대표님 우리 저희 모두 각자 본인 당사자 신청자 참석자 발신자 수신자 작성자 "
+    "공급 공급사 제조사 공장 사장님 셀러 크리에이터 인플루언서 브랜드 회사 팀"
+)
+
+
+def _korean_names(line: str) -> list[str]:
+    out: list[str] = []
+    for m in _KO_NAME_SLOT.finditer(line):
+        name = m.group("name") or m.group("titled")
+        if name in _KO_NOT_NAMES or any(name.endswith(n) for n in ("대표", "팀장", "님")):
+            continue
+        out.append(name)
+    return out
 
 
 def _segment_names(segment: str) -> list[str]:
@@ -470,6 +524,10 @@ class _Index:
             first = _fold(name).split()[0].casefold() if name.split() else ""
             if first:
                 firsts[first] = firsts.get(first, 0) + 1
+        # Folded text of each source, for Korean names: a particle glues to
+        # the name ("김민수에게"), so a token match would miss it.
+        self.texts = [_fold(s.text + " " + s.label) for s in sources]
+        self.korean_roster = [_fold(n) for n in roster if n and _HANGUL.search(n)]
         self.present: list[set[str]] = []
         for toks, name in people:
             if not toks:
@@ -481,6 +539,15 @@ class _Index:
                     break
 
     def name_ok(self, name: str) -> bool:
+        if _HANGUL.search(name):
+            folded = _fold(name)
+            if any(folded in t for t in self.texts):
+                return True
+            # A roster person's given name the context names in full.
+            return any(
+                folded in person and any(person in t for t in self.texts)
+                for person in self.korean_roster
+            )
         toks = _tokens(name)
         if not toks:
             return True
@@ -844,12 +911,12 @@ _REPAIR_INSTRUCTION = (
 
 
 async def _repair(draft: str, context: str, system: str, report: GroundingReport) -> str:
-    from openexecutive.agents.utility_fast import get_fast_model
+    from openexecutive.agents.utility_fast import get_briefing_model
     from openexecutive.audit.usage import log_model_usage
     from openexecutive.briefing.narrative import BRIEF_MAX_TOKENS
     from openexecutive.providers import get_provider
 
-    model = get_fast_model()
+    model = get_briefing_model()
     content = (
         f"{context}\n\n---\nDRAFT:\n{draft}\n\n"
         + _REPAIR_INSTRUCTION.format(items=report.summary())

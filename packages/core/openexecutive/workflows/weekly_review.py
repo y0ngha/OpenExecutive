@@ -577,7 +577,7 @@ def _render_sections(
 async def _next_weeks_top_three(body: str, period: str) -> str:
     """Next week's top three, as a numbered list, from one fast-model call
     that follows the weekly-review playbook. "" on any failure."""
-    from openexecutive.agents.utility_fast import get_fast_model
+    from openexecutive.agents.utility_fast import get_briefing_model
     from openexecutive.audit.usage import log_model_usage
     from openexecutive.memory.facts import with_standing_facts
     from openexecutive.providers import get_provider
@@ -590,7 +590,7 @@ async def _next_weeks_top_three(body: str, period: str) -> str:
         + playbook_clause(playbook, "Choose the three following this playbook"),
     )
     try:
-        model = get_fast_model()
+        model = get_briefing_model()
         response = await get_provider(model).messages_create(
             model=model,
             max_tokens=_TOP_THREE_MAX_TOKENS,

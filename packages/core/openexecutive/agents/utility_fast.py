@@ -42,6 +42,15 @@ class UtilityFastAgent(BaseAgent):
         return ""
 
 
+def get_briefing_model() -> str:
+    """The model for the scheduled writing the principal reads (briefs, the
+    EoD digest, the weekly review, the reflection): ``BRIEFING_MODEL`` when
+    set, else the utility fast model."""
+    from openexecutive.config import get_settings
+
+    return get_settings().briefing_model or get_fast_model()
+
+
 def get_fast_model() -> str:
     """Return the model used for utility/fast tasks (routing gates,
     title generation, decision parsing).

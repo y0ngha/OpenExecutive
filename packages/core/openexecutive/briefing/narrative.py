@@ -702,7 +702,7 @@ async def synthesize_briefing_narrative(
     provider failure so the caller can decide how to surface it (the morning-
     brief workflow yields an error event; the page regen logs and moves on).
     """
-    from openexecutive.agents.utility_fast import get_fast_model
+    from openexecutive.agents.utility_fast import get_briefing_model, get_fast_model
     from openexecutive.audit.usage import log_model_usage
     from openexecutive.providers import get_provider
 
@@ -733,7 +733,9 @@ async def synthesize_briefing_narrative(
         mode=mode, live=live, live_window=live_window, now_label=now_label,
         reflection_flags=reflection_flags, standing_facts=standing_facts,
     )
-    model = get_fast_model()
+    # The DM brief is read on its own, a few times a day; the /today header
+    # regenerates hourly per viewer and stays on the fast model.
+    model = get_briefing_model() if standalone else get_fast_model()
     response = await get_provider(model).messages_create(
         model=model,
         max_tokens=BRIEF_MAX_TOKENS,

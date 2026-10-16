@@ -120,6 +120,13 @@ class Settings(BaseSettings):
     # Thorough preset) to put them on the largest model.
     deep_reasoning_model: str = Field("claude-sonnet-5-5", alias="DEEP_REASONING_MODEL")
     routing_model: str = Field("claude-haiku-5-5", alias="ROUTING_MODEL")
+    # The model that writes what the principal reads on a schedule: the
+    # morning brief, the EoD digest, the weekly review's top three, the
+    # morning reflection and the brief's grounding repair. Unset, they use
+    # the utility fast model (ROUTING_MODEL or its Council override). A
+    # handful of calls a day, so BRIEFING_MODEL=claude-sonnet-5-5 costs
+    # little and keeps a brief from inventing its own day.
+    briefing_model: str | None = Field(None, alias="BRIEFING_MODEL")
     # Model for the executive_research specialist fan-out (research-mode turn
     # only — the chat path still uses each agent's deep_reasoning_model). The
     # research turn is retrieve-from-web-search + summarize, which does not

@@ -8,6 +8,9 @@
 #   bash deploy/oracle/oe.sh status    containers and the API's health
 #   bash deploy/oracle/oe.sh logs [service]
 #   bash deploy/oracle/oe.sh backup    copy the database to deploy/oracle/backups/ (keeps 14)
+#   bash deploy/oracle/oe.sh check [MIN] look at the last MIN minutes (default 60) for
+#                                      undelivered briefs, held-back lines and errors;
+#                                      DMs OPS_ALERT_SLACK_USER (api.env) when any turn up
 #   bash deploy/oracle/oe.sh restart [service]
 #   bash deploy/oracle/oe.sh down      stop (keeps all data)
 #   bash deploy/oracle/oe.sh mcp-on    serve /mcp behind a secret URL, print it
@@ -80,6 +83,29 @@ case "$cmd" in
   down)
     # Never add -v here: it deletes the data volume.
     compose down
+    ;;
+  check)
+    # Run from cron, e.g. hourly: 5 * * * * bash …/oe.sh check 60
+    minutes=${1:-60}
+    logs=$(mktemp)
+    if ! docker compose --project-directory "$HERE" -f "$HERE/docker-compose.yml" \
+        logs --no-color --no-log-prefix --since "${minutes}m" api >"$logs" 2>&1 \
+        || ! compose cp "$logs" api:/tmp/ops-logs.txt >/dev/null \
+        || ! compose cp "$HERE/ops_check.py" api:/tmp/ops_check.py >/dev/null \
+        || ! compose exec -T api python /tmp/ops_check.py /tmp/ops-logs.txt "$minutes"; then
+      # The API itself is down or unreachable: say so with the bot's token
+      # straight from api.env (never echoed).
+      user=$(grep -E '^OPS_ALERT_SLACK_USER=' "$HERE/api.env" | cut -d= -f2- || true)
+      token=$(grep -E '^SLACK_BOT_TOKEN=' "$HERE/api.env" | cut -d= -f2- || true)
+      if [[ -n "$user" && -n "$token" ]]; then
+        curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
+          --data-urlencode "channel=$user" \
+          --data-urlencode "text=[운영 점검] API 컨테이너에 접속하지 못했어요. bash deploy/oracle/oe.sh status 로 확인해 주세요." \
+          https://slack.com/api/chat.postMessage || true
+      fi
+      echo "ops-check: the api container did not answer" >&2
+    fi
+    rm -f "$logs"
     ;;
   backup)
     # `backup [label]`: daily backups keep the newest 14; `update` saves under

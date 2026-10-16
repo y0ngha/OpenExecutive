@@ -167,6 +167,7 @@ bash deploy/oracle/oe.sh status
 | 로그 보기 | `bash deploy/oracle/oe.sh logs` (특정 서비스만: `logs api`) |
 | 새 코드로 업데이트 | `bash deploy/oracle/oe.sh update` (백업 → `git pull` → 재빌드 → 재시작) |
 | DB 백업 | `bash deploy/oracle/oe.sh backup` → `deploy/oracle/backups/` (최근 14개 보관) |
+| 운영 점검 | `bash deploy/oracle/oe.sh check [분]` (기본 60분: 발송 실패, 브리핑에서 빠진 줄, 에러를 찾아 `OPS_ALERT_SLACK_USER`에게 Slack DM) |
 | 설정을 바꾼 뒤 적용 | `api.env`/`ui.env` 수정 → `bash deploy/oracle/oe.sh compose up -d` |
 | 멈추기 | `bash deploy/oracle/oe.sh down` (데이터는 유지) |
 
@@ -174,6 +175,12 @@ bash deploy/oracle/oe.sh status
 
 ```
 0 3 * * * bash /home/ubuntu/OpenExecutive/deploy/oracle/oe.sh backup >> /home/ubuntu/oe-backup.log 2>&1
+```
+
+**문제가 생기면 Slack으로 알림**(매시간). `api.env`에 알림 받을 사람의 Slack 멤버 ID를 `OPS_ALERT_SLACK_USER=U…`로 넣고 `oe.sh compose up -d api`로 적용한 뒤, `crontab -e`에 추가합니다. 문제가 없으면 아무것도 보내지 않습니다.
+
+```
+5 * * * * bash /home/ubuntu/OpenExecutive/deploy/oracle/oe.sh check 60 >> /home/ubuntu/oe-check.log 2>&1
 ```
 
 백업은 같은 서버 안에 쌓입니다. 서버를 잃어도 남게 하려면 가끔 `scp`로 내 컴퓨터에 받아 두거나 Oracle Object Storage에 올리세요.

@@ -879,7 +879,9 @@ class ExecutiveReflectionWorkflow(Workflow):
             if solo
             else _build_reflection_system(configured, bool(roster))
         )
-        model = settings.routing_model
+        from openexecutive.agents.utility_fast import get_briefing_model
+
+        model = get_briefing_model()
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": user_content}
         ]

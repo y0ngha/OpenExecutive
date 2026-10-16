@@ -53,3 +53,37 @@ def test_scheduled_today_never_names_a_raw_channel_id(monkeypatch) -> None:
         now,
     )
     assert "U0C7TM2TJMT" not in block and "to someone: shoot" in block
+
+
+def test_briefs_use_the_briefing_model_when_set(monkeypatch) -> None:
+    from openexecutive.agents import utility_fast
+    from openexecutive.config import get_settings
+
+    monkeypatch.setattr(utility_fast, "get_fast_model", lambda: "fast")
+    monkeypatch.delenv("BRIEFING_MODEL", raising=False)
+    get_settings.cache_clear() if hasattr(get_settings, "cache_clear") else None
+    assert utility_fast.get_briefing_model() == "fast"
+    monkeypatch.setenv("BRIEFING_MODEL", "claude-sonnet-5-5")
+    get_settings.cache_clear() if hasattr(get_settings, "cache_clear") else None
+    assert utility_fast.get_briefing_model() == "claude-sonnet-5-5"
+
+
+def test_grounding_reads_korean_amounts_and_names() -> None:
+    """Korean briefs were checked for nothing: names have no capitals and
+    3억 / 1,200만 원 read as "3d"-style tokens."""
+    from openexecutive.briefing import grounding as g
+
+    figs = {f.raw: (f.value, f.kind) for f in g.extract_figures("3억 원 투자, 견적 1,200만 원, 반응 30%, 15명")}
+    assert figs["3억 원"] == (3e8, "money")
+    assert figs["1,200만 원"] == (1.2e7, "money")
+    assert figs["30%"][1] == "pct" and figs["15"][0] == 15
+    # Dates, times and durations are not figures.
+    assert g.extract_figures("10월 16일 8시에 3시간 촬영") == []
+
+    assert g.extract_names("김민수님이 보냈고 박지훈 팀장에게 전달했어요") == ["김민수", "박지훈"]
+    assert g.extract_names("대표님, 고객님, 교보문고 대표와 통화") == []
+
+    src = [g.GroundingSource("c0", "ctx", "김민수에게서 견적 1200만원")]
+    report = g.check_text("김민수님이 1,200만 원 견적을 보냈어요\n이영희님은 5억 원을 원해요", src, [])
+    assert (report.lines[0].names_bad, report.lines[0].figures_bad) == ([], [])
+    assert (report.lines[1].names_bad, report.lines[1].figures_bad) == (["이영희"], ["5억 원"])
