@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from openexecutive.delegation.schema import VOICE_HISTORY_TABLE, VOICE_TABLE, ensure_schema
+from openexecutive.utils.korean_text import LATIN_END, LATIN_START
 
 if TYPE_CHECKING:
     from openexecutive.people.models import Person
@@ -231,17 +232,30 @@ def reset_voice(person_id: int, *, updated_by: str, db_path: Path | None = None)
 # Validation
 # --------------------------------------------------------------------------- #
 
+_LS = LATIN_START
+_LE = LATIN_END
+
 # A habit must be about the writing itself — like attunement's _STYLE_TOPIC,
 # with the words people use about their own email.
 _VOICE_TOPIC = re.compile(
-    r"\b(email\w*|message\w*|repl\w*|note\w*|greet\w*|hello|hi|hey|dear|sign\w*|"
+    _LS + r"(email\w*|message\w*|repl\w*|note\w*|greet\w*|hello|hi|hey|dear|sign\w*|"
     r"close\w*|closing|opens?|opening|ends?|ending|sentence\w*|paragraph\w*|line\w*|"
     r"word\w*|phrase\w*|tone|formal\w*|casual\w*|warm\w*|friendly|direct\w*|brief\w*|"
     r"short\w*|long\w*|length|concise|terse|verbose|detail\w*|bullet\w*|list\w*|"
     r"punctuation|exclamation\w*|question\w*|emoji\w*|capital\w*|lowercase|"
     r"first names?|thank\w*|thanks|please|apolog\w*|humou?r\w*|plain|jargon|"
-    r"subject\w*|format\w*|structure\w*|summar\w*|recap\w*|writ\w*)\b",
+    r"subject\w*|format\w*|structure\w*|summar\w*|recap\w*|writ\w*)" + _LE,
     re.IGNORECASE,
+)
+# The Korean words for the same, matched anywhere in a word (particles and
+# endings glue onto the stem).
+_KO_VOICE_TOPIC = re.compile(
+    r"메일|이메일|메시지|답장|답변|대답|회신|인사|안녕|서명|맺음말|끝인사|첫인사|"
+    r"마무리|시작|문장|문단|단락|줄|단어|표현|어구|톤|말투|어조|존댓말|반말|격식|"
+    r"친근|따뜻|정중|공손|직설|직접|짧게|짧은|길게|긴 |길이|분량|간결|간단|자세|상세|"
+    r"글머리|불릿|목록|리스트|문장 ?부호|느낌표|물음표|질문|이모지|이모티콘|대문자|"
+    r"소문자|이름|감사|고맙|부탁|사과|죄송|유머|농담|쉬운|전문 ?용어|용어|제목|형식|"
+    r"구조|요약|정리|굵게|강조|작성"
 )
 _SHORT_TEXT_DENY = re.compile(r"https?://|www\.|@\w|[$€£¥<>\[\]`]|\{(?!first\})")
 _EMAIL_RE = re.compile(r"[\w.+\-]+@[\w\-]+(\.[\w\-]+)+")
@@ -263,22 +277,22 @@ def rule_rejection(text: str, *, roster_names: list[str] | None = None) -> str |
     person writes but never smuggle in an action, a link, a handle, an
     amount, a tool name or someone on the roster."""
     from openexecutive.attunement.style import (
-        _DENY_PATTERNS,
+        _denied,
         _names_a_person,
         _non_latin_letter,
         _roster_names,
     )
+    from openexecutive.utils.korean_text import weighted_len
 
-    if len(text) < RULE_MIN_CHARS:
+    if weighted_len(text) < RULE_MIN_CHARS:
         return "too_short"
     if len(text) > RULE_MAX_CHARS:
         return "too_long"
     if _non_latin_letter(text):
         return "non_latin_letters"
-    for pattern in _DENY_PATTERNS:
-        if pattern.search(text):
-            return "denied_content"
-    if not _VOICE_TOPIC.search(text):
+    if _denied(text):
+        return "denied_content"
+    if not (_VOICE_TOPIC.search(text) or _KO_VOICE_TOPIC.search(text)):
         return "not_about_writing"
     names = roster_names if roster_names is not None else _roster_names()
     if _names_a_person(text, names):

@@ -69,7 +69,10 @@ def _due_phrase(due_at: str | None) -> str:
         local = dt.astimezone(_user_tz())
     except (ValueError, TypeError):
         return ""
-    return f"{local:%A} {local.day} {local:%B}"
+    from openexecutive.utils.i18n import tr
+    from openexecutive.utils.i18n.dates import day_parts
+
+    return tr("assignment_notice.due_date", "{weekday} {day} {month}", **day_parts(local, long=True))
 
 
 def _quoted_task(task: str) -> str:
@@ -85,12 +88,17 @@ def _quoted_task(task: str) -> str:
 
 
 def notice_text(*, assigner_name: str, task: str, due_at: str | None) -> str:
-    """The message the owner gets."""
+    """The message the owner gets, in OE_LANGUAGE."""
+    from openexecutive.utils.i18n import tr
+
     due = _due_phrase(due_at)
-    lines = [f"{assigner_name} asked you to take this on: {_quoted_task(task)}."]
+    lines = [tr(
+        "assignment_notice.asked", "{name} asked you to take this on: {task}.",
+        name=assigner_name, task=_quoted_task(task),
+    )]
     if due:
-        lines.append(f"It's due {due}.")
-    lines.append("Reply here when it's done, or if you can't do it.")
+        lines.append(tr("assignment_notice.due", "It's due {due}.", due=due))
+    lines.append(tr("assignment_notice.reply", "Reply here when it's done, or if you can't do it."))
     return " ".join(lines)
 
 

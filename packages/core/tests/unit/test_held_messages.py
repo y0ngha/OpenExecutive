@@ -154,7 +154,14 @@ def test_the_principals_brief_carries_their_held_messages(ids: dict[str, int]) -
 def test_render_block_names_when_each_would_have_gone() -> None:
     msg = held.HeldMessage(1, 1, "reflection", "Hello", "2026-10-14T21:05:00+00:00", None)
     block = held.render_block([msg], zone=ZoneInfo("UTC"))
-    assert block == f"**{held.HEADING}**\n\n- Wed 9:05 pm: Hello"
+    assert block == f"**{held.HEADING}**\n\n- Wed Oct 14, 9:05 pm: Hello"
+
+
+def test_render_block_in_korean(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OE_LANGUAGE", "ko")
+    msg = held.HeldMessage(1, 1, "reflection", "Hello", "2026-10-16T00:05:00+00:00", None)
+    block = held.render_block([msg], zone=ZoneInfo("Asia/Seoul"))
+    assert block == "**자리를 비운 동안 온 메시지**\n\n- 10월 16일(금) 오전 9:05: Hello"
 
 
 def test_a_claimed_row_is_not_sent_twice(ids: dict[str, int], sent: list[tuple[int, str]]) -> None:

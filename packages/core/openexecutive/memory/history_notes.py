@@ -44,8 +44,20 @@ logger = logging.getLogger(__name__)
 MAX_NOTES = 3
 MAX_BODY_CHARS = 6000
 _MAX_TOKENS = 600
+# A Hangul or CJK character counts as ``utils.korean_text.WIDE_CHAR_WEIGHT``
+# toward the character floor, and a quote in a caseless script needs only
+# ``_QUOTE_MIN_WORDS_CASELESS`` words: "금요일에 보내드릴게요" is a whole
+# promise in two.
 _QUOTE_MIN_CHARS = 12
 _QUOTE_MIN_WORDS = 3
+_QUOTE_MIN_WORDS_CASELESS = 2
+# The reporting words a Korean summary is built on ("…하기로 했다",
+# "약속했다", "동의했다"): the summary's grammar, like its first word in
+# English, not a claim about what they said.
+_KO_REPORTING = (
+    "했", "하기로", "하겠다", "한다고", "말했", "약속", "합의", "동의", "결정",
+    "거절", "요청", "부탁", "공유", "답했", "답변", "알렸", "전했", "밝혔",
+)
 _DUE_KINDS = frozenset({"promised", "agreed"})
 _LINK = re.compile(r"https?://|www\.|[\w.+-]+@[\w-]+\.", re.IGNORECASE)
 _NAME_CHARS = re.compile(r"[^\w .'-]")
@@ -126,16 +138,27 @@ def render_reply(body: str, *, to_names: list[str], sent_on: date) -> str:
 
 def _unsaid(summary: str, allowed: str) -> list[str]:
     """Names and date words in ``summary`` that aren't in ``allowed`` (the
-    first word is exempt, being capitalised by grammar)."""
+    first word is exempt, being capitalised by grammar). Every word in a
+    script without capitals is checked, and counts as said when a said word shares its stem
+    (``utils.korean_text.said_caseless``); a Korean reporting word is the
+    summary's grammar."""
     from openexecutive.memory.episodic import _normalize_for_quote_match
     from openexecutive.orchestrator.fact_tools import _DATE_WORDS, _GLUE, _WORD, _bare
+    from openexecutive.utils.korean_text import SaidIndex, caseless, said_caseless
 
     said = {_bare(w) for w in _WORD.findall(_normalize_for_quote_match(allowed))}
+    said_index = SaidIndex(said)
     missing: list[str] = []
     for i, m in enumerate(_WORD.finditer(summary)):
         bare = _bare(m.group(0))
         key = bare.lower()
         if not key or key in _GLUE or key in said:
+            continue
+        if caseless(bare):
+            # No grammar capitalises a caseless word, so the first one is
+            # checked too ("민수에게 …" opens a Korean summary with a name).
+            if not (bare.startswith(_KO_REPORTING) or said_caseless(bare, said_index)):
+                missing.append(bare)
             continue
         if key in _DATE_WORDS or ((bare[0].isupper() or not bare.isascii()) and i > 0):
             missing.append(bare)
@@ -146,18 +169,37 @@ def _mostly_theirs(summary: str, allowed: str) -> bool:
     """Whether at least half the summary's content words (four letters or
     more, glue words aside) are words they wrote or names they wrote to,
     matched on the first five letters so "agreed" counts for "agree". A
-    summary that is mostly new words says something they didn't."""
+    summary that is mostly new words says something they didn't.
+
+    A word in a script without capitals is content from two characters (a
+    Korean word is short) and matches on its stem, particles and endings
+    aside (``utils.korean_text.said_caseless``); a reporting word is glue."""
     from openexecutive.memory.episodic import _normalize_for_quote_match
     from openexecutive.orchestrator.fact_tools import _GLUE, _WORD, _bare
+    from openexecutive.utils.korean_text import SaidIndex, caseless, said_caseless
 
     def stem(word: str) -> str:
         return word.lower()[:5]
 
-    said = {stem(_bare(w)) for w in _WORD.findall(_normalize_for_quote_match(allowed))}
-    content = [b for b in (_bare(w) for w in _WORD.findall(summary)) if len(b) >= 4 and b.lower() not in _GLUE]
+    said_words = {_bare(w) for w in _WORD.findall(_normalize_for_quote_match(allowed))}
+    said = {stem(w) for w in said_words}
+    said_index = SaidIndex(said_words)
+    content: list[str] = []
+    for b in (_bare(w) for w in _WORD.findall(summary)):
+        if caseless(b):
+            if len(b) >= 2 and not b.startswith(_KO_REPORTING):
+                content.append(b)
+        elif len(b) >= 4 and b.lower() not in _GLUE:
+            content.append(b)
     if not content:
         return True
-    return sum(stem(w) in said for w in content) * 2 >= len(content)
+
+    def theirs(word: str) -> bool:
+        if caseless(word):
+            return said_caseless(word, said_index)
+        return stem(word) in said
+
+    return sum(theirs(w) for w in content) * 2 >= len(content)
 
 
 def check_note(raw: Any, *, body: str, allowed: str) -> NewNote | None:
@@ -165,6 +207,7 @@ def check_note(raw: Any, *, body: str, allowed: str) -> NewNote | None:
     from openexecutive.delegation.ghostwriter import one_line
     from openexecutive.memory.episodic import _normalize_for_quote_match
     from openexecutive.orchestrator.fact_tools import _numbers_in, _same
+    from openexecutive.utils.korean_text import has_caseless_letters, quote_in, weighted_len
 
     if not isinstance(raw, dict):
         return None
@@ -174,9 +217,10 @@ def check_note(raw: Any, *, body: str, allowed: str) -> NewNote | None:
     if kind not in KINDS or not summary or not quote:
         return None
     nq = _normalize_for_quote_match(quote)
-    if len(nq.replace(" ", "")) < _QUOTE_MIN_CHARS or len(nq.split()) < _QUOTE_MIN_WORDS:
+    min_words = _QUOTE_MIN_WORDS_CASELESS if has_caseless_letters(nq) else _QUOTE_MIN_WORDS
+    if weighted_len(nq.replace(" ", "")) < _QUOTE_MIN_CHARS or len(nq.split()) < min_words:
         return None
-    if nq not in _normalize_for_quote_match(body):
+    if not quote_in(quote, body):
         return None
     if _LINK.search(summary):
         return None

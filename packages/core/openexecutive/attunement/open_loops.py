@@ -89,6 +89,23 @@ _CLOSE_HINT = re.compile(
     re.IGNORECASE,
 )
 
+# The same gates for Korean, which has no word boundaries to lean on: a
+# promise ends in a future ending glued to the verb ("보낼게", "드리겠습니다",
+# "할 거예요"; "겠" only after a doing verb, so "알겠어요" is no promise), an ask in a request ending ("해줘", "해 주세요", "부탁"), and
+# a deadline in "까지". ``_RIEUL_FINAL`` is every syllable ending in ㄹ, the
+# future-tense attachment ("할", "보낼", "드릴").
+_RIEUL_FINAL = "".join(chr(c) for c in range(0xAC00, 0xD7A4) if (c - 0xAC00) % 28 == 8)
+_KO_NEW_LOOP_HINT = re.compile(
+    rf"[{_RIEUL_FINAL}] ?(?:게|께|거예요|거에요|거야|예정)|"
+    r"(?:하|드리|보내|주|챙기|마치|끝내|올리|넘기)겠|까지|"
+    r"해 ?줘|해 ?주세요|해 ?줄래|해 ?주실|해 ?주시|해 ?줄 수|부탁|약속|"
+    r"주실 수|줄 수 있|해야 ?(?:해|돼|합니다|됩니다)"
+)
+_KO_CLOSE_HINT = re.compile(
+    r"보냈|끝났|끝냈|마쳤|마무리|완료|처리했|처리됐|해결|제출|공유했|올렸|전달했|"
+    r"첨부했|했어|했습니다|했어요|됐어|됐습니다|취소|필요 ?없|안 ?해도"
+)
+
 _SELF_OWNER = {"me", "i", "myself", "self"}
 
 # Closure reasons that mean the thing was actually done.
@@ -650,13 +667,17 @@ def consume_call_budget(limit: int, *, db_path: Path | None = None) -> bool:
 def render_for_reflection(limit: int = 10, *, db_path: Path | None = None) -> list[str]:
     """One line per open loop, soonest-due first, for the reflection prompt."""
     now = datetime.now(UTC)
+    tz = _user_tz()
     lines: list[str] = []
     for loop in list_open_loops(limit=limit, db_path=db_path):
         due = _parse_iso(loop.due_at)
         state = "OVERDUE" if due is not None and due <= now else "due"
+        # The day it is due where the user is: a 17:00 Seoul deadline is
+        # 08:00 UTC, but one at 01:00 Seoul is the previous UTC day.
+        day = due.astimezone(tz).date().isoformat() if due is not None else loop.due_at[:10]
         lines.append(
             f"- loop_id={loop.id} owner={loop.owner_name} (id={loop.owner_person_id}): "
-            f"{loop.description[:160]} [{state} {loop.due_at[:10]}]"
+            f"{loop.description[:160]} [{state} {day}]"
         )
     return lines
 
@@ -762,11 +783,11 @@ def _resolve_due(raw: Any, *, today: date, default_days: int) -> datetime:
 
 
 def _quote_in_message(quote: str, message: str) -> bool:
-    """The quote appears verbatim (modulo whitespace/case/smart punctuation)."""
-    from openexecutive.memory.episodic import _normalize_for_quote_match
+    """The quote appears verbatim (modulo whitespace/case/smart punctuation),
+    a line break in the message read either as a sentence end or a space."""
+    from openexecutive.utils.korean_text import quote_in
 
-    nq = _normalize_for_quote_match(quote.strip())
-    return bool(nq) and nq in _normalize_for_quote_match(message)
+    return quote_in(quote, message)
 
 
 def _resolve_owner(raw: str, *, speaker: Any, roster: list[Any]) -> Any | None:
@@ -794,9 +815,11 @@ def should_run(user_message: str, *, has_open_loops: bool) -> bool:
     a loop."""
     if not user_message.strip() or _ATTACHMENT_MARKER.search(user_message):
         return False
-    if _NEW_LOOP_HINT.search(user_message):
+    if _NEW_LOOP_HINT.search(user_message) or _KO_NEW_LOOP_HINT.search(user_message):
         return True
-    return has_open_loops and bool(_CLOSE_HINT.search(user_message))
+    return has_open_loops and bool(
+        _CLOSE_HINT.search(user_message) or _KO_CLOSE_HINT.search(user_message)
+    )
 
 
 def _audit(summary: str, details: dict[str, Any], *, session_id: str | None = None) -> None:

@@ -176,15 +176,21 @@ def _held(person: Person, now: datetime) -> bool:
 
 
 def message(text: str, created_at: str) -> str:
-    """The reminder as sent, saying when they set it, so it reads as theirs."""
+    """The reminder as sent, saying when they set it, so it reads as theirs.
+    In OE_LANGUAGE; the date is in the workspace's timezone."""
     from openexecutive.memory.workspace_settings import get_user_timezone
+    from openexecutive.utils.i18n import tr
+    from openexecutive.utils.i18n.dates import day_parts
 
     try:
         set_at = datetime.fromisoformat(created_at).astimezone(get_user_timezone())
-        when = f"{set_at:%b} {set_at.day}"
     except ValueError:
-        return f"Reminder you set: {text}"
-    return f"Reminder you set on {when}: {text}"
+        return tr("reminders.message.undated", "Reminder you set: {text}", text=text)
+    parts = day_parts(set_at)
+    return tr(
+        "reminders.message", "Reminder you set on {month} {day}: {text}",
+        month=parts["month"], day=parts["day"], text=text,
+    )
 
 
 async def send_due(now: datetime, *, db_path: Path | None = None) -> int:

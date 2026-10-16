@@ -101,6 +101,8 @@ def _settings(**overrides: object) -> Settings:
         nudge_max_per_scan=10,
         nudge_max_per_person_per_scan=2,
         nudge_max_per_scope=3,
+        # Fixed text (an unreachable card) reads the language via get_settings.
+        oe_language="en",
     )
     base.update(overrides)
     return base  # type: ignore[return-value]

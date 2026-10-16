@@ -46,7 +46,7 @@ async def generate_session_title(
         model = get_fast_model()
         response = await get_provider(model).messages_create(
             model=model,
-            max_tokens=32,
+            max_tokens=64,  # 4-6 words, with room for Korean
             system=_TITLE_SYSTEM,
             messages=[
                 {

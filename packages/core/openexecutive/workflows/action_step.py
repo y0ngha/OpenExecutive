@@ -835,10 +835,11 @@ async def run_held_calls(
     the (live) step's allowlist and still resolves. Not approved: nothing runs.
     Every call is audited either way.
     """
+    from openexecutive.utils.i18n import tr
     from openexecutive.workflows.approved_targets import remember
 
     resolved = await tool_catalog.resolve(list(step.tools)) if approved else {}
-    lines = ["**Held for approval**", ""]
+    lines = [f"**{tr('action_step.held_heading', 'Held for approval')}**", ""]
     for call in held:
         where = ", ".join(describe_target(k, v) for k, v in call.targets) or "a new target"
         if not approved:
@@ -870,24 +871,36 @@ def drop_held_calls(workflow_name: str, step_id: str, held: list[HeldCall], reas
 
 
 def held_question(workflow_title: str, held: list[HeldCall]) -> str:
-    """What the owner is asked about the writes a step held."""
-    lines = [
-        f"The workflow \u201c{workflow_title}\u201d wants to write somewhere it "
-        "hasn't written before:",
-    ]
+    """What the owner is asked about the writes a step held, in OE_LANGUAGE."""
+    from openexecutive.utils.i18n import tr
+
+    lines = [tr(
+        "action_step.question.intro",
+        "The workflow \u201c{title}\u201d wants to write somewhere it hasn't written before:",
+        title=workflow_title,
+    )]
     for call in held:
-        where = ", ".join(describe_target(k, v) for k, v in call.targets) or "a new target"
-        lines.append(f"- {where} (via {call.tool})")
-    lines.append(
-        "Reply yes to allow all of the above — they run now, and future runs "
-        "can write to these with any of this workflow's tools without asking — "
-        "or no to skip them."
-    )
+        where = ", ".join(describe_target(k, v) for k, v in call.targets) or tr(
+            "action_step.new_target", "a new target"
+        )
+        lines.append(tr("action_step.question.item", "- {where} (via {tool})", where=where, tool=call.tool))
+    lines.append(tr(
+        "action_step.question.ask",
+        "Reply yes to allow all of the above — they run now, and future runs can write to "
+        "these with any of this workflow's tools without asking — or no to skip them.",
+    ))
     return "\n".join(lines)
 
 
 def _format_output(report: str, actions: list[tuple[str, str]]) -> str:
-    lines = [report.strip() or "(The step finished without a report.)", "", "**Actions taken**", ""]
+    from openexecutive.utils.i18n import tr
+
+    lines = [
+        report.strip() or tr("action_step.no_report", "(The step finished without a report.)"),
+        "",
+        f"**{tr('action_step.actions_heading', 'Actions taken')}**",
+        "",
+    ]
     if actions:
         # Repeats collapse to one line with a count, so a script's 300 moves
         # read as one line, in the order each first happened.
@@ -899,5 +912,5 @@ def _format_output(report: str, actions: list[tuple[str, str]]) -> str:
             for (name, outcome), n in counts.items()
         ]
     else:
-        lines.append("- No tools were called.")
+        lines.append(f"- {tr('action_step.no_tools', 'No tools were called.')}")
     return "\n".join(lines)

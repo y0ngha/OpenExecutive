@@ -83,6 +83,23 @@ def build_insight_input_hash(signals: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _local(iso: Any) -> str:
+    """An ISO time as the workspace's local "YYYY-MM-DD HH:MM", so the note
+    never reads a UTC clock as local (an SLA at 03:00 UTC is noon in Seoul)."""
+    from openexecutive.alerts.lifecycle import parse_aware
+
+    dt = parse_aware(str(iso or ""))
+    if dt is None:
+        return str(iso)
+    try:
+        from openexecutive.memory.workspace_settings import get_user_timezone
+
+        dt = dt.astimezone(get_user_timezone())
+    except Exception:
+        pass
+    return f"{dt:%Y-%m-%d %H:%M}"
+
+
 def _render_signals(signals: dict[str, Any]) -> str:
     lines: list[str] = [f"Role: {signals.get('role') or 'unknown'}"]
     if signals.get("is_principal"):
@@ -93,25 +110,25 @@ def _render_signals(signals: dict[str, Any]) -> str:
     if awaiting:
         line = f"Workflow checkpoints awaiting their action: {awaiting}"
         if signals.get("soonest_sla_at"):
-            line += f" (soonest SLA {signals['soonest_sla_at']})"
+            line += f" (soonest SLA {_local(signals['soonest_sla_at'])})"
         lines.append(line)
 
     replies = signals.get("awaiting_reply_count", 0)
     if replies:
         line = f"Open commitments awaiting their reply: {replies}"
         if signals.get("oldest_awaiting_reply_at"):
-            line += f" (oldest since {signals['oldest_awaiting_reply_at']})"
+            line += f" (oldest since {_local(signals['oldest_awaiting_reply_at'])})"
         lines.append(line)
 
     if signals.get("overdue"):
         lines.append("At least one item is overdue.")
 
     if signals.get("on_leave_until"):
-        lines.append(f"On leave until {signals['on_leave_until']}.")
+        lines.append(f"On leave until {_local(signals['on_leave_until'])}.")
     elif signals.get("reachable_now"):
         lines.append("Reachable right now.")
     elif signals.get("next_window_at"):
-        lines.append(f"Not reachable now; next available {signals['next_window_at']}.")
+        lines.append(f"Not reachable now; next available {_local(signals['next_window_at'])}.")
     else:
         lines.append("Not reachable right now.")
 
@@ -120,7 +137,7 @@ def _render_signals(signals: dict[str, Any]) -> str:
         lines.append("Can approve: " + ", ".join(scope))
 
     if signals.get("last_contact_at"):
-        lines.append(f"Last outbound contact: {signals['last_contact_at']}.")
+        lines.append(f"Last outbound contact: {_local(signals['last_contact_at'])}.")
 
     return "\n".join(lines)
 
@@ -170,7 +187,7 @@ async def generate_person_insight(
         model = get_fast_model()
         response = await get_provider(model).messages_create(
             model=model,
-            max_tokens=48,
+            max_tokens=120,  # 8-15 words, with room for Korean
             system=_INSIGHT_SYSTEM,
             messages=[{"role": "user", "content": content}],
         )

@@ -2427,8 +2427,10 @@ _LABEL_CHARS = 60
 _RETRY_QUOTE_ECHO_CHARS = 200
 
 # Output budget for both extraction calls. Three short arrays of items; a
-# model that needs more is padding, not extracting.
-_EXTRACTION_MAX_TOKENS = 1024
+# model that needs more is padding, not extracting. Korean summaries and
+# quotes spend two to three times the tokens, and a cut tool input loses
+# every item in it.
+_EXTRACTION_MAX_TOKENS = 2048
 
 
 def _store_item(

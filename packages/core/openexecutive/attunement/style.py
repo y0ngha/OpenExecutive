@@ -58,6 +58,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from openexecutive.utils.korean_text import LATIN_END, LATIN_START, hangul_name_pattern
+
 logger = logging.getLogger(__name__)
 
 MAX_RULES = 4
@@ -85,61 +87,100 @@ _MAX_TOKENS = 800
 _MAX_DROPPED_IN_AUDIT = 10
 _MIN_CLAIM_INTERVAL = timedelta(minutes=1)
 
+# English words are bounded by Latin letters only, not ``\b``: Hangul is a
+# word character, so ``\b`` would let a glued particle hide a denied word
+# ("forward하세요", "approve하고"). Every other non-Latin letter is refused
+# outright (``_non_latin_letter``).
+_LS = LATIN_START
+_LE = LATIN_END
+
 # A style rule describes how to write, never what to do. Anything that reads
 # as an action, points somewhere, or tries to talk to the model about its
 # instructions is rejected outright rather than repaired.
 _DENY_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"https?://|www\.|\.(com|io|net|org|ai)\b", re.IGNORECASE),
+    re.compile(r"https?://|www\.|\.(com|io|net|org|ai)" + _LE, re.IGNORECASE),
     re.compile(r"@\w"),
     re.compile(r"[$€£¥]"),
     re.compile(r"[<>{}`\[\]]"),
     re.compile(r"\b\w+_\w+\b"),  # snake_case: tool names, identifiers
     re.compile(
-        r"\b(send|sends|sent|dm|dms|forward|approve|approves|approval|pay|payment|"
+        _LS + r"(send|sends|sent|dm|dms|forward|approve|approves|approval|pay|payment|"
         r"transfer|wire|delete|remove|cancel|notify|escalate|reveal|grant|"
         r"disable|enable|execute|invoke|schedule|purchase|buy|"
-        r"password|passwords|secret|secrets|credential|credentials|token|tokens)\b",
+        r"password|passwords|secret|secrets|credential|credentials|token|tokens)" + _LE,
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(ignore|disregard|override|bypass|instruction|instructions|"
-        r"prompt|prompts|tool|tools|jailbreak)\b",
+        _LS + r"(ignore|disregard|override|bypass|instruction|instructions|"
+        r"prompt|prompts|tool|tools|jailbreak)" + _LE,
         re.IGNORECASE,
     ),
     # Nudges toward acting without checking — "skip confirming and just
     # proceed" names no action verb but loosens every tool-capable turn.
     re.compile(
-        r"\b(confirm\w*|permission\w*|proceed\w*|autonom\w*|judg(e)?ment|"
+        _LS + r"(confirm\w*|permission\w*|proceed\w*|autonom\w*|judg(e)?ment|"
         r"go ahead|without asking|ask(ing)? first|check\w*|verif\w*|pause\w*|"
         r"hesitat\w*|instinct\w*|assum\w*|guess\w*|trust\w*|wait\w*|initiative|"
         r"yes|agree\w*|caution\w*|careful\w*|risk\w*|safe\w*|speed|slow\w*|hurr\w*|"
         r"rush\w*|doubt\w*|default\w*|whatever|anything|everything|"
         r"act|acts|acting|action|actions|decide|decides|deciding|decision|decisions|"
-        r"authori[sz]\w*|allow\w*|always do|do it)\b",
+        r"authori[sz]\w*|allow\w*|always do|do it)" + _LE,
         re.IGNORECASE,
+    ),
+    # The same three in Korean. No word boundaries: particles and endings
+    # glue onto the stem ("보내줘", "승인하고", "확인하지"), so a stem
+    # anywhere is enough.
+    re.compile(
+        r"보내|보낸|보냈|송금|결제|결재|지불|이체|입금|출금|승인|전달|발송|전송|넘기|넘겨|"
+        r"공유|포워드|처리하|처리해|송부|전해|지우|통보|통지|해버|"
+        r"삭제|지워|제거|취소|공개|권한 ?(?:줘|부여)|실행|호출|예약|구매|구입|"
+        r"비밀번호|비번|암호|패스워드|비밀|자격 ?증명|토큰|인증"
+    ),
+    re.compile(r"무시|지시|명령|지침|프롬프트|우회|탈옥|도구|툴|규칙을 ?(?:어기|깨)"),
+    re.compile(
+        r"확인|허락|허가|허용|진행|판단|묻지|물어보지|물어보고|기다리|기다려|가정|추측|"
+        r"짐작|신뢰|믿고|믿어|동의|조심|신중|위험|안전|서둘|급하게|속도|기본값|"
+        r"뭐든|무엇이든|아무거나|모든 ?것|전부 ?다|행동|조치|결정|알아서|마음대로|"
+        r"그냥 ?해|바로 ?해|항상 ?해|해도 ?돼|괜찮다고|컨펌|체크|오케이|생략|"
+        r"(?:확인|컨펌|질문|허락|승인) ?없이|물어볼 ?(?:필요|것) ?없|물어보지|물어볼 ?것 ?없이|"
+        r"질문하지 ?말|묻지 ?말"
     ),
 )
 
 # ...and must be about the writing: every rule names at least one aspect of
 # how a reply looks or reads.
 _STYLE_TOPIC = re.compile(
-    r"\b(reply|replies|answer|answers|response|responses|message|messages|"
+    _LS + r"(reply|replies|answer|answers|response|responses|message|messages|"
     r"summar\w*|bullet\w*|list|lists|table|tables|heading\w*|headline\w*|"
     r"paragraph\w*|sentence\w*|word|words|length|long|longer|short|shorter|brief|"
     r"concise|terse|verbose|detail\w*|depth|format\w*|structure\w*|tone|formal|"
     r"casual|friendly|direct|blunt|plain|jargon|technical|explain\w*|example\w*|"
     r"preamble|recap\w*|context|number|numbers|figures|data|lead|first|up front|"
-    r"recommendation\w*|options|emoji\w*|language|wording|simple|clear)\b",
+    r"recommendation\w*|options|emoji\w*|language|wording|simple|clear)" + _LE,
     re.IGNORECASE,
+)
+# Korean words for the same aspects, matched anywhere in a word.
+_KO_STYLE_TOPIC = re.compile(
+    r"답변|대답|답장|응답|메시지|짧게|짧은|길게|긴 |간결|간단|자세|상세|요약|정리|"
+    r"목록|리스트|글머리|불릿|표로|표를|제목|문단|단락|문장|단어|길이|분량|형식|구조|"
+    r"톤|말투|어조|존댓말|반말|격식|친근|직설|직접|쉽게|쉬운|전문 ?용어|용어|설명|"
+    r"예시|예를|서론|결론|핵심|요점|먼저|맨 ?앞|숫자|수치|데이터|추천|선택지|옵션|"
+    r"이모지|이모티콘|굵게|강조|한국어|영어|언어|표현|명확"
 )
 
 
 def _non_latin_letter(text: str) -> bool:
-    """Letters outside the Latin script — look-alikes (Cyrillic "а" in
-    "аpprove") would otherwise slip a denied word past the regexes."""
-    return any(
-        ch.isalpha() and not unicodedata.name(ch, "").startswith("LATIN") for ch in text
-    )
+    """A letter that could pass for a Latin one — look-alikes (Cyrillic "а"
+    in "аpprove") would otherwise slip a denied word past the regexes.
+    Only Latin and whole Hangul syllables are allowed, the two scripts the
+    deny patterns read (``utils.korean_text.lookalike_letters``)."""
+    from openexecutive.utils.korean_text import lookalike_letters
+
+    return lookalike_letters(text)
+
+
+def _about_style(text: str) -> bool:
+    return bool(_STYLE_TOPIC.search(text) or _KO_STYLE_TOPIC.search(text))
 
 _SYSTEM = """You maintain a short working-style profile for one person who talks \
 to an executive assistant: how the assistant's replies should be written for \
@@ -362,30 +403,84 @@ def _roster_names() -> list[str]:
 def _names_a_person(text: str, roster_names: list[str]) -> bool:
     """A full name anywhere (any case), or a capitalized part of one past the
     first word. Bare lowercase parts don't count: a teammate called "Max
-    Short" must not make "keep replies short" unsayable."""
+    Short" must not make "keep replies short" unsayable. A Hangul name counts
+    anywhere, whatever is glued to it ("팀장김민수에게"), written with or
+    without its space ("김 민수"), and so does its given name ("민수씨")."""
     for full in roster_names:
-        if re.search(rf"\b{re.escape(full)}\b", text, re.IGNORECASE):
+        forms = {full, "".join(full.split())} if _all_hangul(full) else {full}
+        if any(re.search(_name_pattern(f), text, re.IGNORECASE) for f in forms if f):
             return True
-        for part in full.split():
-            if len(part) < 3:
-                continue
-            if any(m.start() > 0 for m in re.finditer(rf"\b{re.escape(part)}\b", text)):
+        for part in _name_parts(full):
+            if _all_hangul(part):
+                if re.search(hangul_name_pattern(part), text):
+                    return True
+            elif any(m.start() > 0 for m in re.finditer(_name_pattern(part), text)):
                 return True
     return False
 
 
+def _all_hangul(name: str) -> bool:
+    letters = [c for c in name if not c.isspace()]
+    return bool(letters) and all("\uac00" <= c <= "\ud7a3" for c in letters)
+
+
+def _name_pattern(name: str) -> str:
+    """A name as a whole word: Latin letters may not touch it; a Hangul name
+    counts wherever it appears."""
+    if _all_hangul(name):
+        return hangul_name_pattern(name)
+    return LATIN_START + re.escape(name) + LATIN_END
+
+
+# Two-syllable Korean surnames: the given name of 남궁민수 is 민수.
+_COMPOUND_SURNAMES = ("남궁", "황보", "제갈", "선우", "독고", "사공", "서문", "동방")
+
+
+def _name_parts(full: str) -> list[str]:
+    """The parts of ``full`` checked on their own: each Latin word of three
+    letters or more; for a Hangul name, each spaced part of two syllables or
+    more and the given name of a name written as one word (김민수 → 민수,
+    남궁민수 → 민수)."""
+    if not _all_hangul(full):
+        return [p for p in full.split() if len(p) >= 3]
+    parts = [p for p in full.split() if len(p) >= 2]
+    joined = "".join(full.split())
+    if " " not in full.strip() and len(joined) >= 3:
+        surname = 2 if joined.startswith(_COMPOUND_SURNAMES) and len(joined) >= 4 else 1
+        parts.append(joined[surname:])
+    return [p for p in parts if len(p) >= 2]
+
+
+def _strip_accents(text: str) -> str:
+    """``text`` with diacritics dropped ("ïgnore" → "ignore"); Hangul comes
+    back whole (NFKD splits a syllable into jamo, NFC joins it again)."""
+    bare = "".join(
+        ch for ch in unicodedata.normalize("NFKD", text) if unicodedata.category(ch) != "Mn"
+    )
+    return unicodedata.normalize("NFC", bare)
+
+
+def _denied(text: str) -> bool:
+    """Whether ``text`` holds denied content, read as written and with its
+    accents dropped: "ïgnore" or "sénd" reads the same to a model and must
+    not slip past the English patterns."""
+    forms = {text, _strip_accents(text)}
+    return any(pattern.search(form) for form in forms for pattern in _DENY_PATTERNS)
+
+
 def rule_rejection(text: str, *, roster_names: list[str] | None = None) -> str | None:
     """Why ``text`` may not be a style rule, or None when it may."""
-    if len(text) < RULE_MIN_CHARS:
+    from openexecutive.utils.korean_text import weighted_len
+
+    if weighted_len(text) < RULE_MIN_CHARS:
         return "too_short"
     if len(text) > RULE_MAX_CHARS:
         return "too_long"
     if _non_latin_letter(text):
         return "non_latin_letters"
-    for pattern in _DENY_PATTERNS:
-        if pattern.search(text):
-            return "denied_content"
-    if not _STYLE_TOPIC.search(text):
+    if _denied(text):
+        return "denied_content"
+    if not _about_style(text):
         return "not_about_style"
     if _names_a_person(text, roster_names if roster_names is not None else _roster_names()):
         return "names_a_person"
@@ -403,8 +498,17 @@ def validate_edited_rule(text: str) -> tuple[str, str | None]:
 
 
 def _quote_in(quote: str, message: str) -> bool:
+    """``quote`` appears in ``message``, a line break there read as nothing
+    (``_normalize`` drops it as a control character), as a space or as a
+    sentence end, so a quote of a sentence wrapped onto two lines matches. A
+    Hangul or CJK character counts extra toward the minimum length."""
+    from openexecutive.utils.korean_text import weighted_len
+
     q = _normalize(quote).casefold()
-    return len(q) >= _QUOTE_MIN_CHARS and q in _normalize(message).casefold()
+    if weighted_len(q) < _QUOTE_MIN_CHARS:
+        return False
+    forms = {message, message.replace("\n", " "), message.replace("\n", ". ")}
+    return any(q in _normalize(form).casefold() for form in forms)
 
 
 def _accept_rule(

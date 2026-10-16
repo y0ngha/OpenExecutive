@@ -56,6 +56,11 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from openexecutive.utils.korean_text import SaidIndex, weighted_len
+from openexecutive.utils.korean_text import caseless as _caseless
+from openexecutive.utils.korean_text import said_caseless as _said_caseless
+from openexecutive.utils.korean_text import spoken_forms as _spoken_forms
+
 logger = logging.getLogger(__name__)
 
 _RATIONALE_MAX = 280
@@ -351,7 +356,8 @@ class _Hold:
 
 
 # A quote this short could be found in almost any message ("48", "yes"), so
-# it would prove nothing about what the principal said.
+# it would prove nothing about what the principal said. A Hangul or CJK
+# character counts as ``utils.korean_text.WIDE_CHAR_WEIGHT`` toward it.
 _QUOTE_MIN_CHARS = 8
 _QUOTE_MIN_WORDS = 2
 
@@ -369,19 +375,6 @@ def _own_words(session: Any) -> str | None:
     return own_words(pin.speaker_text if pin is not None else "")
 
 
-def _spoken_forms(spoken: str) -> tuple[str, ...]:
-    """``spoken`` normalized for a quote match, twice: as the commitment
-    check reads it (a line break is a sentence end) and with each line break
-    read as a space, so a quote of a sentence the speaker wrapped onto two
-    lines ("...소싱할때\n나가는거야") still matches."""
-    from openexecutive.memory.episodic import _normalize_for_quote_match
-
-    return (
-        _normalize_for_quote_match(spoken),
-        _normalize_for_quote_match(spoken.replace("\n", " ")),
-    )
-
-
 def _quote_error(quote: str, session: Any) -> str | None:
     """None when ``quote`` is really the principal's own words this turn."""
     from openexecutive.memory.episodic import _normalize_for_quote_match
@@ -389,7 +382,7 @@ def _quote_error(quote: str, session: Any) -> str | None:
     if not quote:
         return "source_quote is required: the speaker's exact words from this message."
     nq = _normalize_for_quote_match(quote)
-    if len(nq.replace(" ", "")) < _QUOTE_MIN_CHARS or len(nq.split()) < _QUOTE_MIN_WORDS:
+    if weighted_len(nq.replace(" ", "")) < _QUOTE_MIN_CHARS or len(nq.split()) < _QUOTE_MIN_WORDS:
         return (
             "source_quote is too short to show what the speaker said: quote the "
             "whole phrase that states it."
@@ -486,31 +479,8 @@ def _bare(word: str) -> str:
     return re.sub(r"['’]s$", "", word).strip("'’-")
 
 
-# A word in a script without capitals (Korean, Japanese, Chinese, Thai…)
-# can't be told apart from a name, so every one of them is checked. Korean
-# glues particles and endings onto the stem ("지출도" said, "지출은" written;
-# "나가는거야" said, "나간다" written), so such a word counts as said when a
-# said word shares its stem: all but at most its last two characters, and at
-# least two, where the stem's last syllable may differ in its final
-# consonant (나가 / 나간). A single character is a particle or a function word.
-_CASELESS_SUFFIX_MAX = 2
-# Hangul final consonants (jongseong) once a syllable is decomposed (NFD).
-_JONGSEONG = re.compile("[\u11a8-\u11c2]$")
-
-
-def _caseless(word: str) -> bool:
-    return not any(c.isupper() or c.islower() for c in word)
-
-
-def _said_caseless(word: str, said: set[str]) -> bool:
-    if len(word) <= 1:
-        return True
-    stem = max(2, len(word) - _CASELESS_SUFFIX_MAX)
-    head = _JONGSEONG.sub("", unicodedata.normalize("NFD", word[:stem]))
-    return any(
-        len(s) >= stem and unicodedata.normalize("NFD", s).startswith(head)
-        for s in said if _caseless(s)
-    )
+# A word in a script without capitals is checked by its stem
+# (``utils.korean_text.said_caseless``).
 
 
 def _unsaid_claim_words(statement: str, session: Any) -> list[str]:
@@ -531,13 +501,14 @@ def _unsaid_claim_words(statement: str, session: Any) -> list[str]:
 
     spoken = _normalize_for_quote_match(_own_words(session) or "")
     said = {_bare(w) for w in _WORD.findall(spoken)}
+    said_index = SaidIndex(said)
     missing: list[str] = []
     for i, m in enumerate(_WORD.finditer(statement)):
         bare = _bare(m.group(0))
         key = bare.lower()
         if not key or key in _GLUE or key in said:
             continue
-        if _caseless(bare) and _said_caseless(bare, said):
+        if _caseless(bare) and _said_caseless(bare, said_index):
             continue
         name_like = bare[0].isupper() or not bare.isascii()
         if key in _DATE_WORDS or (name_like and i > 0):

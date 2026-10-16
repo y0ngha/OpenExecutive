@@ -26,7 +26,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from openexecutive.briefing.narrative import GROUNDING_RULE
+from openexecutive.briefing.narrative import GROUNDING_RULE, local_date
 from openexecutive.knowledge.store import ChromaDBStore
 from openexecutive.workflows.base import (
     Workflow,
@@ -145,7 +145,7 @@ def _render_eod_context(
         parts.append("WHAT OE DID TODAY (most recent first):")
         for item in activity[:20]:
             parts.append(
-                f"- [{item.get('at', '')[:10]}] {item.get('kind', 'action')}: "
+                f"- [{local_date(item.get('at'))}] {item.get('kind', 'action')}: "
                 f"{item.get('summary', '')[:140]}"
             )
         parts.append("")
@@ -154,7 +154,7 @@ def _render_eod_context(
         parts.append("ALERTS I HANDLED TODAY (already done — report, don't ask):")
         for h in handled[:15]:
             parts.append(
-                f"- [{str(h.get('at', ''))[:10]}] {h.get('kind', '')}: "
+                f"- [{local_date(h.get('at'))}] {h.get('kind', '')}: "
                 f"{str(h.get('summary', ''))[:140]}"
             )
         parts.append("")
@@ -273,7 +273,11 @@ class EndOfDayDigestWorkflow(Workflow):
         store: ChromaDBStore,
     ) -> AsyncIterator[WorkflowEvent]:
         assert isinstance(inputs, EndOfDayDigestInput)
-        period = inputs.period_label or datetime.now(UTC).strftime("%Y-%m-%d")
+        from openexecutive.briefing.narrative_cache import local_today
+
+        # The principal's local date: east of UTC a run before 09:00 was
+        # dated yesterday.
+        period = inputs.period_label or local_today(datetime.now(UTC))
 
         yield WorkflowEvent(
             type="step_start",

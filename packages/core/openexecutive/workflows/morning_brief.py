@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -436,6 +437,8 @@ class MorningBriefWorkflow(Workflow):
 
 
 _SCHEDULED_MAX = 5
+# A Slack/Discord/Telegram id, a channel ref or an address: not a name.
+_RAW_REF = re.compile(r"^(?:[A-Z][A-Z0-9]{6,}|\d{6,}|\S*[:@]\S*)$")
 
 
 def scheduled_today_block(today_data: dict[str, Any], now: datetime) -> str:
@@ -459,7 +462,11 @@ def scheduled_today_block(today_data: dict[str, Any], now: datetime) -> str:
             intent = " ".join(str(item.get("intent") or "").split())
             if len(intent) > 240:
                 intent = intent[:239].rstrip() + "…"
-            target = " ".join(str(item.get("target") or item.get("channel") or "").split())[:60]
+            target = " ".join(str(item.get("target") or "").split())[:60]
+            if not target or _RAW_REF.match(target):
+                # An unresolved channel reference ("U0C7TM2TJMT") would
+                # reach the principal as a code, not a name.
+                target = "someone"
             lines.append(f"- [{at.astimezone(tz):%H:%M}] to {target}: {intent}")
             if len(lines) >= _SCHEDULED_MAX:
                 break

@@ -358,7 +358,7 @@ def _goal_line(goal: dict[str, Any]) -> str:
     return line + ")"
 
 
-def _local_date(iso: str | None) -> str:
+def local_date(iso: str | None) -> str:
     """``iso`` as a date in the workspace's timezone: a message sent at 08:00
     in Seoul is stamped 23:00 UTC the day before."""
     dt = parse_aware(iso)
@@ -633,7 +633,7 @@ def render_briefing_context(
             )
         for item in activity[:15]:
             parts.append(
-                f"- [{_local_date(item.get('at'))}] {item.get('kind', 'action')}: "
+                f"- [{local_date(item.get('at'))}] {item.get('kind', 'action')}: "
                 f"{item.get('summary', '')[:140]}"
             )
 
@@ -754,6 +754,7 @@ __all__ = [
     "GROUNDING_RULE",
     "BRIEFING_NARRATIVE_SYSTEM",
     "BRIEF_MAX_TOKENS",
+    "local_date",
     "QUIET_PRINCIPAL",
     "QUIET_VIEWER",
     "STANDALONE_BRIEF_SOLO_SYSTEM",

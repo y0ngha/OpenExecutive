@@ -59,7 +59,27 @@ BRIEF_SURFACES = ("morning brief", "end-of-day digest")
 # Lines kept for Home per brief, and characters per line.
 _HELD_KEEP = 30
 _HELD_LINE_CHARS = 400
+# The citations footer's header in English; what is written is
+# ``sources_header()``, in OE_LANGUAGE.
 SOURCES_HEADER = "**Sources**"
+
+
+def sources_header() -> str:
+    """The citations footer's header in OE_LANGUAGE."""
+    from openexecutive.utils.i18n import tr
+
+    return f"**{tr('grounding.sources', 'Sources')}**"
+
+
+def _split_sources(text: str) -> tuple[str, str, str]:
+    """``text`` split at its citations footer like ``str.partition``, taking
+    the header in OE_LANGUAGE or in English (an older stored brief)."""
+    best: tuple[str, str, str] = (text, "", "")
+    for header in dict.fromkeys((sources_header(), SOURCES_HEADER)):
+        body, sep, footer = text.partition("\n\n" + header)
+        if sep and len(body) < len(best[0]):
+            best = (body, sep, footer)
+    return best
 
 _MAX_CITED_SOURCES = 9
 _SNIPPET_CHARS = 90
@@ -808,7 +828,7 @@ def _cite(text: str, report: GroundingReport) -> tuple[str, int]:
     if not listed:
         return text, 0
     footer = [
-        "", SOURCES_HEADER,
+        "", sources_header(),
         *(f"- [{n}] {_snippet(src.label, 40)} — {_snippet(src.text)}" for n, src in enumerate(listed, 1)),
     ]
     return "\n".join(lines + footer), len(listed)
@@ -910,7 +930,7 @@ async def ground_brief(
             if result.held and out != HELD_BACK_ALL:
                 n = len(result.held)
                 note = HELD_BACK_NOTE.format(n=n, s="" if n == 1 else "s")
-                body, sep, footer = out.partition("\n\n" + SOURCES_HEADER)
+                body, sep, footer = _split_sources(out)
                 out = f"{body}\n\n{note}" + (sep + footer if sep else "")
         else:
             result.held = [c.text for c in report.bad_lines]

@@ -861,3 +861,12 @@ def test_a_quote_may_span_the_speakers_line_break(principal: SimpleNamespace) ->
                 statement="월 지출도 고정 지출 없고 그때그때 재료나 소싱할때 나가는거야",
                 source_quote="월 지출도 고정 지출 없고 그때그때 재료나 소싱할때 나가는거야")
     assert out["status"] == "ok", out
+
+
+def test_a_short_korean_quote_is_long_enough(principal: SimpleNamespace) -> None:
+    principal.turn_delegation.speaker_text = "참고로 월 매출 3억 정도야"
+    out = _call(fact_tools.handle_remember_fact, subject="월 매출",
+                statement="월 매출 3억", source_quote="월 매출 3억")
+    assert out["status"] == "ok", out
+    # English keeps its floor: "Units 48" is still too short to rest on.
+    assert fact_tools._quote_error("ok 48", principal) is not None

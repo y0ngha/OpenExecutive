@@ -3647,8 +3647,15 @@ attunement:
       carries a reaction; basis stated → quote verbatim (NFKC, casefold) in a
       cited message. Honcho is not read or written.
     validation: |
-      rule_rejection(): 8-160 chars; Latin-script letters only (confusables
-      like Cyrillic "а" would dodge the regexes); deny-list (URLs/domains,
+      rule_rejection(): 8-160 chars (a Hangul/CJK character counts 2.5,
+      utils.korean_text); Latin letters and whole Hangul syllables only —
+      Han, kana, Cyrillic/Greek, Hangul jamo, fullwidth and math-alphabet
+      letters are refused (confusables like Cyrillic "а" would dodge the
+      regexes); English deny words stop only at a Latin letter, so a glued
+      particle ("send하기") can't hide one; Korean topic and deny words
+      mirror the English lists, matched anywhere in a word since particles
+      attach;
+      deny-list (URLs/domains,
       @handles, currency, <>{}[]`, snake_case, action verbs send/approve/pay/
       schedule/delete..., act-without-checking words confirm/proceed/go ahead/
       judgment/decide/allow..., ignore/override/instructions/prompt/tool,

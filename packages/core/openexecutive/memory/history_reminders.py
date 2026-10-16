@@ -38,12 +38,25 @@ _task: asyncio.Task[int] | None = None
 
 
 def reminder_text(count: int, today: date) -> str:
-    """The message: how many, never what."""
-    things = "one thing" if count == 1 else f"{count} things"
-    return (
-        f"From your notes: {things} you said you'd do by email {'is' if count == 1 else 'are'} "
-        f"due today ({today:%a} {today.day} {today:%b}). Ask me \"what's due today?\" in the "
-        "web app or a direct message and I'll go through them."
+    """The message: how many, never what. In OE_LANGUAGE."""
+    from openexecutive.utils.i18n import tr
+    from openexecutive.utils.i18n.dates import day_parts
+
+    date_text = tr("history_reminders.date", "{weekday} {day} {month}", **day_parts(today))
+    if count == 1:
+        return tr(
+            "history_reminders.one",
+            "From your notes: one thing you said you'd do by email is due today ({date}). "
+            "Ask me \"what's due today?\" in the web app or a direct message and I'll go "
+            "through them.",
+            date=date_text,
+        )
+    return tr(
+        "history_reminders.many",
+        "From your notes: {count} things you said you'd do by email are due today ({date}). "
+        "Ask me \"what's due today?\" in the web app or a direct message and I'll go "
+        "through them.",
+        count=count, date=date_text,
     )
 
 

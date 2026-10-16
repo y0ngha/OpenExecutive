@@ -34,12 +34,13 @@ import logging
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
 
 from openexecutive.knowledge.store import ChromaDBStore
+from openexecutive.utils.i18n import MessageTable
 from openexecutive.workflows.base import (
     Workflow,
     WorkflowEvent,
@@ -62,11 +63,25 @@ REVISIT_AFTER_DAYS = 30
 # ...but only this many a week.
 REVISIT_MAX = 3
 _MAX_LISTED = 10
-_TOP_THREE_MAX_TOKENS = 400
-# The artifact's title line and its last section. `summarize_review` (the
-# solo Briefing's "This week's review" card) reads them back.
+_TOP_THREE_MAX_TOKENS = 1000
+# The artifact's title line and its last section, in English. The artifact
+# is written with ``_title_prefix()`` / ``_top_three_heading()`` (OE_LANGUAGE)
+# and `summarize_review` (the solo Briefing's "This week's review" card) reads
+# back either, so a review stored in English still reads.
 TITLE_PREFIX = "# Weekly review — "
 TOP_THREE_HEADING = "## Next week's top 3"
+
+
+def _title_prefix() -> str:
+    from openexecutive.utils.i18n import tr
+
+    return f"# {tr('weekly_review.title', 'Weekly review')} — "
+
+
+def _top_three_heading() -> str:
+    from openexecutive.utils.i18n import tr
+
+    return "## " + tr("weekly_review.top_three", "Next week's top 3")
 
 WEEKLY_TOP_THREE_SYSTEM = (
     "You are the principal's Executive, closing out their week. The principal "
@@ -238,9 +253,12 @@ class WeeklyReviewWorkflow(Workflow):
         top_three = await _next_weeks_top_three(body, period)
         if not top_three:
             top_three = _fallback_top_three(areas=list(areas), due=due, quiet=quiet, now=now)
+        from openexecutive.utils.i18n import tr
+
+        nothing = tr("weekly_review.nothing_stands_out", "Nothing stands out — a good week to get ahead.")
         artifact = (
-            f"{TITLE_PREFIX}{period}\n\n{body}\n{TOP_THREE_HEADING}\n\n"
-            f"{top_three or '_Nothing stands out — a good week to get ahead._'}\n"
+            f"{_title_prefix()}{period}\n\n{body}\n{_top_three_heading()}\n\n"
+            f"{top_three or f'_{nothing}_'}\n"
         )
         yield WorkflowEvent(
             type="result",
@@ -417,24 +435,43 @@ def decisions_to_revisit(now: datetime) -> list[Decision]:
 # Rendering
 # --------------------------------------------------------------------------- #
 
-_STATUS_WORDS = {"on_track": "on track", "at_risk": "at risk", "off_track": "off track"}
+_STATUS_WORDS = MessageTable("weekly_review.status", {
+    "on_track": "on track", "at_risk": "at risk", "off_track": "off track",
+})
 
 
 def _words(status: str | None) -> str:
-    return _STATUS_WORDS.get(str(status or ""), str(status or ""))
+    """A goal status as words in OE_LANGUAGE; an unknown one as it is."""
+    key = str(status or "")
+    return _STATUS_WORDS.get(key) or key
 
 
 def _one_line(text: object, limit: int = 160) -> str:
     return " ".join(str(text or "").split())[:limit]
 
 
+def _local_day(timestamp: object, zone: tzinfo) -> str:
+    """The workspace's local date (YYYY-MM-DD) of a stored UTC timestamp; the
+    text's first ten characters when it can't be read."""
+    raw = str(timestamp or "")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return raw[:10]
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(zone).date().isoformat()
+
+
 def _due_line(d: dict[str, Any]) -> str:
+    from openexecutive.utils.i18n import tr
+
     raw = str(d.get("due_date", ""))[:10]
     state = d.get("state")
     when = (
-        f"OVERDUE (was due {raw})" if state == "overdue"
-        else f"due today ({raw})" if state == "today"
-        else f"due {raw}"
+        tr("weekly_review.due.overdue", "OVERDUE (was due {date})", date=raw) if state == "overdue"
+        else tr("weekly_review.due.today", "due today ({date})", date=raw) if state == "today"
+        else tr("weekly_review.due.later", "due {date}", date=raw)
     )
     return f"- {when}: {_one_line(d.get('description'))}"
 
@@ -448,25 +485,44 @@ def _render_sections(
     revisit: list[Decision],
     noun: str,
 ) -> str:
-    """Every section but the top three. Each section always renders, with a
-    one-line note when it is empty, so the review keeps one shape."""
-    lines: list[str] = [f"## Goals by {noun}", ""]
+    """Every section but the top three, in OE_LANGUAGE. Each section always
+    renders, with a one-line note when it is empty, so the review keeps one
+    shape. Dates are the workspace's local dates."""
+    from openexecutive.memory.workspace_settings import get_user_timezone
+    from openexecutive.utils.i18n import tr
+
+    zone = get_user_timezone()
+    team = noun != "area"
+    goals_heading = (
+        tr("weekly_review.goals_by.department", "Goals by department") if team
+        else tr("weekly_review.goals_by.area", "Goals by area")
+    )
+    lines: list[str] = [f"## {goals_heading}", ""]
     if not areas:
-        lines.append("_No goals tracked yet._")
+        lines.append(f"_{tr('weekly_review.no_goals', 'No goals tracked yet.')}_")
     for area in areas:
         heading = f"### {area.title}"
         if area.outcome == "no_specialist":
-            heading += f" _(not graded — no specialist covers this {noun})_"
+            note = (
+                tr("weekly_review.not_graded.department", "not graded — no specialist covers this department")
+                if team
+                else tr("weekly_review.not_graded.area", "not graded — no specialist covers this area")
+            )
+            heading += f" _({note})_"
         elif area.outcome == "failed":
-            heading += " _(couldn't be graded this week — shown as last recorded)_"
+            note = tr(
+                "weekly_review.grading_failed",
+                "couldn't be graded this week — shown as last recorded",
+            )
+            heading += f" _({note})_"
         lines.append(heading)
         for g in area.goals:
             status = _words(g["status"])
             if g.get("was"):
-                status += f" (was {_words(g['was'])})"
-            detail = f"target {_one_line(g['target'], 80)}"
+                status += " " + tr("weekly_review.goal.was", "(was {status})", status=_words(g["was"]))
+            detail = tr("weekly_review.goal.target", "target {target}", target=_one_line(g["target"], 80))
             if g.get("current"):
-                detail += f", now {_one_line(g['current'], 80)}"
+                detail += tr("weekly_review.goal.now", ", now {current}", current=_one_line(g["current"], 80))
             line = f"- **{_one_line(g['key_result'], 120)}** — {status}; {detail}."
             if g.get("rationale"):
                 line += f" {_one_line(g['rationale'], 200)}"
@@ -476,26 +532,45 @@ def _render_sections(
         lines.append("")
     if areas:
         lines.pop()
-    lines += ["", "## Commitments due", ""]
-    lines += [_due_line(d) for d in due] or ["_Nothing overdue or due in the next week._"]
-    lines += ["", "## Projects that went quiet", ""]
+    lines += ["", f"## {tr('weekly_review.commitments', 'Commitments due')}", ""]
+    lines += [_due_line(d) for d in due] or [
+        f"_{tr('weekly_review.no_commitments', 'Nothing overdue or due in the next week.')}_"
+    ]
+    lines += ["", f"## {tr('weekly_review.quiet', 'Projects that went quiet')}", ""]
     lines += [
-        f"- **{_one_line(p['title'], 120)}** — no update in {p['days']} days"
+        "- **{}** — {}".format(
+            _one_line(p["title"], 120),
+            tr("weekly_review.quiet.days", "no update in {days} days", days=p["days"]),
+        )
         for p in quiet
-    ] or [f"_Every active project moved in the last {QUIET_PROJECT_DAYS} days._"]
-    lines += ["", "## This week's decisions", ""]
+    ] or ["_{}_".format(tr(
+        "weekly_review.no_quiet", "Every active project moved in the last {days} days.",
+        days=QUIET_PROJECT_DAYS,
+    ))]
+    lines += ["", "## " + tr("weekly_review.decisions", "This week's decisions"), ""]
     lines += [
-        f"- {str(d.timestamp)[:10]} — {_one_line(d.summary, 200)}" for d in week
-    ] or ["_No decisions logged this week._"]
-    lines += ["", "## How did these turn out?", ""]
+        f"- {_local_day(d.timestamp, zone)} — {_one_line(d.summary, 200)}" for d in week
+    ] or ["_{}_".format(tr("weekly_review.no_decisions", "No decisions logged this week."))]
+    lines += ["", f"## {tr('weekly_review.revisit', 'How did these turn out?')}", ""]
     if revisit:
         lines += [
-            f"- [decision {d.id}] decided {str(d.timestamp)[:10]} — {_one_line(d.summary, 200)}"
+            "- [decision {}] {} — {}".format(
+                d.id,
+                tr("weekly_review.revisit.decided", "decided {date}", date=_local_day(d.timestamp, zone)),
+                _one_line(d.summary, 200),
+            )
             for d in revisit
         ]
-        lines += ["", "Tell me how any of these turned out and I'll record it against the decision."]
+        lines += ["", tr(
+            "weekly_review.revisit.ask",
+            "Tell me how any of these turned out and I'll record it against the decision.",
+        )]
     else:
-        lines.append(f"_No decisions older than {REVISIT_AFTER_DAYS} days are waiting on an outcome._")
+        lines.append("_{}_".format(tr(
+            "weekly_review.no_revisit",
+            "No decisions older than {days} days are waiting on an outcome.",
+            days=REVISIT_AFTER_DAYS,
+        )))
     return "\n".join(lines) + "\n"
 
 
@@ -561,7 +636,15 @@ def _numbered_items(text: str, limit: int = 3) -> str:
 
 _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 _MD_MARKS_RE = re.compile(r"\*\*|__|`|~~")
-_TOP_THREE_SPLIT_RE = re.compile(rf"^{re.escape(TOP_THREE_HEADING)}[ \t]*$", re.MULTILINE)
+
+
+def _top_three_split_re() -> re.Pattern[str]:
+    """The top-three heading on a line of its own, in OE_LANGUAGE or English."""
+    headings = dict.fromkeys((_top_three_heading(), TOP_THREE_HEADING))
+    alts = "|".join(re.escape(h) for h in headings)
+    return re.compile(rf"^(?:{alts})[ \t]*$", re.MULTILINE)
+
+
 _EXCERPT_LINES = 3
 _EXCERPT_LINE_MAX = 240
 
@@ -590,13 +673,15 @@ def summarize_review(artifact: str) -> dict[str, Any]:
         return {"period": "", "top_three": [], "excerpt": ""}
     first, _, rest = text.partition("\n")
     period = ""
-    if first.startswith(TITLE_PREFIX):
-        period = _plain(first[len(TITLE_PREFIX):])
-        text = rest
+    for prefix in dict.fromkeys((_title_prefix(), TITLE_PREFIX)):
+        if first.startswith(prefix):
+            period = _plain(first[len(prefix):])
+            text = rest
+            break
     # The heading on a line of its own (each line quoting the principal's
     # data starts with a list marker, emphasis or a deeper heading), and the
     # last one, since it is the review's last section.
-    parts = _TOP_THREE_SPLIT_RE.split(text)
+    parts = _top_three_split_re().split(text)
     found = len(parts) > 1
     body = parts[0]
     section = parts[-1] if found else ""

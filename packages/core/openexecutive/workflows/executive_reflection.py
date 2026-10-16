@@ -37,6 +37,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from openexecutive.briefing.narrative import local_date
 from openexecutive.knowledge.store import ChromaDBStore
 from openexecutive.workflows.base import (
     Workflow,
@@ -210,7 +211,8 @@ def _build_reflection_system(configured: set[str], has_roster: bool = True) -> s
         "  (d) IGNORE — quiet signals don't need action.\n\n"
         "When you're done calling tools, emit a SHORT Markdown summary "
         "(≤200 words) of what you did and what you flagged for the "
-        "morning brief. Format:\n\n"
+        "morning brief. Format (keep the three headings in English exactly as "
+        "written, whatever language the rest is in: code reads them):\n\n"
         "  **Acted on:** (bullets — one per tool call you made)\n"
         "  **Flagged for the brief:** (bullets — anything to surface "
         "without acting on it yet)\n"
@@ -281,7 +283,8 @@ def _build_reflection_system_solo() -> str:
         "  (c) IGNORE — quiet signals don't need action.\n\n"
         "When you're done calling tools, emit a SHORT Markdown summary "
         "(≤200 words) of what you did and what you flagged for the "
-        "morning brief. Format:\n\n"
+        "morning brief. Format (keep the three headings in English exactly as "
+        "written, whatever language the rest is in: code reads them):\n\n"
         "  **Acted on:** (bullets — one per tool call you made)\n"
         "  **Flagged for the brief:** (bullets — anything to surface "
         "without acting on it yet)\n"
@@ -407,7 +410,7 @@ def _render_reflection_context(
         parts.append("RECENT EXECUTIVE ACTIVITY (most recent first):")
         for item in activity[:15]:
             parts.append(
-                f"- [{item.get('at', '')[:10]}] {item.get('kind', 'action')}: "
+                f"- [{local_date(item.get('at'))}] {item.get('kind', 'action')}: "
                 f"{item.get('summary', '')[:140]}"
             )
         parts.append("")
@@ -611,7 +614,11 @@ class ExecutiveReflectionWorkflow(Workflow):
         store: ChromaDBStore,
     ) -> AsyncIterator[WorkflowEvent]:
         assert isinstance(inputs, ExecutiveReflectionInput)
-        period = inputs.period_label or datetime.now(UTC).strftime("%Y-%m-%d")
+        from openexecutive.briefing.narrative_cache import local_today
+
+        # The principal's local date: east of UTC a run before 09:00 was
+        # dated yesterday.
+        period = inputs.period_label or local_today(datetime.now(UTC))
 
         # ------------------------------------------------------------------ #
         # Step 1: gather signals

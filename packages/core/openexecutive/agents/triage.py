@@ -236,7 +236,10 @@ class TriageAgent(BaseAgent):
         # ``messages_create`` — branch only on the call shape.
         create_kwargs: dict[str, Any] = {
             "model": self.effective_model(),
-            "max_tokens": 512,
+            # Room for a Korean headline, body and action in the forced
+            # tool call; at 512 the input could come back cut and the alert
+            # was silently not raised.
+            "max_tokens": 1200,
             "timeout": _TRIAGE_TIMEOUT,
             "system": self.effective_system_prompt(),
             "tools": [TRIAGE_TOOL],

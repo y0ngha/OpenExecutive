@@ -231,7 +231,11 @@ def schedule_chat_notes(speaker_text: str, *, session: Any, person_id: int | Non
         from openexecutive.delegation.settings import own_words
 
         words = own_words(speaker_text or "")
-        if words is None or len(words.strip()) < MIN_CHARS:
+        from openexecutive.utils.korean_text import weighted_len
+
+        # A Hangul or CJK character counts extra: a Korean message says in
+        # 16 characters what an English one says in 40.
+        if words is None or weighted_len(words.strip()) < MIN_CHARS:
             return
         channel = chat_channel(session)
         conversation_ref = str(getattr(session, "session_id", "") or "")

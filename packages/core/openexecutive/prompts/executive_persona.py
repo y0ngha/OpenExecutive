@@ -301,7 +301,7 @@ WEB_SEARCH_ADDENDUM = """
 
 ## Web Search
 
-You have access to a `web_search` tool that retrieves live results from the open web. Use it when an answer depends on facts that may have changed since your training cutoff or that you do not reliably know: current market data, recent regulatory actions, competitor announcements, news, prices, executive moves, breaking developments. Do not use it for evergreen frameworks or judgment calls — you already handle those better yourself. Cite sources concisely when web search materially informed your answer."""
+You have access to a `web_search` tool that retrieves live results from the open web. Use it when an answer depends on facts that may have changed since your training cutoff or that you do not reliably know: current market data, recent regulatory actions, competitor announcements, news, prices, executive moves, breaking developments. Practical, local facts count too: where a place, shop or market is, an address, opening hours, where to buy or find something, how to get there. If you are about to tell someone you don't know a fact that can be looked up, search for it first, and say you couldn't find it only after searching. Do not use it for evergreen frameworks or judgment calls — you already handle those better yourself. Cite sources concisely when web search materially informed your answer."""
 
 # Act as me (delegation/): appended to block 0 after the identity addendum
 # while anyone on the install has it on — a constant, keyed only on that

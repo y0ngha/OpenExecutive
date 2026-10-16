@@ -972,3 +972,47 @@ def test_solo_commitment_eval_scenario_is_shipped_and_valid() -> None:
     scenario = validate_scenario_yaml(path.read_text(encoding="utf-8"))
     assert scenario["workspace_mode"] == "solo"
     assert "by Friday" in scenario["query"]
+
+
+# --------------------------------------------------------------------------- #
+# Korean
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("text", [
+    "내일까지 견적서 보낼게", "금요일에 보내드릴게요", "제가 정리해서 공유하겠습니다",
+    "다음 주에 할 거예요", "자료 좀 정리해줘", "보고서 검토해 주세요", "민수씨한테 부탁했어",
+])
+def test_korean_commitments_and_asks_pass_the_gate(text: str) -> None:
+    assert open_loops.should_run(text, has_open_loops=False)
+
+
+@pytest.mark.parametrize("text", ["고마워요", "네 알겠어요", "좋아요 감사합니다", "오늘 날씨 어때?"])
+def test_korean_small_talk_does_not(text: str) -> None:
+    assert not open_loops.should_run(text, has_open_loops=False)
+
+
+@pytest.mark.parametrize("text", ["견적서 보냈어", "끝났습니다", "제출 완료", "그거 처리했어요"])
+def test_korean_closures_pass_only_with_open_loops(text: str) -> None:
+    assert open_loops.should_run(text, has_open_loops=True)
+    assert not open_loops.should_run(text, has_open_loops=False)
+
+
+def test_a_quote_may_span_a_line_break() -> None:
+    message = "견적서는 내일까지\n보낼게요. 확인 부탁해요"
+    assert open_loops._quote_in_message("견적서는 내일까지 보낼게요", message)
+    assert open_loops._quote_in_message("견적서는 내일까지. 보낼게요", message)
+    assert not open_loops._quote_in_message("견적서는 모레까지 보낼게요", message)
+
+
+def test_reflection_dates_a_loop_in_the_user_timezone(
+    team: SimpleNamespace, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from zoneinfo import ZoneInfo
+
+    monkeypatch.setattr(open_loops, "_user_tz", lambda: ZoneInfo("Asia/Seoul"))
+    # 16:00 UTC on the 16th is 01:00 on the 17th in Seoul.
+    open_loops.open_loop(owner_person_id=team.sara, description="send the quote",
+                         due_at=datetime(2026, 10, 16, 16, 0, tzinfo=UTC))
+    [line] = open_loops.render_for_reflection()
+    assert "2026-10-17]" in line

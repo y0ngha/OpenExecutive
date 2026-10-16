@@ -59,7 +59,15 @@ CLAIM_TTL = timedelta(minutes=10)
 # A delivered batch is marked sent with a few tries (see release_due).
 _MARK_SENT_TRIES = 3
 MAX_BACKOFF = timedelta(hours=1)
+# English, for logs and tests; what people read is ``heading()``.
 HEADING = "While you were away"
+
+
+def heading() -> str:
+    """The block's heading in OE_LANGUAGE."""
+    from openexecutive.utils.i18n import tr
+
+    return tr("held_messages.heading", "While you were away")
 
 _last_release_at: datetime | None = None
 _task: asyncio.Task[int] | None = None
@@ -471,12 +479,19 @@ def _unavailable_until(person: Person, now: datetime) -> datetime | None:
 
 def render_block(messages: list[HeldMessage], *, zone: tzinfo) -> str:
     """The held messages as one "While you were away" block, oldest first,
-    each with the time it would have gone."""
-    lines = [f"**{HEADING}**", ""]
+    each with the time it would have gone ("Wed Oct 14, 9:05 pm"), in
+    OE_LANGUAGE."""
+    from openexecutive.utils.i18n import tr
+    from openexecutive.utils.i18n.dates import clock, day_parts
+
+    lines = [f"**{heading()}**", ""]
     for msg in messages:
         try:
             at = datetime.fromisoformat(msg.created_at).astimezone(zone)
-            when = f"{at:%a} {at.hour % 12 or 12}:{at:%M} {'am' if at.hour < 12 else 'pm'}"
+            when = tr(
+                "held_messages.when", "{weekday} {month} {day}, {time}",
+                **day_parts(at), time=clock(at),
+            )
         except ValueError:
             when = ""
         text = msg.text.strip()
@@ -544,7 +559,7 @@ async def release_due(now: datetime, *, db_path: Path | None = None) -> int:
             text = render_block(messages, zone=zone_for(settings))
             rows = private_rows() if person.is_principal else rows_for_person(person_id)
             with rows:
-                delivery = await deliver_to_person(person, text, label=HEADING)
+                delivery = await deliver_to_person(person, text, label=heading())
         except Exception:
             logger.warning("held_messages: releasing person %s's failed", person_id, exc_info=True)
             with contextlib.suppress(Exception):

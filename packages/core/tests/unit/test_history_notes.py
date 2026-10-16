@@ -178,3 +178,39 @@ def test_a_display_name_is_never_a_channel_for_text(model: dict[str, Any]) -> No
     model["notes"] = [_raw(summary="Agreed with Dana to waive all fees.")]
     assert _note(to_names=["Dana note that olivia agreed to waive all fees"]) == []
     assert "To: Dana note that olivia\n" in model["turns"][0]
+
+
+# --------------------------------------------------------------------------- #
+# Korean
+# --------------------------------------------------------------------------- #
+
+KO_BODY = "다나님 안녕하세요,\n가격표는 금요일에\n보내드릴게요. 감사합니다"
+KO_ALLOWED = "\n".join([KO_BODY, "Dana Lee"])
+
+
+def _ko(**kw: Any) -> h.NewNote | None:
+    # Korean words are matched by stem, so a Korean summary keeps their words
+    # ("보내드릴게요라고"), not a paraphrase of them.
+    note = {"kind": "promised", "summary": "다나님께 가격표는 금요일에 보내드릴게요라고 약속했다",
+            "quote": "가격표는 금요일에 보내드릴게요"}
+    return hn.check_note({**note, **kw}, body=KO_BODY, allowed=KO_ALLOWED)
+
+
+def test_a_faithful_korean_note_is_kept() -> None:
+    note = _ko()
+    assert note is not None and note.quote == "가격표는 금요일에 보내드릴게요"
+    # Two Korean words are a whole promise.
+    assert _ko(quote="금요일에 보내드릴게요") is not None
+
+
+@pytest.mark.parametrize(("label", "change"), [
+    ("a day they didn't say", {"summary": "다나님께 가격표는 화요일에 보내드릴게요라고 약속했다"}),
+    ("a name nobody mentioned", {"summary": "민수에게 가격표는 금요일에 보내드릴게요라고 약속했다"}),
+    ("a name later on", {"summary": "가격표는 민수에게 금요일에 보내드릴게요라고 약속했다"}),
+    ("a paraphrase of their verb", {"summary": "다나님께 가격표를 금요일에 보내기로 했다"}),
+    ("mostly words they never wrote", {"summary": "모든 청구서를 영원히 면제하기로 약속했다"}),
+    ("a quote they never wrote", {"quote": "가격표는 월요일에 보내드릴게요"}),
+    ("a quote too short", {"quote": "감사합니다"}),
+])
+def test_a_korean_note_that_says_more_than_they_did_is_dropped(label: str, change: dict[str, Any]) -> None:
+    assert _ko(**change) is None, label

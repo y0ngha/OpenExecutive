@@ -315,31 +315,37 @@ async def parse_decision(
         from openexecutive.audit.usage import log_model_usage
         from openexecutive.config import get_settings
         from openexecutive.providers import get_provider
+        from openexecutive.providers.output_language import internal_call
 
         settings = get_settings()
         model = get_fast_model()
-        response = await get_provider(model).messages_create(
-            model=model,
-            max_tokens=256,
-            timeout=settings.utility_fast_timeout_s,
-            system=_SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"Parse this reply (expected shape: {expected_shape}):\n\n"
-                        f"{shape_prompt}\n\n"
-                        + (
-                            f"The question it should be answering:\n"
-                            f"{question[:500]}\n\n"
-                            if question
-                            else ""
-                        )
-                        + f"Reply to parse:\n{text[:1000]}"
-                    ),
-                }
-            ],
-        )
+        # A parse only code reads: it echoes the reply as written, in
+        # English JSON, so it gets no output-language block.
+        with internal_call():
+            response = await get_provider(model).messages_create(
+                model=model,
+                # The free-text shape echoes up to 500 characters of the reply
+                # in JSON; a Korean reply at 256 tokens was cut and failed to parse.
+                max_tokens=1024,
+                timeout=settings.utility_fast_timeout_s,
+                system=_SYSTEM_PROMPT,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Parse this reply (expected shape: {expected_shape}):\n\n"
+                            f"{shape_prompt}\n\n"
+                            + (
+                                f"The question it should be answering:\n"
+                                f"{question[:500]}\n\n"
+                                if question
+                                else ""
+                            )
+                            + f"Reply to parse:\n{text[:1000]}"
+                        ),
+                    }
+                ],
+            )
         log_model_usage(response, model=model, actor="wait_for_human")
         # The SDK only emits text blocks for this prompt (no tools, no
         # thinking). The union-attr complaint mypy raises here is a false

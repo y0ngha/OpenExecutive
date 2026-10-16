@@ -291,3 +291,13 @@ def test_the_executive_schedules_it_after_a_turn_but_not_one_that_touched_mail()
         src = inspect.getsource(method)
         assert "if not touched_mail:\n                schedule_chat_notes(speaker_text, session=session, " \
             "person_id=person_id)" in src, method.__name__
+
+
+def test_a_short_korean_message_is_long_enough(
+    roster: SimpleNamespace, scheduled: list[dict[str, Any]]
+) -> None:
+    # 16 Hangul characters say what 40 English letters do.
+    text = "다나님께 가격표는 금요일에 보내드리기로 했어요"
+    assert len(text) < hc.MIN_CHARS
+    _schedule(text, _web(roster.teammate), roster.teammate)
+    assert [c["text"] for c in scheduled] == [text]
