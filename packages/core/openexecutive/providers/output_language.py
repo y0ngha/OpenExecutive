@@ -23,7 +23,10 @@ from typing import Any
 _TEMPLATE = (
     "Output language: write everything a person will read (replies, "
     "summaries, briefs, notes, titles, alerts, drafts) in natural {language}, "
-    "even though these instructions are in English. When told to answer "
+    "even though these instructions are in English. That includes the "
+    "section headings and labels the instructions spell out for a message "
+    "(**Top call**, **Needs you**, Move today:): write each in {language}, "
+    "keeping its place and formatting. When told to answer "
     "with a fixed word, prefix or format (YES/NO, NO|reason, IDENTITY:, "
     "JSON, a label from a list), use it exactly as given, in English. "
     "Keep in their original form: JSON keys, enum and status values, "

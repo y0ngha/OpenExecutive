@@ -78,9 +78,63 @@ def _one_line(value: Any, limit: int = _TEXT_MAX) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def _local_hhmm(iso: str | None, tz: tzinfo) -> str:
+def _local_hhmm(iso: str | None, tz: tzinfo, now: datetime | None = None) -> str:
+    """Local "HH:MM", with the date in front ("10-15 18:48") when ``now`` is
+    given and the time falls on another local day: a window since the last
+    brief spans two days, and a bare "18:48" read as today's."""
     dt = parse_aware(iso)
-    return f"{dt.astimezone(tz):%H:%M}" if dt is not None else "--:--"
+    if dt is None:
+        return "--:--"
+    local = dt.astimezone(tz)
+    if now is not None and local.date() != now.astimezone(tz).date():
+        return f"{local:%m-%d %H:%M}"
+    return f"{local:%H:%M}"
+
+
+# Chat channels whose inbound rows carry the sender's account id, and the
+# details key it is under.
+_CHAT_USER_KEYS = {"slack": "slack_user", "discord": "discord_user"}
+_CHAT_LABELS = {"slack": "Slack", "discord": "Discord"}
+# "slack from user=U123 channel=D456": the raw ids a chat row's summary holds.
+_CHAT_IDS_RE = re.compile(r"^\w+ from user=\S* channel=\S*$")
+
+
+def _chat_sender(channel: str, user_id: str, cache: dict[str, str]) -> str:
+    """Who sent a Slack or Discord message, by their People name ("Dana Kim",
+    "Dana Kim (the principal)"), not their account id. An account nobody on
+    People holds reads as "a Slack user"."""
+    key = f"{channel}:{user_id}"
+    if key in cache:
+        return cache[key]
+    label = f"a {_CHAT_LABELS.get(channel, channel)} user"
+    try:
+        from openexecutive.people import store
+
+        finder = {
+            "slack": store.find_person_by_slack_id,
+            "discord": store.find_person_by_discord_id,
+        }[channel]
+        person = finder(user_id, include_contacts=True)
+        if person is not None and person.full_name:
+            label = _one_line(person.full_name, 60)
+            if person.is_principal:
+                label += " (the principal)"
+    except Exception:
+        logger.warning("live_signals: sender lookup failed", exc_info=True)
+    cache[key] = label
+    return label
+
+
+def _replied_sessions(since: datetime, include_private: bool) -> dict[str, str]:
+    """The latest Executive reply time per session since ``since``, from the
+    ``chat_turn`` rows: an inbound message with a reply after it in its
+    session was answered."""
+    latest: dict[str, str] = {}
+    for ev in _audit_rows("chat_turn", since, include_private):
+        sid = str(ev.session_id or "")
+        if sid and str(ev.ts or "") > latest.get(sid, ""):
+            latest[sid] = str(ev.ts)
+    return latest
 
 
 @dataclass(frozen=True)
@@ -125,11 +179,17 @@ def _audit_rows(event_type: str, since: datetime, include_private: bool) -> list
 
 
 def _inbound(
-    since: datetime, tz: tzinfo, include_private: bool
+    since: datetime, tz: tzinfo, include_private: bool, now: datetime | None = None
 ) -> tuple[list[str], int, int, list[str], list[str]]:
     """``(lines, total, shown, stuck_lines, keys)`` from ``integration_inbound``
     rows. ``shown`` is how many messages the grouped lines cover."""
     rows = _audit_rows("integration_inbound", since, include_private)
+    replied: dict[str, str] = {}
+    try:
+        replied = _replied_sessions(since, include_private)
+    except Exception:
+        logger.warning("live_signals: reply lookup failed", exc_info=True)
+    senders: dict[str, str] = {}
     groups: dict[tuple[str, str], dict[str, Any]] = {}
     stuck: list[str] = []
     stuck_seen: set[str] = set()
@@ -143,7 +203,7 @@ def _inbound(
             if sender and key not in stuck_seen:
                 stuck_seen.add(key)
                 stuck.append(
-                    f"[{_local_hhmm(ev.ts, tz)}] {sender} is not on the roster, so the "
+                    f"[{_local_hhmm(ev.ts, tz, now)}] {sender} is not on the roster, so the "
                     "Executive could not reply to their email — they may be waiting"
                 )
             continue
@@ -151,7 +211,7 @@ def _inbound(
             key = f"chat:{summary[:60].lower()}"
             if key not in stuck_seen:
                 stuck_seen.add(key)
-                stuck.append(f"[{_local_hhmm(ev.ts, tz)}] {_one_line(summary)}")
+                stuck.append(f"[{_local_hhmm(ev.ts, tz, now)}] {_one_line(summary)}")
             continue
         if not summary.startswith("Inbound "):
             # Rejected unknown senders, response-gate skips, handler errors:
@@ -165,12 +225,18 @@ def _inbound(
         else:
             head, _, text = summary.partition(": ")
             sender = _one_line(_PAREN_REF_RE.sub("", head[len("Inbound "):]), 80)
+            user_id = str(details.get(_CHAT_USER_KEYS.get(channel, "")) or "")
+            if user_id and _CHAT_IDS_RE.match(sender):
+                sender = "from " + _chat_sender(channel, user_id, senders)
             topic = _one_line(text, 100)
         group_key = (sender.lower(), re.sub(r"^(re|fwd?):\s*", "", topic.lower()))
         group = groups.get(group_key)
         if group is None:
+            sid = str(ev.session_id or "")
             groups[group_key] = {
                 "at": ev.ts, "channel": channel, "sender": sender, "topic": topic,
+                # Rows come newest first, so this is the group's last message.
+                "answered": bool(sid) and replied.get(sid, "") >= str(ev.ts or ""),
                 "preview": _one_line(details.get("preview"), 100) if channel == "email" else "",
                 "count": 1,
             }
@@ -182,7 +248,7 @@ def _inbound(
     shown = 0
     for g in list(groups.values())[:_INBOUND_MAX]:
         shown += g["count"]
-        line = f"[{_local_hhmm(g['at'], tz)}] {g['channel'] or 'message'}"
+        line = f"[{_local_hhmm(g['at'], tz, now)}] {g['channel'] or 'message'}"
         if g["channel"] == "email":
             line += f" from {g['sender']}: {g['topic'] or '(no subject)'}"
             if g["preview"]:
@@ -191,12 +257,16 @@ def _inbound(
             line += f" {g['sender']}: {g['topic']}"
         if g["count"] > 1:
             line += f" (x{g['count']})"
+        if g["answered"]:
+            line += " [you replied]"
         lines.append(line)
         keys.append(f"{g['sender'].lower()}|{g['topic'].lower()[:60]}|{g['count']}")
     return lines, total, shown, stuck, keys
 
 
-def _outbound_blocked(since: datetime, tz: tzinfo, include_private: bool) -> list[str]:
+def _outbound_blocked(
+    since: datetime, tz: tzinfo, include_private: bool, now: datetime | None = None
+) -> list[str]:
     """Replies the outbound gate refused because the recipient is not on the
     allow-list. Refusals of other kinds (a tool, another account) are guard
     bookkeeping and stay out."""
@@ -211,7 +281,7 @@ def _outbound_blocked(since: datetime, tz: tzinfo, include_private: bool) -> lis
             continue
         seen.add(address.lower())
         out.append(
-            f"[{_local_hhmm(ev.ts, tz)}] an email to {address} was held at the outbound "
+            f"[{_local_hhmm(ev.ts, tz, now)}] an email to {address} was held at the outbound "
             "gate (not on the allow-list) — it did not go out"
         )
     return out
@@ -223,7 +293,9 @@ def _drafts(since: datetime, include_private: bool) -> int:
     return len(_audit_rows("delegation_drafted", since, True))
 
 
-def _conversations(since: datetime, tz: tzinfo) -> tuple[list[str], list[str]]:
+def _conversations(
+    since: datetime, tz: tzinfo, now: datetime | None = None
+) -> tuple[list[str], list[str]]:
     """The principal's web chat sessions active since ``since``, newest first."""
     from openexecutive.memory import episodic
     from openexecutive.people.store import find_principal_person
@@ -247,7 +319,7 @@ def _conversations(since: datetime, tz: tzinfo) -> tuple[list[str], list[str]]:
         title = _one_line(row["title"], 100)
         if title.lower() in _UNTITLED:
             continue
-        lines.append(f"[{_local_hhmm(row['updated_at'], tz)}] {title}")
+        lines.append(f"[{_local_hhmm(row['updated_at'], tz, now)}] {title}")
         keys.append(title.lower())
         if len(lines) >= _CONVERSATIONS_MAX:
             break
@@ -369,11 +441,11 @@ def gather_live_signals(
     stuck: list[str] = []
     total = shown = 0
     try:
-        inbound, total, shown, stuck, inbound_keys = _inbound(since, tz, include_private)
+        inbound, total, shown, stuck, inbound_keys = _inbound(since, tz, include_private, now)
     except Exception:
         logger.exception("live_signals: inbound read failed")
     try:
-        stuck = _outbound_blocked(since, tz, include_private) + stuck
+        stuck = _outbound_blocked(since, tz, include_private, now) + stuck
     except Exception:
         logger.exception("live_signals: outbound-blocked read failed")
     drafts = 0
@@ -385,7 +457,7 @@ def gather_live_signals(
     conversation_keys: list[str] = []
     if include_private:
         try:
-            conversations, conversation_keys = _conversations(since, tz)
+            conversations, conversation_keys = _conversations(since, tz, now)
         except Exception:
             logger.exception("live_signals: conversations read failed")
 
@@ -438,8 +510,9 @@ def render_live_blocks(signals: LiveSignals, *, window: str) -> list[str]:
         more = signals.inbound_total - signals.inbound_shown
         parts.append(
             f"INBOUND {window.upper()} ({signals.inbound_total} message"
-            f"{'' if signals.inbound_total == 1 else 's'}, newest first, local times; "
-            f"{quoted}):"
+            f"{'' if signals.inbound_total == 1 else 's'}, newest first, local times "
+            "(a date in front when not today); [you replied] marks a message you "
+            f"already answered; {quoted}):"
         )
         parts.extend(f"- {line}" for line in signals.inbound)
         if more > 0:

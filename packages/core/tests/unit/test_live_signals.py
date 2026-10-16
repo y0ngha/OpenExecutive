@@ -264,3 +264,55 @@ def test_the_calendar_is_placed_at_the_real_time() -> None:
         _since(), now=now, include_private=True, calendar=events,
     )
     assert signals.calendar == ("IN PROGRESS 10:30–11:00 Pricing review", "14:00–14:30 Call")
+
+
+def _slack(logger: AuditLogger, user: str, text: str, session: str) -> None:
+    logger.log(
+        "integration_inbound", f"Inbound slack from user={user} channel=D1: {text}",
+        actor="slack", session_id=session,
+        details={"channel": "slack", "slack_user": user, "slack_channel": "D1"},
+    )
+
+
+def test_chat_senders_read_by_their_people_name(
+    audit: AuditLogger, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Slack row names its sender by account id; the brief shows who it is,
+    and marks the principal's own messages as theirs."""
+    from openexecutive.people import store as people_store
+
+    people = {
+        "U1": SimpleNamespace(full_name="Seona Ham", is_principal=True),
+        "U2": SimpleNamespace(full_name="Yongha", is_principal=False),
+    }
+    monkeypatch.setattr(
+        people_store, "find_person_by_slack_id", lambda uid, **k: people.get(uid)
+    )
+    _slack(audit, "U1", "where to?", "slack:dm:U1")
+    _slack(audit, "U2", "is the wiki done?", "slack:dm:U2")
+    _slack(audit, "U9", "hello", "slack:dm:U9")
+
+    joined = "\n".join(live_signals.gather_live_signals(_since(), include_private=True).inbound)
+
+    assert "slack from Seona Ham (the principal): where to?" in joined
+    assert "slack from Yongha: is the wiki done?" in joined
+    assert "slack from a Slack user: hello" in joined
+    assert "U1" not in joined and "channel=" not in joined
+
+
+def test_an_answered_message_is_marked(audit: AuditLogger) -> None:
+    _slack(audit, "U1", "where to?", "slack:dm:U1")
+    audit.log("chat_turn", "Executive: Dongdaemun market", actor="executive",
+              session_id="slack:dm:U1")
+    _slack(audit, "U2", "still there?", "slack:dm:U2")
+
+    lines = live_signals.gather_live_signals(_since(), include_private=False).inbound
+
+    assert [line.endswith("[you replied]") for line in lines] == [False, True]
+
+
+def test_a_message_from_another_day_carries_its_date() -> None:
+    now = datetime(2026, 10, 16, 8, 0, tzinfo=UTC)
+    assert live_signals._local_hhmm("2026-10-16T07:30:00+00:00", UTC, now) == "07:30"
+    assert live_signals._local_hhmm("2026-10-15T18:48:00+00:00", UTC, now) == "10-15 18:48"
+    assert live_signals._local_hhmm("2026-10-15T18:48:00+00:00", UTC) == "18:48"

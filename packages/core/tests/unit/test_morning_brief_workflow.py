@@ -529,3 +529,31 @@ async def test_the_first_week_block_reaches_the_brief_its_fingerprint_and_privac
     assert result(delivered)["private_to_principal"] is True
     assert result(shared)["brief_fingerprint"] == result(plain)["brief_fingerprint"]
     assert result(delivered)["brief_fingerprint"] != result(shared)["brief_fingerprint"]
+
+
+def test_scheduled_today_lists_only_todays_reminders(monkeypatch) -> None:
+    """A 08:00 brief and a 08:00 reminder once named two different plans for
+    the day: the brief now sees what goes out today."""
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    from openexecutive.memory import workspace_settings
+    from openexecutive.workflows.morning_brief import scheduled_today_block
+
+    monkeypatch.setattr(
+        workspace_settings, "get_user_timezone", lambda *a, **k: ZoneInfo("Asia/Seoul")
+    )
+    now = datetime(2026, 10, 15, 23, 0, 13, tzinfo=UTC)  # 08:00 Friday in Seoul
+    data = {"in_flight": [
+        {"run_at": "2026-10-15T23:00:00+00:00", "intent": "Friday: cafe shoot, 3h",
+         "target": "Seona", "channel": "slack_dm"},
+        {"run_at": "2026-10-17T00:00:00+00:00", "intent": "Saturday: edit the cuts",
+         "target": "Seona", "channel": "slack_dm"},
+    ]}
+
+    block = scheduled_today_block(data, now)
+
+    assert block.startswith("SCHEDULED TO GO OUT TODAY")
+    assert "- [08:00] to Seona: Friday: cafe shoot, 3h" in block
+    assert "Saturday" not in block
+    assert scheduled_today_block({"in_flight": []}, now) == ""

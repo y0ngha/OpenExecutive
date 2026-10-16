@@ -8,6 +8,8 @@ Two distinct surfaces:
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from openexecutive.briefing.narrative import (
     BRIEFING_NARRATIVE_SYSTEM,
     STANDALONE_BRIEF_SYSTEM,
@@ -226,3 +228,54 @@ def test_quoted_text_can_never_start_a_block_header() -> None:
         assert not line.startswith("NEEDS YOU")
         assert not line.startswith("- wire")
     assert "  > - real flag" in out
+
+
+def test_activity_is_dated_in_the_workspace_timezone(monkeypatch) -> None:
+    """A DM sent at 08:00 in Seoul is 23:00 UTC the day before; the brief
+    reads it under the local day, and is told its 'today' is that day."""
+    from zoneinfo import ZoneInfo
+
+    from openexecutive.briefing.narrative import render_briefing_context
+    from openexecutive.memory import workspace_settings
+
+    monkeypatch.setattr(
+        workspace_settings, "get_user_timezone", lambda *a, **k: ZoneInfo("Asia/Seoul")
+    )
+    out = render_briefing_context(
+        period_label="2026-10-16", today_data={}, since=datetime(2026, 10, 15, 23, 0, tzinfo=UTC),
+        activity=[{"at": "2026-10-15T23:00:32+00:00", "kind": "dm_sent", "summary": "today: shoot"}],
+    )
+    assert "- [2026-10-16] dm_sent: today: shoot" in out
+    assert "its 'today' is that day" in out
+
+
+def test_solo_brief_never_builds_a_top_three_from_activity() -> None:
+    from openexecutive.briefing.narrative import STANDALONE_BRIEF_SOLO_SYSTEM
+
+    assert "never build it from OE ACTIVITY or CONVERSATIONS" in STANDALONE_BRIEF_SOLO_SYSTEM
+
+
+async def test_the_brief_has_room_to_finish(monkeypatch) -> None:
+    """The 230-270 word cap was sized in English; a Korean brief at 600
+    tokens stopped mid-bullet."""
+    from types import SimpleNamespace
+
+    from openexecutive.briefing import narrative
+
+    seen: dict = {}
+
+    class _Provider:
+        async def messages_create(self, **kwargs):
+            seen.update(kwargs)
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text="ok")], stop_reason="end_turn",
+                usage=None,
+            )
+
+    monkeypatch.setattr("openexecutive.providers.get_provider", lambda model: _Provider())
+    monkeypatch.setattr("openexecutive.audit.usage.log_model_usage", lambda *a, **k: None)
+    out = await narrative.synthesize_briefing_narrative(
+        today_data={}, activity=[], period_label="p", rendered_context="ctx",
+    )
+    assert out == "ok"
+    assert seen["max_tokens"] == narrative.BRIEF_MAX_TOKENS >= 1500

@@ -826,6 +826,7 @@ _REPAIR_INSTRUCTION = (
 async def _repair(draft: str, context: str, system: str, report: GroundingReport) -> str:
     from openexecutive.agents.utility_fast import get_fast_model
     from openexecutive.audit.usage import log_model_usage
+    from openexecutive.briefing.narrative import BRIEF_MAX_TOKENS
     from openexecutive.providers import get_provider
 
     model = get_fast_model()
@@ -835,7 +836,7 @@ async def _repair(draft: str, context: str, system: str, report: GroundingReport
     )
     response = await get_provider(model).messages_create(
         model=model,
-        max_tokens=700,
+        max_tokens=BRIEF_MAX_TOKENS,
         system=system,
         messages=[{"role": "user", "content": content}],
     )

@@ -369,6 +369,19 @@ def _own_words(session: Any) -> str | None:
     return own_words(pin.speaker_text if pin is not None else "")
 
 
+def _spoken_forms(spoken: str) -> tuple[str, ...]:
+    """``spoken`` normalized for a quote match, twice: as the commitment
+    check reads it (a line break is a sentence end) and with each line break
+    read as a space, so a quote of a sentence the speaker wrapped onto two
+    lines ("...소싱할때\n나가는거야") still matches."""
+    from openexecutive.memory.episodic import _normalize_for_quote_match
+
+    return (
+        _normalize_for_quote_match(spoken),
+        _normalize_for_quote_match(spoken.replace("\n", " ")),
+    )
+
+
 def _quote_error(quote: str, session: Any) -> str | None:
     """None when ``quote`` is really the principal's own words this turn."""
     from openexecutive.memory.episodic import _normalize_for_quote_match
@@ -388,7 +401,7 @@ def _quote_error(quote: str, session: Any) -> str | None:
             "apart from the speaker's own words. Ask them to state the fact in a "
             "message of its own."
         )
-    if nq not in _normalize_for_quote_match(spoken):
+    if not any(nq in form for form in _spoken_forms(spoken)):
         return (
             "source_quote is not in what the speaker wrote this turn. Quote their "
             "exact words, or — if they did not state it (a document, an earlier "
@@ -403,7 +416,10 @@ def _in_own_words(text: str, session: Any) -> bool:
 
     spoken = _own_words(session)
     needle = _normalize_for_quote_match(text)
-    return bool(needle) and spoken is not None and needle in _normalize_for_quote_match(spoken)
+    return (
+        bool(needle) and spoken is not None
+        and any(needle in form for form in _spoken_forms(spoken))
+    )
 
 
 # Linear, whatever the input: the lookbehind stops a match starting inside a
@@ -470,6 +486,33 @@ def _bare(word: str) -> str:
     return re.sub(r"['’]s$", "", word).strip("'’-")
 
 
+# A word in a script without capitals (Korean, Japanese, Chinese, Thai…)
+# can't be told apart from a name, so every one of them is checked. Korean
+# glues particles and endings onto the stem ("지출도" said, "지출은" written;
+# "나가는거야" said, "나간다" written), so such a word counts as said when a
+# said word shares its stem: all but at most its last two characters, and at
+# least two, where the stem's last syllable may differ in its final
+# consonant (나가 / 나간). A single character is a particle or a function word.
+_CASELESS_SUFFIX_MAX = 2
+# Hangul final consonants (jongseong) once a syllable is decomposed (NFD).
+_JONGSEONG = re.compile("[\u11a8-\u11c2]$")
+
+
+def _caseless(word: str) -> bool:
+    return not any(c.isupper() or c.islower() for c in word)
+
+
+def _said_caseless(word: str, said: set[str]) -> bool:
+    if len(word) <= 1:
+        return True
+    stem = max(2, len(word) - _CASELESS_SUFFIX_MAX)
+    head = _JONGSEONG.sub("", unicodedata.normalize("NFD", word[:stem]))
+    return any(
+        len(s) >= stem and unicodedata.normalize("NFD", s).startswith(head)
+        for s in said if _caseless(s)
+    )
+
+
 def _unsaid_claim_words(statement: str, session: Any) -> list[str]:
     """The names and date words in ``statement`` the principal did not write
     this turn. A figure-free claim carried in from a document ("Cedar Court's
@@ -493,6 +536,8 @@ def _unsaid_claim_words(statement: str, session: Any) -> list[str]:
         bare = _bare(m.group(0))
         key = bare.lower()
         if not key or key in _GLUE or key in said:
+            continue
+        if _caseless(bare) and _said_caseless(bare, said):
             continue
         name_like = bare[0].isupper() or not bare.isascii()
         if key in _DATE_WORDS or (name_like and i > 0):

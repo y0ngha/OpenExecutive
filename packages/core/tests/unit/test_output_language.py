@@ -152,3 +152,13 @@ def test_the_block_is_the_same_on_every_call(monkeypatch):
     first = apply_output_language({"system": [CACHED], "messages": []})
     second = apply_output_language({"system": [CACHED], "messages": []})
     assert first["system"][-1] == second["system"][-1]
+
+
+def test_message_headings_are_written_in_the_language():
+    # The briefs' prompts name their sections in English (**Top call**); a
+    # Korean brief kept them in English until the block said otherwise.
+    from openexecutive.providers.output_language import instruction
+
+    text = instruction("ko")
+    assert text is not None
+    assert "section headings and labels" in text and "**Top call**" in text

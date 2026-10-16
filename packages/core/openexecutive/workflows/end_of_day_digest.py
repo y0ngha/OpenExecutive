@@ -380,6 +380,7 @@ class EndOfDayDigestWorkflow(Workflow):
 
         from openexecutive.agents.utility_fast import get_fast_model
         from openexecutive.audit.usage import log_model_usage
+        from openexecutive.briefing.narrative import BRIEF_MAX_TOKENS
         from openexecutive.memory.facts import with_standing_facts
         from openexecutive.providers import get_provider
 
@@ -394,7 +395,7 @@ class EndOfDayDigestWorkflow(Workflow):
             model = get_fast_model()
             response = await get_provider(model).messages_create(
                 model=model,
-                max_tokens=600,
+                max_tokens=BRIEF_MAX_TOKENS,
                 system=system,
                 messages=[{"role": "user", "content": user_content}],
             )

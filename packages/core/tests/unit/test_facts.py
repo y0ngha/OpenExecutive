@@ -825,3 +825,39 @@ def scenario_has_facts(scenario: dict[str, Any]) -> bool:
     from openexecutive.evals.runner import scenario_standing_facts
 
     return scenario_standing_facts(scenario).startswith(facts.FACTS_BLOCK_HEADER)
+
+
+@pytest.mark.parametrize(
+    ("said", "statement", "ok"),
+    [
+        # Korean glues particles onto the stem: 지출도 said, 지출은 written.
+        ("월 지출도 고정 지출 없고 그때그때 재료나 소싱할때 나가는거야",
+         "월 지출은 고정 지출이 없고 재료나 소싱할 때 나간다.", True),
+        ("펀딩은 수단이지 우선순위 및 목표 자체가 아니야",
+         "펀딩은 수단일 뿐 우선순위나 목표 자체는 아니다.", True),
+        # A word from an earlier turn or a document is still refused.
+        ("펀딩은 수단이지 우선순위 및 목표 자체가 아니야",
+         "펀딩은 교보문고에서 시도해볼 수단이다.", False),
+    ],
+)
+def test_korean_word_endings_count_as_the_principals_words(
+    principal: SimpleNamespace, said: str, statement: str, ok: bool,
+) -> None:
+    principal.turn_delegation.speaker_text = said
+    out = _call(fact_tools.handle_remember_fact, subject="지출",
+                statement=statement, source_quote=said)
+    if ok:
+        assert out["status"] == "ok", out
+    else:
+        assert "which the speaker did not write" in out["error"]
+        assert "교보문고" in out["error"]
+
+
+def test_a_quote_may_span_the_speakers_line_break(principal: SimpleNamespace) -> None:
+    principal.turn_delegation.speaker_text = (
+        "월 지출도 고정 지출 없고 그때그때 재료나 소싱할때\n나가는거야. 우선 없다고 쳐"
+    )
+    out = _call(fact_tools.handle_remember_fact, subject="월 지출",
+                statement="월 지출도 고정 지출 없고 그때그때 재료나 소싱할때 나가는거야",
+                source_quote="월 지출도 고정 지출 없고 그때그때 재료나 소싱할때 나가는거야")
+    assert out["status"] == "ok", out
