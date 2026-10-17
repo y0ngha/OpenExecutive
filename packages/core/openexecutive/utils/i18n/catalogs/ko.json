@@ -978,5 +978,6 @@
   "weekly_review.status.on_track": "순조로움",
   "weekly_review.title": "주간 리뷰",
   "weekly_review.top_three": "다음 주 우선순위 3가지",
+  "weekly_review.week_of": "{month} {day}일 주",
   "workflows.run.no_artifact": "워크플로가 문서를 만들지 못하고 끝났어요."
 }

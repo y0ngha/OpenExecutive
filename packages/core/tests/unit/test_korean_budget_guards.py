@@ -108,3 +108,14 @@ def test_the_held_back_note_is_in_the_language(monkeypatch) -> None:
     assert "1줄을 뺐어요" in g.held_back_note(1)
     assert "3줄을 뺐어요" in g.held_back_note(3)
     assert "보내지 않았어요" in g.held_back_all()
+
+
+def test_weekly_review_week_label_is_in_the_language(monkeypatch) -> None:
+    from openexecutive.memory import workspace_settings
+    from openexecutive.workflows.weekly_review import _default_period
+
+    monkeypatch.setattr(workspace_settings, "get_user_timezone", lambda *a, **k: UTC)
+    now = datetime(2026, 10, 16, 7, 0, tzinfo=UTC)
+    assert _default_period(now) == "Week of Oct 12"
+    monkeypatch.setenv("OE_LANGUAGE", "ko")
+    assert _default_period(now) == "10월 12일 주"

@@ -287,15 +287,18 @@ class WeeklyReviewWorkflow(Workflow):
 
 
 def _default_period(now: datetime) -> str:
-    """"Week of Sep 21" — the week's Monday in the user's zone."""
+    """"Week of Sep 21" — the week's Monday in the user's zone, in
+    OE_LANGUAGE ("10월 12일 주")."""
     from openexecutive.memory.workspace_settings import get_user_timezone
-    from openexecutive.orchestrator.department_tools import default_period_value
+    from openexecutive.utils.i18n import tr
+    from openexecutive.utils.i18n.dates import day_parts
 
     try:
         today = now.astimezone(get_user_timezone()).date()
     except Exception:
         today = now.date()
-    return default_period_value("week", today)
+    monday = today - timedelta(days=today.weekday())
+    return tr("weekly_review.week_of", "Week of {month} {day}", **day_parts(monday))
 
 
 def _goal_row(goal: Any, *, status: str, was: str | None, rationale: str) -> dict[str, Any]:
