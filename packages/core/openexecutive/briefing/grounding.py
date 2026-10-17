@@ -64,6 +64,37 @@ _HELD_LINE_CHARS = 400
 SOURCES_HEADER = "**Sources**"
 
 
+def held_back_note(n: int) -> str:
+    """The line a brief ends with when the grounding pass left lines out,
+    in OE_LANGUAGE (``HELD_BACK_NOTE`` is the English)."""
+    from openexecutive.utils.i18n import tr
+
+    if n == 1:
+        return tr(
+            "grounding.held_back.one",
+            "_I left out 1 line that named people or figures I couldn't match to "
+            "your data. It's under Left out of your brief on Home._",
+        )
+    return tr(
+        "grounding.held_back.many",
+        "_I left out {n} lines that named people or figures I couldn't match to "
+        "your data. They're under Left out of your brief on Home._",
+        n=n,
+    )
+
+
+def held_back_all() -> str:
+    """The whole brief when every line was left out, in OE_LANGUAGE."""
+    from openexecutive.utils.i18n import tr
+
+    return tr(
+        "grounding.held_back.all",
+        "Everything I drafted for this brief named people or figures I couldn't "
+        "match to your data, so I've held it back. The lines are under Left out "
+        "of your brief on Home.",
+    )
+
+
 def sources_header() -> str:
     """The citations footer's header in OE_LANGUAGE."""
     from openexecutive.utils.i18n import tr
@@ -421,6 +452,9 @@ _KO_NAME_SLOT = re.compile(
     r"|(?<![가-힣])(?P<titled>[가-힣]{3})\s(?:대표|팀장|과장|부장|차장|이사|실장|"
     r"본부장|매니저|사장|상무|전무|주임|대리|사원|선임|책임|수석|원장|교수|작가|기자|"
     r"변호사|세무사|회계사)"
+    # …and the title ends there or takes an honorific or particle: "컷에서
+    # 대표 후보" is a product short-list, not a person called 컷에서.
+    r"(?=님|께|에게|한테|이랑|랑|이|은|는|과|와|의|을|를|도|만|[^가-힣]|$)"
 )
 _KO_NOT_NAMES = _wordset(
     "대표 고객 팀장 사장 선생 부장 과장 차장 이사 실장 원장 회장 기사 작가 담당자 담당 "
@@ -432,10 +466,17 @@ _KO_NOT_NAMES = _wordset(
 )
 
 
+_KO_TRAILING_PARTICLES = (
+    "에서", "에게", "한테", "으로", "까지", "부터", "처럼", "보다", "이랑", "하고",
+)
+
+
 def _korean_names(line: str) -> list[str]:
     out: list[str] = []
     for m in _KO_NAME_SLOT.finditer(line):
         name = m.group("name") or m.group("titled")
+        if name.endswith(_KO_TRAILING_PARTICLES):
+            continue  # 컷에서, 회의에서: a word with its particle, not a name
         if name in _KO_NOT_NAMES or any(name.endswith(n) for n in ("대표", "팀장", "님")):
             continue
         out.append(name)
@@ -985,18 +1026,18 @@ async def ground_brief(
         result.names_bad = report.names_bad[:10]
         result.figures_bad = report.figures_bad[:10]
         out = text
+        all_held = held_back_all()
         if mode == "enforce":
             if not report.ok:
                 out, result.held = _drop_lines(text, {c.index for c in report.bad_lines})
                 if any(ln.strip() and not _is_header(ln) for ln in out.splitlines()):
                     report = check_text(out, sources, index=idx)
                 else:
-                    out = HELD_BACK_ALL
-            if citations_enabled() and out != HELD_BACK_ALL:
+                    out = all_held
+            if citations_enabled() and out != all_held:
                 out, result.cited = _cite(out, report)
-            if result.held and out != HELD_BACK_ALL:
-                n = len(result.held)
-                note = HELD_BACK_NOTE.format(n=n, s="" if n == 1 else "s")
+            if result.held and out != all_held:
+                note = held_back_note(len(result.held))
                 body, sep, footer = _split_sources(out)
                 out = f"{body}\n\n{note}" + (sep + footer if sep else "")
         else:

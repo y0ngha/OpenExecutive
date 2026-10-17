@@ -87,3 +87,24 @@ def test_grounding_reads_korean_amounts_and_names() -> None:
     report = g.check_text("김민수님이 1,200만 원 견적을 보냈어요\n이영희님은 5억 원을 원해요", src, [])
     assert (report.lines[0].names_bad, report.lines[0].figures_bad) == ([], [])
     assert (report.lines[1].names_bad, report.lines[1].figures_bad) == (["이영희"], ["5억 원"])
+
+
+def test_a_word_before_a_title_is_not_always_a_name() -> None:
+    """The 10/17 brief lost "오늘 보정하는 컷에서 대표 후보를 먼저 골라 보면" because
+    컷에서 sat before 대표."""
+    from openexecutive.briefing import grounding as g
+
+    assert g.extract_names("오늘 보정하는 컷에서 대표 후보를 먼저 골라 보면 어때요?") == []
+    assert g.extract_names("회의에서 팀장 의견을 들어요") == []
+    assert g.extract_names("박지훈 팀장에게 보내요") == ["박지훈"]
+    assert g.extract_names("박지훈 대표님이 답했어요") == ["박지훈"]
+
+
+def test_the_held_back_note_is_in_the_language(monkeypatch) -> None:
+    from openexecutive.briefing import grounding as g
+
+    assert "Left out of your brief" in g.held_back_note(2)
+    monkeypatch.setenv("OE_LANGUAGE", "ko")
+    assert "1줄을 뺐어요" in g.held_back_note(1)
+    assert "3줄을 뺐어요" in g.held_back_note(3)
+    assert "보내지 않았어요" in g.held_back_all()
