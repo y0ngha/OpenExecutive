@@ -2343,7 +2343,10 @@ async def _run_principal_brief(action: ScheduledAction, now: datetime) -> None:
             # as one "While you were away" block (people.held_messages).
             delivered_text, held_ids = _with_held_messages(kind, artifact)
             try:
-                delivery = await _deliver_to_principal(delivered_text, label=workflow.title)
+                from openexecutive.orchestrator.schedule_tools import sent_as_brief
+
+                with sent_as_brief():
+                    delivery = await _deliver_to_principal(delivered_text, label=workflow.title)
             except BaseException:
                 _unclaim_held(held_ids)
                 raise

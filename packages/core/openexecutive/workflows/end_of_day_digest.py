@@ -310,7 +310,12 @@ class EndOfDayDigestWorkflow(Workflow):
             today_data = {"departments": [], "people": [], "proposals": []}
 
         try:
-            activity_response = today_route._build_activity(30, since=since)
+            # Without the rhythm runs and brief deliveries: "finished the
+            # Executive Reflection" and the morning brief's own text are not
+            # the day's work.
+            activity_response = today_route._build_activity(
+                30, since=since, exclude_workflows=today_route.RHYTHM_WORKFLOWS,
+            )
             activity = [item.model_dump() for item in activity_response.items]
         except Exception:
             logger.exception("eod_digest: /today/activity aggregation failed")

@@ -98,6 +98,26 @@ def _is_contact_ref(channel: str, channel_ref: str, finder: Callable[..., Any]) 
     return person is not None and getattr(person, "kind", "team") != "team"
 
 
+# The kind a direct send is recorded under in the activity feed. The
+# scheduler's brief deliveries set BRIEF_DELIVERY_KIND (``sent_as_brief``)
+# so the next brief and the EoD digest don't read their own earlier text as
+# something the Executive did that day.
+BRIEF_DELIVERY_KIND = "brief_delivery"
+send_activity_kind: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "send_activity_kind", default="ad_hoc"
+)
+
+
+@contextlib.contextmanager
+def sent_as_brief() -> Iterator[None]:
+    """Record the sends inside this block as brief deliveries."""
+    token = send_activity_kind.set(BRIEF_DELIVERY_KIND)
+    try:
+        yield
+    finally:
+        send_activity_kind.reset(token)
+
+
 def _record_send_to_activity(
     *,
     channel: str,
@@ -148,6 +168,7 @@ def _record_send_to_activity(
                 channel_ref=channel_ref,
                 intent_text=intent_text[:160],
                 originating_session_id=session_id,
+                kind=send_activity_kind.get(),
                 status="done",
             )
         except Exception as exc:

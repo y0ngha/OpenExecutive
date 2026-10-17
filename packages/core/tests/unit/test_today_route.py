@@ -2426,3 +2426,66 @@ def test_a_failed_run_card_carries_its_run(client: TestClient) -> None:
     by_headline = {p["headline"]: p for p in client.get("/today").json()["proposals"]}
     assert by_headline["Finance check-in didn't finish"]["failed_run_id"] == "r-9"
     assert by_headline["other"]["failed_run_id"] is None  # only a failure card names a run
+
+
+def test_briefs_leave_out_their_own_deliveries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The 10/16 EoD digest reported the morning brief's own (wrong) Top call
+    as something done that day. A brief delivery stays on the rail but not
+    in a brief's activity."""
+    from openexecutive.orchestrator.schedule_tools import BRIEF_DELIVERY_KIND
+
+    db = tmp_path / "act_brief.db"
+    _setup_isolated_db(db, monkeypatch)
+    now = datetime.now(UTC).isoformat()
+    episodic.insert_scheduled_action(
+        run_at=now, channel="slack_dm", channel_ref="alice", status="done",
+        intent_text="**Top call** go to the market", kind=BRIEF_DELIVERY_KIND, db_path=db,
+    )
+    episodic.insert_scheduled_action(
+        run_at=now, channel="slack_dm", channel_ref="alice", status="done",
+        intent_text="Friday reminder", kind="ad_hoc", db_path=db,
+    )
+
+    rail = [i.summary for i in today_route._build_activity(limit=20).items]
+    brief = [
+        i.summary for i in today_route._build_activity(
+            limit=20, exclude_workflows=today_route.RHYTHM_WORKFLOWS,
+        ).items
+    ]
+    assert "**Top call** go to the market" in rail
+    assert brief == ["Friday reminder"]
+
+
+def test_brief_sends_are_recorded_as_brief_deliveries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openexecutive.orchestrator import schedule_tools
+
+    db = tmp_path / "act_kind.db"
+    _setup_isolated_db(db, monkeypatch)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        episodic, "insert_scheduled_action", lambda **kw: seen.append(kw["kind"]) or 1
+    )
+    with schedule_tools.sent_as_brief():
+        schedule_tools._record_send_to_activity(
+            channel="slack_dm", channel_ref="alice", intent_text="brief",
+        )
+    schedule_tools._record_send_to_activity(
+        channel="slack_dm", channel_ref="alice", intent_text="reminder",
+    )
+    assert seen == [schedule_tools.BRIEF_DELIVERY_KIND, "ad_hoc"]
+
+
+def test_default_departments_are_seeded_in_the_language(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OE_LANGUAGE", "ko")
+    db = tmp_path / "seed.db"
+    episodic.initialize_db(db)
+    dept_store.initialize_db(db)
+    dept_store.seed_default_departments(db_path=db)
+    titles = {d.config.slug: d.config.title for d in dept_store.list_departments(db_path=db)}
+    assert titles["product"] == "제품" and titles["hr"] == "인사"

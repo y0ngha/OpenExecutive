@@ -1174,9 +1174,14 @@ def _build_activity(
     }
 
     from openexecutive.alerts.models import is_private_alert, visible_alert
+    from openexecutive.orchestrator.schedule_tools import BRIEF_DELIVERY_KIND
 
     for action in list_scheduled_actions(status="done", limit=pool, exclude_internal=True):
         if action.kind == "nudge_scan" or action.channel == "__internal__":
+            continue
+        # The briefs leave out their own deliveries with the rhythm runs: a
+        # brief re-read as "what I did today" repeats its own mistakes.
+        if exclude_workflows and action.kind == BRIEF_DELIVERY_KIND:
             continue
         # `created_at` is when the action was queued, not when it fired.
         # For ad-hoc follow-ups these are typically minutes apart, but

@@ -31,6 +31,7 @@ from openexecutive.departments.models import (
     GoalStatus,
     PeriodType,
 )
+from openexecutive.utils.i18n import MessageTable
 from openexecutive.utils.slug import DEPARTMENT_SLUG_FALLBACK, slugify
 
 logger = logging.getLogger(__name__)
@@ -414,6 +415,18 @@ def _row_to_state(row: sqlite3.Row, goals: list[Goal]) -> DepartmentState:
 
 _SEEDED_META_KEY = "default_departments_seeded"
 
+# The eight default departments' titles, in OE_LANGUAGE at seed time.
+DEFAULT_TITLES = MessageTable("departments.default_title", {
+    "strategy": "Strategy",
+    "finance": "Finance",
+    "hr": "People & Talent",
+    "legal": "Legal",
+    "operations": "Operations",
+    "marketing": "Marketing",
+    "product": "Product",
+    "board_comms": "Board & Investor Comms",
+})
+
 
 def _defaults_seeded(conn: sqlite3.Connection) -> bool:
     """True once the default departments have been seeded (or adopted) for this DB."""
@@ -470,7 +483,9 @@ def seed_default_departments(db_path: Path | None = None) -> int:
                 """,
                 (
                     slug,
-                    title,
+                    # Seeded in the deployment's language (the title is shown
+                    # as stored, in the UI and the briefs).
+                    DEFAULT_TITLES.get(slug) or title,
                     specialist_key,
                     charter.mission,
                     json.dumps(charter.scope),
