@@ -1016,10 +1016,20 @@ class ExecutiveReflectionWorkflow(Workflow):
                 )
             final_text = final_text + "\n".join(log_lines) if final_text.endswith("\n") else final_text + "\n" + "\n".join(log_lines)
         if held_flags:
+            from openexecutive.utils.i18n import tr
+
             n = len(held_flags)
-            final_text += (
-                f"\n\n_Grounding: held back {n} flag{'' if n == 1 else 's'} naming "
-                "people or figures not in the input._"
+            final_text += "\n\n" + (
+                tr(
+                    "reflection.held_flags.one",
+                    "_Grounding: held back 1 flag naming people or figures not in the input._",
+                )
+                if n == 1
+                else tr(
+                    "reflection.held_flags.many",
+                    "_Grounding: held back {n} flags naming people or figures not in the input._",
+                    n=n,
+                )
             )
 
         yield WorkflowEvent(

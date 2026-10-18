@@ -586,6 +586,8 @@
   "onboarding.route.sign_save_setup": "설정을 저장하려면 로그인하세요.",
   "onboarding.understand.timeout": "설정 도우미의 응답이 너무 오래 걸렸어요.",
   "onboarding.understand.unavailable": "지금은 설정 도우미를 쓸 수 없어요.",
+  "reflection.held_flags.many": "_입력에서 확인되지 않는 사람이나 숫자가 들어간 항목 {n}개를 뺐어요._",
+  "reflection.held_flags.one": "_입력에서 확인되지 않는 사람이나 숫자가 들어간 항목 1개를 뺐어요._",
   "reminders.message": "{month} {day}일에 설정한 리마인더예요: {text}",
   "reminders.message.undated": "설정한 리마인더예요: {text}",
   "setup.ago.hours": "{n}시간 전",

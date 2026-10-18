@@ -466,6 +466,18 @@ _KO_NOT_NAMES = _wordset(
 )
 
 
+# Common Korean surnames (about 98% of people). Only a word before a title
+# that opens with one reads as a full name; anything else there ("있으면
+# 대표님", "컷에서 대표 후보") is the sentence going on.
+_KO_SURNAMES = tuple(
+    "김이박최정강조윤장임한오서신권황안송류유전홍고문양손배백허남심노하곽성차주우구민"
+    "진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편"
+    "용예경봉사부가복태목형계피두감음빈동온호범좌팽승간상시갈단견당"
+)
+# Last syllables of a word before a title that make it the sentence, not a
+# name (이번에, 오늘은, 자료를, 없으면). A name ending in one (김정은) goes
+# unchecked there: missing a check is safer than dropping a good line.
+_KO_TITLED_ENDINGS = tuple("에은는을를도만의로와과면고게요니데엔랑")
 _KO_TRAILING_PARTICLES = (
     "에서", "에게", "한테", "으로", "까지", "부터", "처럼", "보다", "이랑", "하고",
 )
@@ -475,6 +487,12 @@ def _korean_names(line: str) -> list[str]:
     out: list[str] = []
     for m in _KO_NAME_SLOT.finditer(line):
         name = m.group("name") or m.group("titled")
+        if m.group("titled") and (
+            not name.startswith(_KO_SURNAMES) or name.endswith(_KO_TITLED_ENDINGS)
+        ):
+            # 있으면 대표님, 컷에서 대표, 오늘은 대표님: a full name opens with
+            # a surname and doesn't end in a particle or an ending.
+            continue
         if name.endswith(_KO_TRAILING_PARTICLES):
             continue  # 컷에서, 회의에서: a word with its particle, not a name
         if name in _KO_NOT_NAMES or any(name.endswith(n) for n in ("대표", "팀장", "님")):

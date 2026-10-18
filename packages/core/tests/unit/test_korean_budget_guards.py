@@ -119,3 +119,14 @@ def test_weekly_review_week_label_is_in_the_language(monkeypatch) -> None:
     assert _default_period(now) == "Week of Oct 12"
     monkeypatch.setenv("OE_LANGUAGE", "ko")
     assert _default_period(now) == "10월 12일 주"
+
+
+def test_a_title_needs_a_surname_before_it() -> None:
+    """The 10/18 reflection lost a flag: "아직 열려 있으면 대표님 확인이 필요해요"
+    read 있으면 as a person."""
+    from openexecutive.briefing import grounding as g
+
+    assert g.extract_names("아직 열려 있으면 대표님 확인이 필요해요.") == []
+    assert g.extract_names("자료가 없으면 팀장님께 물어봐요") == []
+    assert g.extract_names("이번에 대표님이 정해요. 오늘은 대표님 확인") == []
+    assert g.extract_names("박지훈 팀장님께 보내요, 최은영 대표와 통화") == ["박지훈", "최은영"]
