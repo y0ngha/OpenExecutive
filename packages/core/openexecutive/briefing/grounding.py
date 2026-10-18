@@ -386,6 +386,7 @@ _MD_MASK = re.compile(
 
 
 _HANGUL = re.compile(r"[가-힣]")
+_GLUED_HANGUL = re.compile(r"(?<=[A-Za-z'’])[가-힣]+$")
 
 
 def _is_name_token(word: str) -> bool:
@@ -417,6 +418,9 @@ def _segment_words(segment: str) -> list[_Word]:
     words: list[_Word] = []
     for m in _WORD_RE.finditer(segment):
         raw = m.group(0)
+        # A Korean particle glued to a Latin name ("Disrupt Marketing의",
+        # "Autumn Colors'가") is not part of it.
+        raw = _GLUED_HANGUL.sub("", raw)
         possessive = False
         if raw.lower().endswith("'s"):
             raw, possessive = raw[:-2], True

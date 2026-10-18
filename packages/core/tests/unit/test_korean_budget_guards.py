@@ -130,3 +130,11 @@ def test_a_title_needs_a_surname_before_it() -> None:
     assert g.extract_names("자료가 없으면 팀장님께 물어봐요") == []
     assert g.extract_names("이번에 대표님이 정해요. 오늘은 대표님 확인") == []
     assert g.extract_names("박지훈 팀장님께 보내요, 최은영 대표와 통화") == ["박지훈", "최은영"]
+
+
+def test_a_korean_particle_is_not_part_of_a_latin_name() -> None:
+    from openexecutive.briefing import grounding as g
+
+    src = [g.GroundingSource("c0", "ctx", "Disrupt Marketing report on Autumn Colors")]
+    report = g.check_text("Disrupt Marketing의 보고서와 Autumn Colors'가 나왔어요", src, [])
+    assert report.lines[0].names_bad == []
