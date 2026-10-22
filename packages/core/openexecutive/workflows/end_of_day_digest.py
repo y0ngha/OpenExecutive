@@ -389,7 +389,12 @@ class EndOfDayDigestWorkflow(Workflow):
 
         from openexecutive.agents.utility_fast import get_briefing_model
         from openexecutive.audit.usage import log_model_usage
-        from openexecutive.briefing.narrative import BRIEF_MAX_TOKENS
+        from openexecutive.briefing.narrative import (
+            BRIEF_MAX_TOKENS,
+            QUIET_DAY,
+            brief_text,
+            localized_quiet_line,
+        )
         from openexecutive.memory.facts import with_standing_facts
         from openexecutive.providers import get_provider
 
@@ -409,15 +414,14 @@ class EndOfDayDigestWorkflow(Workflow):
                 messages=[{"role": "user", "content": user_content}],
             )
             log_model_usage(response, model=model, actor=self.name)
-            text_blocks = [b for b in response.content if getattr(b, "type", "") == "text"]
-            artifact_text = text_blocks[0].text.strip() if text_blocks else ""
+            artifact_text = localized_quiet_line(brief_text(response, actor=self.name))
         except Exception as exc:
             logger.exception("eod_digest: synthesis failed")
             yield WorkflowEvent(type="error", message=f"Synthesis failed: {exc}")
             return
 
         if not artifact_text:
-            artifact_text = "Quiet day — nothing carrying forward."
+            artifact_text = localized_quiet_line(QUIET_DAY)
 
         # Nobody reads this before it ships: hold back any line naming a
         # person or figure the context doesn't hold, and cite the figures.

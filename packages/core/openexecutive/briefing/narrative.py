@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 # `test_briefing_narrative.py` asserts each prompt still carries its line.
 QUIET_PRINCIPAL = "Quiet right now — nothing pressing."
 QUIET_VIEWER = "Quiet right now — nothing needs you."
+QUIET_DAY = "Quiet day — nothing carrying forward."
 
 # Shared by the standalone briefs and the EoD digest: the grounding pass
 # (briefing/grounding.py) holds back any line that breaks it, so say it up front.
@@ -44,8 +45,40 @@ QUIET_VIEWER = "Quiet right now — nothing needs you."
 # the budget sits well above that so a brief never stops mid-line. The word
 # cap was sized in English, and a language such as Korean spends two to
 # three times the tokens on the same message: at 600 a Korean brief was cut
-# off in the middle of a bullet.
-BRIEF_MAX_TOKENS = 1500
+# off in the middle of a bullet, and at 1500 a long Korean morning brief
+# still was (2026-10-21).
+BRIEF_MAX_TOKENS = 3000
+
+
+def brief_text(response: Any, *, actor: str) -> str:
+    """A brief's text from the model's reply. When the reply stopped at
+    max_tokens the stop is logged and the cut-off last line dropped, so a
+    brief never goes out ending mid-sentence."""
+    blocks = [b for b in response.content if getattr(b, "type", "") == "text"]
+    text = blocks[0].text.strip() if blocks else ""
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        logger.warning("%s: the model hit max_tokens; the cut-off last line is dropped", actor)
+        head, newline, _ = text.rpartition("\n")
+        if newline and head.strip():
+            text = head.rstrip()
+    return text
+
+
+def localized_quiet_line(text: str) -> str:
+    """``text``, or the fixed quiet line in the deployment's language when
+    ``text`` is one. The prompts name the lines in English and the model
+    often writes them verbatim, like the code's own fallbacks, so a Korean
+    install got "Quiet right now — nothing pressing." in its DM."""
+    from openexecutive.utils.i18n import tr
+
+    line = text.strip()
+    if line == QUIET_PRINCIPAL:
+        return tr("briefing.quiet.principal", "Quiet right now — nothing pressing.")
+    if line == QUIET_VIEWER:
+        return tr("briefing.quiet.viewer", "Quiet right now — nothing needs you.")
+    if line == QUIET_DAY:
+        return tr("briefing.quiet.day", "Quiet day — nothing carrying forward.")
+    return text
 
 GROUNDING_RULE = (
     "Name only people and figures that appear in the context, exactly as "
@@ -743,10 +776,7 @@ async def synthesize_briefing_narrative(
         messages=[{"role": "user", "content": user_content}],
     )
     log_model_usage(response, model=model, actor="briefing_narrative")
-    if getattr(response, "stop_reason", None) == "max_tokens":
-        logger.warning("briefing_narrative: the model hit max_tokens; the text is cut off")
-    text_blocks = [b for b in response.content if getattr(b, "type", "") == "text"]
-    return text_blocks[0].text.strip() if text_blocks else ""
+    return localized_quiet_line(brief_text(response, actor="briefing_narrative"))
 
 
 __all__ = [
@@ -756,6 +786,9 @@ __all__ = [
     "GROUNDING_RULE",
     "BRIEFING_NARRATIVE_SYSTEM",
     "BRIEF_MAX_TOKENS",
+    "QUIET_DAY",
+    "brief_text",
+    "localized_quiet_line",
     "local_date",
     "QUIET_PRINCIPAL",
     "QUIET_VIEWER",

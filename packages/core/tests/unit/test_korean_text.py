@@ -15,6 +15,9 @@ from openexecutive.utils.korean_text import (
     ("나간다", "나가는거야"), ("수단일", "수단이지"), ("지출은", "지출도"),
     ("우선순위나", "우선순위"), ("자체는", "자체가"), ("아니다", "아니야"),
     ("김민수에게", "김민수"), ("소싱할", "소싱할때"), ("김민지가", "김민지"),
+    # 하다 / 되다 on a noun, a stem inside a compound, a weekday, grammar words.
+    ("신청을", "신청했어"), ("신청", "신청했어"), ("결정되며", "결정되고"),
+    ("준비", "준비시간이"), ("목은", "목에"), ("있다", "제안해줘"), ("않는다", "제안해줘"),
 ])
 def test_particles_and_endings_aside_a_word_is_said(word: str, said: str) -> None:
     assert said_caseless(word, [said])
@@ -26,6 +29,8 @@ def test_particles_and_endings_aside_a_word_is_said(word: str, said: str) -> Non
     # A name whose last syllable looks like a particle or an ending.
     ("손하나", "손하은"), ("고하나", "고하은"), ("전민지", "전민서"), ("문지은", "문지나"),
     ("하나", "하은"), ("손하나가", "손하은"),
+    # Inside a said word only with a suffix a both-sides match takes off.
+    ("손하나", "손하은이"), ("문지은", "문지나가"), ("하나", "하은이"),
 ])
 def test_a_different_name_is_not_said(word: str, said: str) -> None:
     assert not said_caseless(word, [said])

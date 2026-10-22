@@ -278,4 +278,29 @@ async def test_the_brief_has_room_to_finish(monkeypatch) -> None:
         today_data={}, activity=[], period_label="p", rendered_context="ctx",
     )
     assert out == "ok"
-    assert seen["max_tokens"] == narrative.BRIEF_MAX_TOKENS >= 1500
+    assert seen["max_tokens"] == narrative.BRIEF_MAX_TOKENS >= 3000
+
+
+def test_a_brief_cut_at_max_tokens_loses_its_cut_line() -> None:
+    from types import SimpleNamespace
+
+    from openexecutive.briefing.narrative import brief_text
+
+    def reply(text: str, stop: str) -> SimpleNamespace:
+        return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason=stop)
+
+    cut = "**시작하기**\n- 주력 상품 정하기: 북쿠션이 후보예요.\n- 찻잔"
+    assert brief_text(reply(cut, "max_tokens"), actor="t") == "**시작하기**\n- 주력 상품 정하기: 북쿠션이 후보예요."
+    assert brief_text(reply(cut, "end_turn"), actor="t") == cut
+    # A one-line reply has nothing to fall back to and is kept.
+    assert brief_text(reply("한 줄", "max_tokens"), actor="t") == "한 줄"
+
+
+def test_the_quiet_lines_follow_the_language(monkeypatch) -> None:
+    from openexecutive.briefing import narrative
+
+    monkeypatch.setattr("openexecutive.utils.i18n.current_language", lambda: "ko")
+    for line in (narrative.QUIET_PRINCIPAL, narrative.QUIET_VIEWER, narrative.QUIET_DAY):
+        out = narrative.localized_quiet_line(line)
+        assert out != line and "조용" in out
+    assert narrative.localized_quiet_line("other text") == "other text"

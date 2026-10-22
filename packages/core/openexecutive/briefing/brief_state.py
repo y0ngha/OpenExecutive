@@ -46,10 +46,6 @@ logger = logging.getLogger(__name__)
 SCOPE_PREFIX = "brief:"
 DEFAULT_WINDOW = timedelta(hours=24)
 
-SUPPRESSED_TEMPLATE = (
-    "Nothing new since yesterday's brief — {n} item{s} still waiting on you."
-)
-
 # Audit event types the alert review job emits for autonomous moves. The
 # brief's "handled overnight" block is built from these (see handled_since).
 REVIEW_EVENT_TYPES: tuple[str, ...] = (
@@ -597,7 +593,16 @@ def suppress_unchanged_enabled() -> bool:
 
 
 def suppressed_line(n_waiting: int) -> str:
-    return SUPPRESSED_TEMPLATE.format(n=n_waiting, s="" if n_waiting == 1 else "s")
+    if n_waiting == 1:
+        return tr(
+            "brief.suppressed.one",
+            "Nothing new since yesterday's brief — 1 item still waiting on you.",
+        )
+    return tr(
+        "brief.suppressed.other",
+        "Nothing new since yesterday's brief — {n} items still waiting on you.",
+        n=n_waiting,
+    )
 
 
 def pending_watch_suggestions() -> int:
@@ -620,7 +625,6 @@ __all__ = [
     "delivery_problem",
     "HANDLED_EVENT_KINDS",
     "REVIEW_EVENT_TYPES",
-    "SUPPRESSED_TEMPLATE",
     "DeliveryOutcome",
     "DeliveryReason",
     "describe_problem",

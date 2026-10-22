@@ -21,7 +21,9 @@ from collections.abc import Iterable
 # "나가는거야" said, "나간다" written), so such a word counts as said when,
 # after at most one trailing particle or ending is taken off each side, the
 # two stems are the same (``_match``). A stem is never matched on a prefix:
-# 박지훈 is not 박진영, 현대차 is not 현대건설.
+# 박지훈 is not 박진영, 현대차 is not 현대건설. A stem of two or more
+# syllables may sit inside a said word, though: 준비 is in 준비시간이 and 신청
+# in 신청했어, so writing it carries in nothing the speaker did not say.
 _PARTICLES = (
     "이라고", "에게서", "라고", "에서", "에게", "께서", "으로", "이랑", "까지", "부터",
     "보다", "처럼", "이나", "은", "는", "이", "가", "을", "를", "의", "에", "께", "도",
@@ -29,7 +31,23 @@ _PARTICLES = (
 )
 _ENDINGS = (
     "입니다", "이에요", "이다", "는거야", "거야", "어요", "아요", "해요", "지만", "니다", "다", "지", "고", "면", "서", "때",
+    # 하다 / 되다 on a noun (신청했어 said, 신청을 written; 결정되고 / 결정되며).
+    "했어요", "했는데", "하려면", "하려고", "했어", "했고", "했다", "해서", "해야", "하는",
+    "하고", "하지", "하면", "한다", "합니다", "되고", "되며", "된다", "되는", "되면", "됐어",
+    "돼서",
 )
+# Grammar words that say nothing a document could carry in: forms of 있다,
+# 없다, 않다, 하다, 되다 and 이다 written on their own. Like a single
+# character, they count as said.
+_GLUE = frozenset({
+    "있다", "있는", "있고", "있어", "있어서", "있으며", "있으면", "있음", "있어요", "있습니다",
+    "없다", "없는", "없고", "없어", "없어서", "없으며", "없으면", "없음", "없어요", "없습니다",
+    "않다", "않는다", "않는", "않고", "않아", "않아서", "않으며", "않으면", "않음", "않아요",
+    "않습니다", "하다", "한다", "하는", "하고", "하며", "하면", "하지", "해서", "해야", "했다",
+    "했고", "했어", "했으며", "합니다", "해요", "했어요", "되다", "된다", "되는", "되고", "되며",
+    "되면", "돼서", "됐다", "됐고", "됩니다", "돼요", "이다", "아니다", "아닌", "아니고", "위해",
+    "위한", "대한", "대해", "통해", "따라", "때문에",
+})
 _SUFFIXES = sorted({*_PARTICLES, *_ENDINGS}, key=len, reverse=True)
 _ENDING_SET = frozenset(_ENDINGS)
 
@@ -42,9 +60,11 @@ _ENDING_SET = frozenset(_ENDINGS)
 # 지, 서 and 랑 end too many names ever to qualify, so 지출 says nothing
 # about 지출나 and a pair like 수단이지 / 수단이다 is refused: the
 # trade-off is a few refused paraphrases for never mistaking one name for
-# another. Both stems must keep two syllables (하나 / 하은 → 하).
+# another. Both stems must keep two syllables (하나 / 하은 → 하), except a
+# closed one with the particle that form takes (목은 / 목에, a weekday).
 _BOTH_SIDES_SINGLE = frozenset("는을를도만의에께로와과가다고면때요야")
 _AFTER_CLOSED_ONLY = frozenset("은이")
+_ONE_SYLLABLE_OK = frozenset("은이을과에의")
 _HANGUL_FIRST, _HANGUL_LAST = 0xAC00, 0xD7A3
 _JONGSEONG_COUNT = 28
 
@@ -87,7 +107,7 @@ def _loose_key(stem: str) -> str:
 
 def _both_sides_ok(stem: str, suffix: str) -> bool:
     if len(stem) < 2:
-        return False
+        return len(stem) == 1 and _closed(stem) and suffix in _ONE_SYLLABLE_OK
     if len(suffix) >= 2 or suffix in _BOTH_SIDES_SINGLE:
         return True
     return suffix in _AFTER_CLOSED_ONLY and _closed(stem[-1])
@@ -117,26 +137,41 @@ class SaidIndex:
 
     def __init__(self, said: Iterable[str]) -> None:
         self._by_key: dict[str, list[tuple[str, str]]] = {}
+        self._hangul_words: list[str] = []
         for s in set(said):
             if not s or not caseless(s):
                 continue
+            if any(_hangul(ch) for ch in s):
+                self._hangul_words.append(s)
             for form in _stems(s):
                 self._by_key.setdefault(_loose_key(form[0]), []).append(form)
 
     def has(self, word: str) -> bool:
-        return any(
+        stems = _stems(word)
+        if any(
             _match(m, t)
-            for m in _stems(word)
+            for m in stems
             for t in self._by_key.get(_loose_key(m[0]), ())
+        ):
+            return True
+        # A Hangul stem inside a said word (준비 in 준비시간이), taken off
+        # only a suffix a both-sides match would take off: 손하 of 손하나
+        # says nothing about 손하은.
+        return any(
+            len(stem) >= 2
+            and all(_hangul(ch) for ch in stem)
+            and (not suffix or _both_sides_ok(stem, suffix))
+            and any(stem in s for s in self._hangul_words)
+            for stem, suffix in stems
         )
 
 
 def said_caseless(word: str, said: Iterable[str] | SaidIndex) -> bool:
     """Whether the caseless ``word`` is a caseless word in ``said`` with a
     different particle or ending (``_match``). A single character is a
-    particle or a function word. Pass a ``SaidIndex`` when checking many
-    words against the same text."""
-    if len(word) <= 1:
+    particle or a function word, and so is a grammar word (``_GLUE``). Pass
+    a ``SaidIndex`` when checking many words against the same text."""
+    if len(word) <= 1 or word in _GLUE:
         return True
     index = said if isinstance(said, SaidIndex) else SaidIndex(said)
     return index.has(word)

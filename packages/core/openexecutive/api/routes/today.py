@@ -1814,6 +1814,7 @@ async def _regen_briefing_narrative_locked(
     from openexecutive.briefing.narrative import (
         QUIET_PRINCIPAL,
         QUIET_VIEWER,
+        localized_quiet_line,
         synthesize_briefing_narrative,
     )
     from openexecutive.memory.workspace_settings import get_workspace
@@ -1840,7 +1841,9 @@ async def _regen_briefing_narrative_locked(
             # Nothing awaits a decision — skip the model call entirely and
             # write the fixed quiet line. Still cached (below) so the hot path
             # sees a fresh hash instead of re-scheduling this task forever.
-            text = QUIET_VIEWER if viewer_desc is not None else QUIET_PRINCIPAL
+            text = localized_quiet_line(
+                QUIET_VIEWER if viewer_desc is not None else QUIET_PRINCIPAL
+            )
         else:
             text = await asyncio.wait_for(
                 synthesize_briefing_narrative(

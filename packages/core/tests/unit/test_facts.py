@@ -853,6 +853,22 @@ def test_korean_word_endings_count_as_the_principals_words(
         assert "교보문고" in out["error"]
 
 
+def test_a_korean_paraphrase_in_the_speakers_terms_is_kept(principal: SimpleNamespace) -> None:
+    # From the live log: 신청했어 said, 신청을 했고 written; 결정되고 / 결정되며.
+    said = (
+        "교보문고 펀딩 제출하려면 협력사여야 한다는 기준이 있어서 협력사 신청했어. "
+        "이 결과에 따라 진행 여부가 결정되고 심사는 얼마나 걸릴지 알 수 없어"
+    )
+    principal.turn_delegation.speaker_text = said
+    out = _call(fact_tools.handle_remember_fact, subject="교보문고 펀딩 협력사 신청",
+                statement="교보문고 펀딩을 제출하려면 협력사여야 해서 협력사 신청을 했고, "
+                "이 결과에 따라 진행 여부가 결정되며 심사 기간은 알 수 없다.",
+                source_quote=said[:40])
+    # Only the word the speaker never used is named.
+    assert "which the speaker did not write" in out["error"]
+    assert "'기간은'" in out["error"] and "신청" not in out["error"]
+
+
 def test_a_quote_may_span_the_speakers_line_break(principal: SimpleNamespace) -> None:
     principal.turn_delegation.speaker_text = (
         "월 지출도 고정 지출 없고 그때그때 재료나 소싱할때\n나가는거야. 우선 없다고 쳐"

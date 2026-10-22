@@ -976,7 +976,7 @@ _REPAIR_INSTRUCTION = (
 async def _repair(draft: str, context: str, system: str, report: GroundingReport) -> str:
     from openexecutive.agents.utility_fast import get_briefing_model
     from openexecutive.audit.usage import log_model_usage
-    from openexecutive.briefing.narrative import BRIEF_MAX_TOKENS
+    from openexecutive.briefing.narrative import BRIEF_MAX_TOKENS, brief_text
     from openexecutive.providers import get_provider
 
     model = get_briefing_model()
@@ -991,8 +991,7 @@ async def _repair(draft: str, context: str, system: str, report: GroundingReport
         messages=[{"role": "user", "content": content}],
     )
     log_model_usage(response, model=model, actor="briefing_grounding")
-    blocks = [b for b in response.content if getattr(b, "type", "") == "text"]
-    return blocks[0].text.strip() if blocks else ""
+    return brief_text(response, actor="briefing_grounding")
 
 
 def context_sources(context: str) -> list[GroundingSource]:
