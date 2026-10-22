@@ -869,6 +869,29 @@ def test_a_korean_paraphrase_in_the_speakers_terms_is_kept(principal: SimpleName
     assert "'기간은'" in out["error"] and "신청" not in out["error"]
 
 
+def test_the_company_and_roster_names_count_as_said(
+    principal: SimpleNamespace, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from openexecutive.memory.company_profile import CompanyProfile
+
+    monkeypatch.setattr(
+        "openexecutive.onboarding.profile_builder.load_or_create_profile",
+        lambda path=None: CompanyProfile(name="hoiv (호이브)"),
+    )
+    monkeypatch.setattr(
+        "openexecutive.people.store.list_people",
+        lambda **kw: [SimpleNamespace(full_name="Dana Whitfield")],
+    )
+    said = "토요일은 정말 급하지 않으면 약속이 있어서."
+    principal.turn_delegation.speaker_text = said
+    out = _call(fact_tools.handle_remember_fact, subject="토요일 약속",
+                statement="토요일은 약속이 있어서 호이브의 일은 Dana Whitfield에게 넘긴다",
+                source_quote=said)
+    assert "which the speaker did not write" in out["error"]
+    assert "넘긴다" in out["error"]
+    assert "호이브" not in out["error"] and "Dana" not in out["error"]
+
+
 def test_a_quote_may_span_the_speakers_line_break(principal: SimpleNamespace) -> None:
     principal.turn_delegation.speaker_text = (
         "월 지출도 고정 지출 없고 그때그때 재료나 소싱할때\n나가는거야. 우선 없다고 쳐"

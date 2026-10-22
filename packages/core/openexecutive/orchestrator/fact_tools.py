@@ -483,6 +483,32 @@ def _bare(word: str) -> str:
 # (``utils.korean_text.said_caseless``).
 
 
+def _known_names() -> set[str]:
+    """The words of the company's own name and of everyone on the People
+    roster, contacts included: names the workspace already holds, which a
+    statement may use without the speaker writing them this turn ("호이브"
+    for the company, a contact's full name). Empty when neither can be read."""
+    words: set[str] = set()
+    names: list[str] = []
+    try:
+        from openexecutive.config import get_settings
+        from openexecutive.onboarding.profile_builder import load_or_create_profile
+
+        names.append(load_or_create_profile(get_settings().company_profile_path).name)
+    except Exception:
+        logger.debug("fact_tools: company profile unavailable", exc_info=True)
+    try:
+        from openexecutive.people.store import list_people
+
+        names += [p.full_name for p in list_people(include_contacts=True) if p.full_name]
+    except Exception:
+        logger.debug("fact_tools: roster unavailable", exc_info=True)
+    for name in names:
+        words.update(_bare(w).lower() for w in _WORD.findall(name or ""))
+    words.discard("")
+    return words
+
+
 def _unsaid_claim_words(statement: str, session: Any) -> list[str]:
     """The names and date words in ``statement`` the principal did not write
     this turn. A figure-free claim carried in from a document ("Cedar Court's
@@ -496,11 +522,13 @@ def _unsaid_claim_words(statement: str, session: Any) -> list[str]:
     names into one-word sentences ("Cedar Court's landlord. Acme.").
     A statement is one fact, so a second sentence gets no such allowance. A
     name the model writes in lower case is not caught — the gate narrows
-    what a real quote can carry in, it does not prove a paraphrase."""
+    what a real quote can carry in, it does not prove a paraphrase. The
+    company's own name and the People roster's names count as said
+    (``_known_names``)."""
     from openexecutive.memory.episodic import _normalize_for_quote_match
 
     spoken = _normalize_for_quote_match(_own_words(session) or "")
-    said = {_bare(w) for w in _WORD.findall(spoken)}
+    said = {_bare(w) for w in _WORD.findall(spoken)} | _known_names()
     said_index = SaidIndex(said)
     missing: list[str] = []
     for i, m in enumerate(_WORD.finditer(statement)):
